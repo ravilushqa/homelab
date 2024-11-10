@@ -31,6 +31,14 @@ module "talos" {
 
   talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
   talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
+
+  cilium = {
+    values = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
+    install = file("${path.module}/modules/talos/inline-manifests/cilium-install.yaml")
+  }
+
+
+  depends_on = [module.proxmox]
 }
 
 module "monitoring" {
@@ -47,4 +55,6 @@ module "monitoring" {
   externalservices_tempo_host                    = var.externalservices_tempo_host
   externalservices_tempo_basicauth_username      = var.externalservices_tempo_basicauth_username
   externalservices_tempo_basicauth_password      = var.externalservices_tempo_basicauth_password
+
+  depends_on = [module.talos]
 }
