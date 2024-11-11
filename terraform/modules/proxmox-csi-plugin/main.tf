@@ -54,3 +54,15 @@ clusters:
 EOF
   }
 }
+
+resource "helm_release" "proxmox_csi_plugin" {
+  name       = "proxmox-csi-plugin"
+  repository = "oci://ghcr.io/sergelogvinov/charts"
+  chart      = "proxmox-csi-plugin"
+  namespace  = "csi-proxmox"
+  version    = "0.2.13"
+
+  values = [var.proxmox_csi_plugin_helm_values]
+
+  create_namespace = true
+}

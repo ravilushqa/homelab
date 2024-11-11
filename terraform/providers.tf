@@ -12,9 +12,5 @@ terraform {
       source  = "hashicorp/helm"
       version = "2.16.1"
     }
-    kustomization = {
-      source  = "kbst/kustomization"
-      version = "0.9.6"
-    }
   }
 }
