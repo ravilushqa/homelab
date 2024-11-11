@@ -1,4 +1,16 @@
 DEFAULT_KUBECONFIG := ~/.kube/config
+DEFAULT_GOAL := bootstrap
+
+bootstrap: terraform-init terraform-plan terraform-apply kubeconfig
+
+terraform-init:
+	@echo "Initializing Terraform configuration..."
+	@terraform init
+
+terraform-plan:
+	@echo "Planning Terraform configuration..."
+	@terraform plan
+
 
 terraform-apply:
 	@echo "Applying Terraform configuration..."

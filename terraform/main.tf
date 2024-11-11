@@ -70,7 +70,7 @@ module "proxmox_csi_plugin" {
   proxmox = {
     endpoint     = var.proxmox_endpoint
     insecure     = true
-    cluster_name = "cluster01"
+    cluster_name = var.cluster_name
   }
 
   proxmox_csi_plugin_helm_values = file("${path.module}/../k8s/infra/storage/proxmox-csi/values.yaml")
