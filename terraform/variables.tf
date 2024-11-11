@@ -41,38 +41,38 @@ variable "montoring_namespace" {
 }
 
 variable "externalservices_prometheus_host" {
-  type    = string
+  type        = string
   description = "Prometheus host"
 }
 
 variable "externalservices_prometheus_basicauth_username" {
-  type    = number
+  type = number
 }
 
 variable "externalservices_prometheus_basicauth_password" {
-  type    = string
+  type = string
 }
 
 variable "externalservices_loki_host" {
-  type    = string
+  type = string
 }
 
 variable "externalservices_loki_basicauth_username" {
-  type    = number
+  type = number
 }
 
 variable "externalservices_loki_basicauth_password" {
-  type    = string
+  type = string
 }
 
 variable "externalservices_tempo_host" {
-  type    = string
+  type = string
 }
 
 variable "externalservices_tempo_basicauth_username" {
-  type    = number
+  type = number
 }
 
 variable "externalservices_tempo_basicauth_password" {
-  type    = string
+  type = string
 }

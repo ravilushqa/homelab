@@ -30,20 +30,20 @@ module "proxmox" {
 
 module "talos" {
   depends_on = [module.proxmox]
-  source = "./modules/talos"
+  source     = "./modules/talos"
 
   talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
   talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
 
   cilium = {
-    values = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
+    values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
     install = file("${path.module}/modules/talos/inline-manifests/cilium-install.yaml")
   }
 }
 
 module "monitoring" {
   depends_on = [module.talos]
-  source = "./modules/monitoring"
+  source     = "./modules/monitoring"
 
   cluster_name                                   = var.cluster_name
   namespace                                      = var.montoring_namespace
@@ -60,7 +60,7 @@ module "monitoring" {
 
 module "proxmox_csi_plugin" {
   depends_on = [module.talos]
-  source = "./modules/proxmox-csi-plugin"
+  source     = "./modules/proxmox-csi-plugin"
 
   providers = {
     proxmox    = proxmox
@@ -68,8 +68,10 @@ module "proxmox_csi_plugin" {
   }
 
   proxmox = {
-    endpoint = var.proxmox_endpoint
-    insecure = true
+    endpoint     = var.proxmox_endpoint
+    insecure     = true
     cluster_name = "cluster01"
   }
+
+  proxmox_csi_plugin_helm_values = file("${path.module}/../k8s/infra/storage/proxmox-csi/values.yaml")
 }
