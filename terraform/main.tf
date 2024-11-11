@@ -1,5 +1,7 @@
 provider "proxmox" {
   endpoint = var.proxmox_endpoint
+  username = var.proxmox_username
+  password = var.proxmox_password
   insecure = true
 }
 
@@ -27,6 +29,7 @@ module "proxmox" {
 }
 
 module "talos" {
+  depends_on = [module.proxmox]
   source = "./modules/talos"
 
   talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
@@ -36,12 +39,10 @@ module "talos" {
     values = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
     install = file("${path.module}/modules/talos/inline-manifests/cilium-install.yaml")
   }
-
-
-  depends_on = [module.proxmox]
 }
 
 module "monitoring" {
+  depends_on = [module.talos]
   source = "./modules/monitoring"
 
   cluster_name                                   = var.cluster_name
@@ -55,6 +56,20 @@ module "monitoring" {
   externalservices_tempo_host                    = var.externalservices_tempo_host
   externalservices_tempo_basicauth_username      = var.externalservices_tempo_basicauth_username
   externalservices_tempo_basicauth_password      = var.externalservices_tempo_basicauth_password
+}
 
+module "proxmox_csi_plugin" {
   depends_on = [module.talos]
+  source = "./modules/proxmox-csi-plugin"
+
+  providers = {
+    proxmox    = proxmox
+    kubernetes = kubernetes
+  }
+
+  proxmox = {
+    endpoint = var.proxmox_endpoint
+    insecure = true
+    cluster_name = "cluster01"
+  }
 }

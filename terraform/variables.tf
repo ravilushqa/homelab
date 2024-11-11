@@ -9,6 +9,16 @@ variable "proxmox_endpoint" {
   description = "Proxmox API endpoint"
 }
 
+variable "proxmox_username" {
+  type        = string
+  description = "Proxmox username"
+}
+
+variable "proxmox_password" {
+  type        = string
+  description = "Proxmox password"
+}
+
 variable "default_gateway" {
   type        = string
   description = "IP address of your default gateway"

@@ -62,10 +62,16 @@ data "talos_cluster_health" "health" {
   control_plane_nodes  = [var.talos_cp_01_ip_addr]
   worker_nodes         = [var.talos_worker_01_ip_addr]
   endpoints            = data.talos_client_configuration.talosconfig.endpoints
+  timeouts = {
+    read = "10m"
+  }
 }
 
 data "talos_cluster_kubeconfig" "kubeconfig" {
   depends_on           = [talos_machine_bootstrap.bootstrap, data.talos_cluster_health.health]
   client_configuration = talos_machine_secrets.machine_secrets.client_configuration
   node                 = var.talos_cp_01_ip_addr
+  timeouts = {
+    read = "1m"
+  }
 }
