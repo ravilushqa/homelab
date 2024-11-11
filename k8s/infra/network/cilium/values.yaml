@@ -1,5 +1,5 @@
 cluster:
-  name: talos
+  name: cluster01
   id: 1
 
 kubeProxyReplacement: true

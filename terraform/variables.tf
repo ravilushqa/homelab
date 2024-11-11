@@ -1,6 +1,6 @@
 variable "cluster_name" {
   type    = string
-  default = "homelab"
+  default = "cluster01"
 }
 
 # Proxmox
