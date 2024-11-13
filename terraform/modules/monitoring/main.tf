@@ -16,6 +16,7 @@ resource "helm_release" "grafana-k8s-monitoring" {
   namespace  = kubernetes_namespace.monitoring.metadata.0.name
   atomic     = true
   timeout    = 300
+  count      = var.enabled ? 1 : 0
 
   values = [file("${path.module}/values.yaml")]
 
@@ -75,7 +76,7 @@ resource "helm_release" "grafana-k8s-monitoring" {
   }
 
   set {
-    name  = "opencost.opencost.prometheus.external.url"
+    name = "opencost.opencost.prometheus.external.url"
     value = format("%s/api/prom", var.externalservices_prometheus_host)
   }
 }

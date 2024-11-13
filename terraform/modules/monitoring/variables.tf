@@ -1,3 +1,8 @@
+variable "enabled" {
+  type    = bool
+  default = false
+}
+
 variable "namespace" {
   type    = string
   default = "monitoring"
