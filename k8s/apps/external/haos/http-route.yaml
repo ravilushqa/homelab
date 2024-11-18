@@ -7,14 +7,11 @@ spec:
   parentRefs:
     - name: external
       namespace: gateway
+    - name: internal
+      namespace: gateway
   hostnames:
     - "haos.kube.ravil.space"
   rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-      backendRefs:
+    - backendRefs:
         - name: home-assistant
-          namespace: haos
           port: 8123
