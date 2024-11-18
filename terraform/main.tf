@@ -65,6 +65,7 @@ module "proxmox_csi_plugin" {
   providers = {
     proxmox    = proxmox
     kubernetes = kubernetes
+    helm       = helm
   }
 
   proxmox = {
@@ -74,4 +75,22 @@ module "proxmox_csi_plugin" {
   }
 
   proxmox_csi_plugin_helm_values = file("${path.module}/../k8s/infra/storage/proxmox-csi/values.yaml")
+}
+
+module "sealed-secrets" {
+  depends_on = [module.talos]
+  source     = "./modules/sealed-secrets"
+
+  providers = {
+    kubernetes = kubernetes
+    helm = helm
+  }
+
+  // openssl req -x509 -days 365 -nodes -newkey rsa:4096 -keyout sealed-secrets.key -out sealed-secrets.cert -subj "/CN=sealed-secret/O=sealed-secret"
+  cert = {
+    cert = file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.cert")
+    key = file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.key")
+  }
+
+  helm_values = file("${path.module}/../k8s/infra/security/sealed-secrets/values.yaml")
 }
