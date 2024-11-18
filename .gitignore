@@ -40,3 +40,8 @@ terraform.rc
 *.envrc
 _cfgs
 .idea
+
+*.cert
+*.key
+**/infra/**/charts
+*secret*.yaml
