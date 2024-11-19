@@ -18,3 +18,4 @@ jobs:
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_action_config.auto_describe: "true"
