@@ -11,7 +11,7 @@ spec:
   listeners:
     - protocol: HTTPS
       port: 443
-      name: https-gateway
+      name: https-kube-gateway
       hostname: "*.kube.ravil.space"
       tls:
         certificateRefs:
@@ -22,8 +22,8 @@ spec:
           from: All
     - protocol: HTTPS
       port: 443
-      name: https-domain-gateway
-      hostname: kube.ravil.space
+      name: https-home-gateway
+      hostname: "*.home.ravil.space"
       tls:
         certificateRefs:
           - kind: Secret
