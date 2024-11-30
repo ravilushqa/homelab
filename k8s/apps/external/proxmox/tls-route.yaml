@@ -7,8 +7,6 @@ spec:
   parentRefs:
     - name: tls-passthrough
       namespace: gateway
-    - name: external
-      namespace: gateway
   hostnames:
     - "proxmox.kube.ravil.space"
   rules:
