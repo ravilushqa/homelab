@@ -35,7 +35,7 @@ variable "talos_worker_01_ip_addr" {
 }
 
 # Monitoring
-variable "montoring_namespace" {
+variable "monitoring_namespace" {
   type    = string
   default = "monitoring"
 }
