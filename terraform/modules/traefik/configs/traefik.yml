@@ -1,0 +1,19 @@
+entryPoints:
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    directory: "/etc/traefik/conf.d"
+    watch: true
+
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: INFO
+  filePath: "/var/log/traefik/traefik.log"
+
+accessLog:
+  filePath: "/var/log/traefik/traefik-access.log"
