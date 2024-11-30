@@ -51,10 +51,27 @@ resource "proxmox_virtual_environment_container" "traefik" {
     private_key = trimspace(tls_private_key.ubuntu_container_key.private_key_openssh)
   }
 
+  provisioner "remote-exec" {
+    inline = [
+      "mkdir -p /etc/traefik/conf.d",
+    ]
+  }
+
   provisioner "file" {
     source      = "${path.module}/install_traefik.sh"
     destination = "/tmp/install_traefik.sh"
   }
+
+  provisioner "file" {
+    source      = "${path.module}/configs/traefik.yml"
+    destination = "/etc/traefik/traefik.yml"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/configs/tcp_routers.yaml"
+    destination = "/etc/traefik/conf.d/tcp_routers.yaml"
+  }
+
 
   # Add the provisioner block
   provisioner "remote-exec" {
