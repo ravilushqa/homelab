@@ -35,6 +35,11 @@ variable "talos_worker_01_ip_addr" {
 }
 
 # Monitoring
+variable "monitoring_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "monitoring_namespace" {
   type    = string
   default = "monitoring"
