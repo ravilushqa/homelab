@@ -49,6 +49,7 @@ module "monitoring" {
   depends_on = [module.talos]
   source     = "./modules/monitoring"
 
+  enabled                                        = var.monitoring_enabled
   cluster_name                                   = var.cluster_name
   namespace                                      = var.monitoring_namespace
   externalservices_prometheus_host               = var.externalservices_prometheus_host
