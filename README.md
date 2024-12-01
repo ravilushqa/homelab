@@ -56,7 +56,6 @@ Planned features for this project include:
 - [**ArgoCD**](https://argo-cd.readthedocs.io/): Continuous delivery for Kubernetes.
 - [**OIDC**](https://openid.net/connect/): OpenID Connect integration for authentication. such as [Authelia](https://www.authelia.com/) 
 or [Zitadel](https://github.com/zitadel/zitadel).
-- [**Cloudflare DDNS**](https://developers.cloudflare.com/api/): Dynamic DNS updates via Cloudflare.
 
 ---
 
