@@ -45,3 +45,4 @@ _cfgs
 *.key
 **/infra/**/charts
 *secret*.yaml
+*secret*.json

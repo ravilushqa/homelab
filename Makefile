@@ -29,6 +29,7 @@ k8s-apply:
 	kubectl kustomize --enable-helm ./k8s/infra/network/cilium | kubectl apply -f -
 	kubectl kustomize --enable-helm ./k8s/infra/security/cert-manager | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/gateway | kubectl apply -f -
+	kubectl kustomize ./k8s/infra/network/cloudflare-ddns | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/proxmox | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/haos | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
