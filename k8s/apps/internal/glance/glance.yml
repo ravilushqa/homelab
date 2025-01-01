@@ -4,7 +4,6 @@ pages:
       - size: small
         widgets:
           - type: calendar
-
           - type: clock
             hour-format: 24h
             timezones:
@@ -12,20 +11,18 @@ pages:
                 label: Berlin
               - timezone: Europe/Moscow
                 label: Moscow
-
           - type: rss
             limit: 10
             collapse-after: 3
             cache: 3h
             feeds:
-              - url: https://ciechanow.ski/atom.xml
-              - url: https://www.joshwcomeau.com/rss.xml
+              - url: 'https://ciechanow.ski/atom.xml'
+              - url: 'https://www.joshwcomeau.com/rss.xml'
                 title: Josh Comeau
-              - url: https://samwho.dev/rss.xml
-              - url: https://awesomekling.github.io/feed.xml
-              - url: https://ishadeed.com/feed.xml
+              - url: 'https://samwho.dev/rss.xml'
+              - url: 'https://awesomekling.github.io/feed.xml'
+              - url: 'https://ishadeed.com/feed.xml'
                 title: Ahmad Shadeed
-
           - type: twitch-channels
             channels:
               - theprimeagen
@@ -34,25 +31,20 @@ pages:
               - blurbs
               - asmongold
               - jembawls
-
       - size: full
         widgets:
           - type: hacker-news
-
           - type: videos
             channels:
-              - UCR-DXc1voovS8nhAvccRZhg # Jeff Geerling
-              - UCv6J_jJa8GJqFwQNgNrMuww # ServeTheHome
-              - UCOk-gHyjcWZNj3Br4oxwh0A # Techno Tim
-
+              - UCR-DXc1voovS8nhAvccRZhg
+              - UCv6J_jJa8GJqFwQNgNrMuww
+              - UCOk-gHyjcWZNj3Br4oxwh0A
           - type: reddit
             subreddit: selfhosted
-
       - size: small
         widgets:
           - type: weather
-            location: Berlin, Germany
-
+            location: 'Berlin, Germany'
           - type: markets
             markets:
               - symbol: SPY
@@ -61,3 +53,18 @@ pages:
                 name: Bitcoin
               - symbol: DHER.DE
                 name: Delivery Hero
+  - name: Homelab
+    columns:
+      - size: full
+        widgets:
+          - type: bookmarks
+            groups:
+              - links:
+                  - title: Home Assistant
+                    url: 'https://ha.ravil.space/'
+                  - title: Hoarder
+                    url: 'https://hoarder.ravil.space/'
+                  - title: Unifi
+                    url: 'https://unifi.ui.com/'
+                  - title: Proxmox
+                    url: 'https://proxmox.ravil.space/'

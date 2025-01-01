@@ -5,8 +5,7 @@ metadata:
   namespace: gateway
 spec:
   dnsNames:
-    - "*.kube.ravil.space"
-    - "*.home.ravil.space"
+    - "*.ravil.space"
   issuerRef:
     group: cert-manager.io
     kind: ClusterIssuer

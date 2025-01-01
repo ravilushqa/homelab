@@ -10,8 +10,7 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "hoarder.kube.ravil.space"
-    - "hoarder.home.ravil.space"
+    - "hoarder.ravil.space"
   rules:
     - backendRefs:
         - name: web
