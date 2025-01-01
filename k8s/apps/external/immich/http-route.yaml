@@ -10,8 +10,7 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "immich.kube.ravil.space"
-    - "immich.home.ravil.space"
+    - "immich.ravil.space"
   rules:
     - backendRefs:
         - name: immich
