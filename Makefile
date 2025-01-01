@@ -24,6 +24,8 @@ kubeconfig:
 	@echo "KUBECONFIG is set as the default at $(DEFAULT_KUBECONFIG)"
 
 k8s-apply:
+	@echo "Patch the default storage class..."
+	kubectl patch storageclass proxmox-csi -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 	@echo "Applying Kubernetes configuration..."
 	kubectl apply -k ./k8s/infra/crds
 	kubectl kustomize --enable-helm ./k8s/infra/network/cilium | kubectl apply -f -
