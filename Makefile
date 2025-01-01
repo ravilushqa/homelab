@@ -34,3 +34,4 @@ k8s-apply:
 	kubectl kustomize ./k8s/apps/external/haos | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
