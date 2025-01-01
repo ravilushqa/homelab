@@ -1,0 +1,6 @@
+resources:
+  - deployment.yaml
+  - svc.yaml
+  - configmap.yaml
+  - http-route.yaml
+  - ns.yaml

@@ -46,3 +46,4 @@ _cfgs
 **/infra/**/charts
 *secret*.yaml
 *secret*.json
+.aider*
