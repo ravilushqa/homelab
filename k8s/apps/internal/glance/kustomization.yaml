@@ -4,3 +4,9 @@ resources:
   - configmap.yaml
   - http-route.yaml
   - ns.yaml
+configMapGenerator:
+  - name: config-glance
+    namespace: glance
+    behavior: replace
+    files:
+      - glance.yml
