@@ -20,3 +20,14 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - protocol: HTTPS
+      port: 443
+      name: https-gateway-home
+      hostname: "*.home.ravil.space"
+      tls:
+        certificateRefs:
+          - kind: Secret
+            name: cert-ravilspace
+      allowedRoutes:
+        namespaces:
+          from: All
