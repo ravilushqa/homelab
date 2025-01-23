@@ -1,10 +1,71 @@
 pages:
+  - name: Startpage
+    width: slim
+#    hide-desktop-navigation: true
+    center-vertically: true
+    columns:
+      - size: full
+        widgets:
+          - type: search
+            autofocus: true
+
+          - type: monitor
+            cache: 1m
+            title: Services
+            sites:
+              - title: Immich
+                url: https://immich.ravil.space/api/server/ping
+                icon: si:immich
+              - title: Pi-hole
+                url: https://pi.hole/admin/
+                icon: si:pihole
+              - title: Pi-hole
+                url: http://192.168.1.3
+                icon: si:pihole
+              - title: Glance
+                url: https://glance.ravil.space/
+                icon: si:glance
+              - title: Home Assistant
+                url: https://ha.ravil.space/
+                icon: si:homeassistant
+              - title: Hoarder
+                url: https://hoarder.ravil.space/
+                icon: si:hoarder
+              - title: Proxmox
+                url: https://proxmox.ravil.space/
+                icon: si:proxmox
+
+          - type: bookmarks
+            groups:
+              - title: General
+                links:
+                  - title: Gmail
+                    url: https://mail.google.com/mail/u/0/
+                  - title: Amazon
+                    url: https://www.amazon.com/
+                  - title: Github
+                    url: https://github.com/
+              - title: Entertainment
+                links:
+                  - title: YouTube
+                    url: https://www.youtube.com/
+                  - title: Prime Video
+                    url: https://www.primevideo.com/
+                  - title: Disney+
+                    url: https://www.disneyplus.com/
+              - title: Social
+                links:
+                  - title: Reddit
+                    url: https://www.reddit.com/
+                  - title: Twitter
+                    url: https://twitter.com/
+                  - title: Instagram
+                    url: https://www.instagram.com/
   - name: Home
     columns:
       - size: small
         widgets:
           - type: calendar
-
           - type: clock
             hour-format: 24h
             timezones:
@@ -12,20 +73,15 @@ pages:
                 label: Berlin
               - timezone: Europe/Moscow
                 label: Moscow
-
           - type: rss
             limit: 10
             collapse-after: 3
             cache: 3h
             feeds:
-              - url: https://ciechanow.ski/atom.xml
-              - url: https://www.joshwcomeau.com/rss.xml
-                title: Josh Comeau
-              - url: https://samwho.dev/rss.xml
-              - url: https://awesomekling.github.io/feed.xml
-              - url: https://ishadeed.com/feed.xml
-                title: Ahmad Shadeed
-
+              - url: 'https://mshibanami.github.io/GitHubTrendingRSS/monthly/go.xml'
+                title: GitHub Trending Go
+              - url: 'https://mshibanami.github.io/GitHubTrendingRSS/monthly/all.xml'
+                title: GitHub Trending All
           - type: twitch-channels
             channels:
               - theprimeagen
@@ -34,25 +90,22 @@ pages:
               - blurbs
               - asmongold
               - jembawls
-
       - size: full
         widgets:
           - type: hacker-news
-
-          - type: videos
-            channels:
-              - UCR-DXc1voovS8nhAvccRZhg # Jeff Geerling
-              - UCv6J_jJa8GJqFwQNgNrMuww # ServeTheHome
-              - UCOk-gHyjcWZNj3Br4oxwh0A # Techno Tim
-
+          #          - type: videos
+          #            channels:
+          #              - UCR-DXc1voovS8nhAvccRZhg
+          #              - UCv6J_jJa8GJqFwQNgNrMuww
+          #              - UCOk-gHyjcWZNj3Br4oxwh0A
           - type: reddit
             subreddit: selfhosted
-
+          - type: reddit
+            subreddit: golang
       - size: small
         widgets:
           - type: weather
-            location: Berlin, Germany
-
+            location: 'Berlin, Germany'
           - type: markets
             markets:
               - symbol: SPY
@@ -61,3 +114,18 @@ pages:
                 name: Bitcoin
               - symbol: DHER.DE
                 name: Delivery Hero
+  - name: Homelab
+    columns:
+      - size: full
+        widgets:
+          - type: bookmarks
+            groups:
+              - links:
+                  - title: Home Assistant
+                    url: 'https://ha.ravil.space/'
+                  - title: Hoarder
+                    url: 'https://hoarder.ravil.space/'
+                  - title: Unifi
+                    url: 'https://unifi.ui.com/'
+                  - title: Proxmox
+                    url: 'https://proxmox.ravil.space/'

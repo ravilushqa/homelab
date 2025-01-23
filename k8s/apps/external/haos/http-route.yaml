@@ -10,6 +10,7 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
+    - "ha.ravil.space"
     - "ha.home.ravil.space"
   rules:
     - backendRefs:

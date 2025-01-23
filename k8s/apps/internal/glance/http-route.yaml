@@ -10,8 +10,7 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "glance.kube.ravil.space"
-    - "glance.home.ravil.space"
+    - "glance.ravil.space"
   rules:
     - backendRefs:
         - name: glance

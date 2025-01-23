@@ -12,7 +12,7 @@ spec:
     - protocol: HTTPS
       port: 443
       name: https-gateway
-      hostname: "*.kube.ravil.space"
+      hostname: "*.ravil.space"
       tls:
         certificateRefs:
           - kind: Secret
