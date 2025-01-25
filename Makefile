@@ -37,3 +37,6 @@ k8s-apply:
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/changedetection | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
+	kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
