@@ -1,8 +1,8 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: home-assistant
-  namespace: haos
+  name: grafana
+  namespace: grafana
 spec:
   parentRefs:
     - name: external
@@ -10,8 +10,8 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "changedetection.ravil.space"
+    - "grafana.ravil.space"
   rules:
     - backendRefs:
-        - name: home-assistant
-          port: 8123
+        - name: grafana
+          port: 3000
