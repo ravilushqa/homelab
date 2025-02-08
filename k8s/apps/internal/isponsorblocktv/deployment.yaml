@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: isponsorblocktv
+  namespace: isponsorblocktv
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: isponsorblocktv
+  template:
+    metadata:
+      labels:
+        app: isponsorblocktv
+    spec:
+      containers:
+        - name: isponsorblocktv
+          image: ghcr.io/dmunozv04/isponsorblocktv:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: config
+              mountPath: /app/data/config.json
+              subPath: config.json
+      volumes:
+        - name: config
+          configMap:
+            name: config-isponsorblocktv

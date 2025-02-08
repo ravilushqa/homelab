@@ -37,11 +37,15 @@ k8s-apply:
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/changedetection | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
 	kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
 
 glance-restart:
-	kubectl apply -f ./k8s/apps/internal/glance/configmap.yaml
 	kubectl delete pod -l app=glance -n glance
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
+
+isponsorblocktv-restart:
+	kubectl delete pod -l app=isponsorblocktv -n isponsorblocktv
+	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
