@@ -10,7 +10,7 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "changedetection.ravil.space"
+    - "ha.ravil.space"
   rules:
     - backendRefs:
         - name: home-assistant
