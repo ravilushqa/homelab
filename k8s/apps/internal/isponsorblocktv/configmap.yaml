@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-isponsorblocktv
+  namespace: isponsorblocktv
+data:
+  config.json: !include-config.json

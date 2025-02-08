@@ -1,0 +1,10 @@
+resources:
+  - ns.yaml
+  - configmap.yaml
+  - deployment.yaml
+configMapGenerator:
+  - name: config-isponsorblocktv
+    namespace: isponsorblocktv
+    behavior: replace
+    files:
+      - config.json
