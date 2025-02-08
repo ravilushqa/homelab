@@ -9,7 +9,6 @@ pages:
             sites:
               - title: Immich
                 url: https://immich.ravil.space
-                check-url: http://immich.immich.svc.cluster.local:2283
                 icon: si:immich
               - title: Pi-hole
                 url: https://pi.hole/admin
@@ -17,25 +16,20 @@ pages:
                 icon: si:pihole
               - title: Glance
                 url: https://glance.ravil.space
-                check-url: http://glance.glance.svc.cluster.local:8080
                 same-tab: true
                 icon: si:goodreads
               - title: Home Assistant
                 url: https://ha.ravil.space
-                check-url: http://home-assistant.haos.svc.cluster.local:8123
                 icon: si:homeassistant
               - title: Hoarder
                 url: https://hoarder.ravil.space
-                check-url: http://web.hoarder.svc.cluster.local:3000
                 icon: si:htop
               - title: Proxmox
                 url: https://proxmox.ravil.space
-                check-url: http://192.168.1.100:8006
                 allow-insecure: true
                 icon: si:proxmox
               - title: Grafana
                 url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
-                check-url: http://192.168.1.24:3000
                 icon: si:grafana
               - title: Unifi
                 url: https://unifi.ui.com
