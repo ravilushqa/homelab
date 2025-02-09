@@ -2,6 +2,8 @@
 DEFAULT_KUBECONFIG := ~/.kube/config
 DEFAULT_GOAL := bootstrap
 
+include k8s/infra/network/cloudflare-ddns/Makefile
+
 bootstrap: terraform-init terraform-plan terraform-apply kubeconfig k8s-apply
 
 terraform-init:
@@ -23,7 +25,7 @@ kubeconfig:
 	@terraform -chdir=./terraform output -raw kubeconfig_content > $(DEFAULT_KUBECONFIG)
 	@echo "KUBECONFIG is set as the default at $(DEFAULT_KUBECONFIG)"
 
-k8s-apply:
+k8s-apply: cloudflare-ddns-gen
 	@echo "Patch the default storage class..."
 	kubectl patch storageclass proxmox-csi -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 	@echo "Applying Kubernetes configuration..."
@@ -35,16 +37,21 @@ k8s-apply:
 	kubectl kustomize ./k8s/apps/external/proxmox | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/haos | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/n8n | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/dockge | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/changedetection | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
 	kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
 
 glance-restart:
 	kubectl delete pod -l app=glance -n glance
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
+
+cloudflare-ddns-gen:
+	$(MAKE) -C k8s/infra/network/cloudflare-ddns gen
 
 isponsorblocktv-restart:
 	kubectl delete pod -l app=isponsorblocktv -n isponsorblocktv
