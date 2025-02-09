@@ -1,0 +1,17 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dockge
+  namespace: dockge
+spec:
+  parentRefs:
+    - name: external
+      namespace: gateway
+    - name: internal
+      namespace: gateway
+  hostnames:
+    - "dockge.ravil.space"
+  rules:
+    - backendRefs:
+        - name: dockge
+          port: 5001

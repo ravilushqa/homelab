@@ -1,0 +1,17 @@
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: n8n
+  namespace: n8n
+  labels:
+    kubernetes.io/service-name: n8n
+    endpointslice.kubernetes.io/managed-by: cluster-admins
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 5678
+endpoints:
+  - addresses:
+      - 192.168.1.250
+    conditions: { }
