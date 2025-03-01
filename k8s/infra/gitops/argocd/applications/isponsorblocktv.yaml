@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: example-app
+  name: isponsorblocktv
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/ravilushqa/homelab
     targetRevision: HEAD
-    path: k8s/apps/external/grafana
+    path: k8s/apps/internal/isponsorblocktv
   destination:
     server: https://kubernetes.default.svc
-    namespace: grafana
+    namespace: isponsorblocktv
   syncPolicy:
     automated:
       prune: true

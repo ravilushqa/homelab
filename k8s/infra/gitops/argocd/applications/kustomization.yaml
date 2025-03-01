@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
   - grafana.yaml
   - hoarder.yaml
+  - isponsorblocktv.yaml
   # Excluding example-app.yaml as it's just an example
