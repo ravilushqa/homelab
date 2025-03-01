@@ -34,6 +34,12 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize --enable-helm ./k8s/infra/security/cert-manager | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/gateway | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/cloudflare-ddns | kubectl apply -f -
+	@echo "Deploying ArgoCD..."
+	kubectl apply -k ./k8s/infra/gitops/argocd
+	@echo "Waiting for ArgoCD to be ready (this might take a minute)..."
+	kubectl wait --for=condition=available --timeout=120s deployment/argocd-server -n argocd || echo "ArgoCD server not yet ready, continuing anyway..."
+	@echo "Setting up ArgoCD projects..."
+	kubectl apply -k ./k8s/infra/gitops/argocd/projects
 	kubectl kustomize ./k8s/apps/external/proxmox | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/haos | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
@@ -56,3 +62,16 @@ cloudflare-ddns-gen:
 isponsorblocktv-restart:
 	kubectl delete pod -l app=isponsorblocktv -n isponsorblocktv
 	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
+
+argocd-password:
+	@echo "Retrieving the initial admin password for ArgoCD..."
+	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+	@echo ""
+
+argocd-apply-apps:
+	@echo "Applying ArgoCD application manifests..."
+	@kubectl apply -k ./k8s/infra/gitops/argocd/projects/
+	@echo "Waiting for ArgoCD to be fully ready before applying applications..."
+	@kubectl wait --for=condition=available --timeout=60s deployment/argocd-server -n argocd
+	@echo "Applying ArgoCD applications..."
+	@kubectl apply -k ./k8s/infra/gitops/argocd/applications/

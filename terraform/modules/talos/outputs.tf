@@ -4,6 +4,6 @@ output "talosconfig" {
 }
 
 output "kubeconfig" {
-  value     = trimspace(data.talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw)
+  value     = trimspace(talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw)
   sensitive = true
 }

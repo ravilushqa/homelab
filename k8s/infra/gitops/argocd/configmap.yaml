@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Add your git repositories here
+  repositories: |
+    - url: https://github.com/ravilushqa/homelab
+      name: homelab
+  
+  # Configure URL for ArgoCD
+  url: https://argocd.ravil.space
+  
+  # Enable insecure mode since TLS is handled at the gateway
+  server.insecure: "true"
+  
+  # Enable dex for SSO if needed later
+  # dex.config: |
+  #   connectors:
+  #   - type: github
+  #     id: github
+  #     name: GitHub
+  #     config:
+  #       clientID: aabbccddeeff00112233
+  #       clientSecret: $dex.github.clientSecret
+  #       orgs:
+  #       - name: your-github-org
