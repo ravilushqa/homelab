@@ -43,6 +43,7 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize ./k8s/apps/external/proxmox | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/haos | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/openwebui | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/n8n | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/dockge | kubectl apply -f -
