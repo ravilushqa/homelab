@@ -1,0 +1,17 @@
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: hoarder
+  namespace: hoarder
+  labels:
+    kubernetes.io/service-name: hoarder
+    endpointslice.kubernetes.io/managed-by: cluster-admins
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 3000
+endpoints:
+  - addresses:
+      - 192.168.1.180
+    conditions: {}

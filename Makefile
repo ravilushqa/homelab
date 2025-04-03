@@ -41,11 +41,12 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/n8n | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/external/dockge | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/changedetection | kubectl apply -f -
+	kubectl kustomize ./k8s/apps/external/hoarder | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/changedetection | kubectl apply -f -
 	#kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
+	#kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f - // disabled
 
 glance-restart:
 	kubectl delete pod -l app=glance -n glance
