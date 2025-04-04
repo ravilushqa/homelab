@@ -3,5 +3,6 @@ kind: Kustomization
 
 resources:
   - project.yaml
+  - infrastructure.yaml
   - internal-apps.yaml
   - external-apps.yaml 

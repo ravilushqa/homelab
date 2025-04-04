@@ -4,12 +4,9 @@ kind: Kustomization
 namespace: argocd
 
 resources:
-  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.1/manifests/install.yaml
+  - namespace.yaml
+  - gateway-route.yaml
   - applications/
-
-patches:
-  - path: patches/argocd-cm.yaml
-  - path: patches/argocd-cmd-params-cm.yaml
 
 helmCharts:
   - name: argo-cd
