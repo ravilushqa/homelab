@@ -83,6 +83,9 @@ patches:
       - op: replace
         path: /spec/rules/0/backendRefs/0/name
         value: $SERVICE_NAME
+      - op: replace
+        path: /spec/rules/0/backendRefs/0/port
+        value: 443
     target:
       kind: TLSRoute
       name: service-name-tls
