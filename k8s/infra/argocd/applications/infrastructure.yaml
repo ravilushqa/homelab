@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: infrastructure
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: homelab
   source:
@@ -12,7 +14,6 @@ spec:
     directory:
       recurse: true
       exclude: argocd/**
-      jsonnet: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: default
@@ -22,4 +23,10 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ApplyOutOfSyncOnly=true 
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m 
