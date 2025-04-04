@@ -12,6 +12,7 @@ spec:
     directory:
       recurse: true
       exclude: argocd/**
+      jsonnet: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: default
@@ -20,4 +21,5 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true 
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true 
