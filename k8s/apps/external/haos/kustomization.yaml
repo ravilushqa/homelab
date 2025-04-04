@@ -57,7 +57,7 @@ patches:
         value: haos
       - op: replace
         path: /spec/hostnames/0
-        value: haos.ravil.space
+        value: ha.ravil.space
       - op: replace
         path: /spec/rules/0/backendRefs/0/name
         value: home-assistant
