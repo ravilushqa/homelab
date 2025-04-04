@@ -52,6 +52,8 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize --enable-helm ./k8s/infra/security/cert-manager | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/gateway | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/cloudflare-ddns | kubectl apply -f -
+	@echo "Deploying ArgoCD..."
+	kubectl kustomize --enable-helm ./k8s/infra/argocd | kubectl apply -f -
 	# Apply all external services
 	@echo "Applying external services..."
 	@for service in $$(find ./k8s/apps/external -maxdepth 1 -mindepth 1 -type d -not -path "*/\.*" | sort); do \
@@ -62,6 +64,17 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
 	#kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
 	#kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f - // disabled
+
+# ArgoCD management commands
+argocd-password:
+	@echo "ArgoCD admin password:"
+	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+	@echo
+
+argocd-restart:
+	@echo "Restarting ArgoCD components..."
+	kubectl -n argocd delete pod -l app.kubernetes.io/part-of=argocd
+	kubectl kustomize --enable-helm ./k8s/infra/argocd | kubectl apply -f -
 
 glance-restart:
 	kubectl delete pod -l app=glance -n glance

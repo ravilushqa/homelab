@@ -6,6 +6,10 @@
 - **Restart Services**: `make glance-restart`, `make isponsorblocktv-restart`
 - **Full Deployment**: `make bootstrap`
 - **Update DDNS**: `make cloudflare-ddns-gen`
+- **ArgoCD**:
+  - Get admin password: `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d`
+  - Access UI: https://argocd.ravil.space
+  - CLI Login: `argocd login argocd.ravil.space --username admin`
 
 ## Code Style Guidelines
 - **YAML**: 2-space indentation, resource naming in kebab-case
