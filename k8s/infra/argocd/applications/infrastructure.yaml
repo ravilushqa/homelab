@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: infrastructure
+  name: infrastructure-crds
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "1"
@@ -10,10 +10,7 @@ spec:
   source:
     repoURL: https://github.com/ravilushqa/homelab.git
     targetRevision: HEAD
-    path: k8s/infra
-    directory:
-      recurse: true
-      exclude: argocd/**
+    path: k8s/infra/crds
   destination:
     server: https://kubernetes.default.svc
     namespace: default
@@ -23,10 +20,95 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - RespectIgnoreDifferences=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m 
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrastructure-cilium
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: homelab
+  source:
+    repoURL: https://github.com/ravilushqa/homelab.git
+    targetRevision: HEAD
+    path: k8s/infra/network/cilium
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrastructure-cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: homelab
+  source:
+    repoURL: https://github.com/ravilushqa/homelab.git
+    targetRevision: HEAD
+    path: k8s/infra/security/cert-manager
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrastructure-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: homelab
+  source:
+    repoURL: https://github.com/ravilushqa/homelab.git
+    targetRevision: HEAD
+    path: k8s/infra/network/gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrastructure-ddns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: homelab
+  source:
+    repoURL: https://github.com/ravilushqa/homelab.git
+    targetRevision: HEAD
+    path: k8s/infra/network/cloudflare-ddns
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true 
