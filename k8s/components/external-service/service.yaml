@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: grafana
-  namespace: grafana
+  name: service-name
+  namespace: service-name
 spec:
   ports:
     - name: http
       protocol: TCP
-      port: 3000
+      port: 8080

@@ -1,8 +1,69 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Namespace resource
 resources:
-  - ns.yaml
-  - svc.yaml
-  - endpoint-slice.yaml
-  - http-route.yaml
+  - namespace.yaml
+
+# Use our component
+components:
+  - ../../../components/external-service
+
+# Service-specific patches
+patches:
+  # Update Service
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: immich
+      - op: replace
+        path: /metadata/namespace
+        value: immich
+      - op: replace
+        path: /spec/ports/0/port
+        value: 2283
+    target:
+      kind: Service
+      name: service-name
+
+  # Update EndpointSlice
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: immich
+      - op: replace
+        path: /metadata/namespace
+        value: immich
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: immich
+      - op: replace
+        path: /ports/0/port
+        value: 2283
+      - op: replace
+        path: /endpoints/0/addresses/0
+        value: 192.168.1.250
+    target:
+      kind: EndpointSlice
+      name: service-name
+
+  # Update HTTPRoute
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: immich
+      - op: replace
+        path: /metadata/namespace
+        value: immich
+      - op: replace
+        path: /spec/hostnames/0
+        value: immich.ravil.space
+      - op: replace
+        path: /spec/rules/0/backendRefs/0/name
+        value: immich
+      - op: replace
+        path: /spec/rules/0/backendRefs/0/port
+        value: 2283
+    target:
+      kind: HTTPRoute
+      name: service-name

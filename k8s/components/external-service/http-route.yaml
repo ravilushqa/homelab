@@ -1,8 +1,8 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: n8n
-  namespace: n8n
+  name: service-name
+  namespace: service-name
 spec:
   parentRefs:
     - name: external
@@ -10,8 +10,8 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "n8n.ravil.space"
+    - "service-name.ravil.space"
   rules:
     - backendRefs:
-        - name: n8n
-          port: 5678
+        - name: service-name
+          port: 8080

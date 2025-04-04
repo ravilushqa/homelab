@@ -1,15 +1,15 @@
 apiVersion: gateway.networking.k8s.io/v1alpha2
 kind: TLSRoute
 metadata:
-  name: proxmox-tls
-  namespace: proxmox
+  name: service-name-tls
+  namespace: service-name
 spec:
   parentRefs:
     - name: tls-passthrough
       namespace: gateway
   hostnames:
-    - "proxmox.ravil.space"
+    - "service-name.ravil.space"
   rules:
     - backendRefs:
-        - name: proxmox
+        - name: service-name
           port: 443
