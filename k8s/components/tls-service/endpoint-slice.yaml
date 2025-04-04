@@ -1,17 +1,17 @@
 apiVersion: discovery.k8s.io/v1
 kind: EndpointSlice
 metadata:
-  name: openwebui
-  namespace: openwebui
+  name: service-name
+  namespace: service-name
   labels:
-    kubernetes.io/service-name: openwebui
+    kubernetes.io/service-name: service-name
     endpointslice.kubernetes.io/managed-by: cluster-admins
 addressType: IPv4
 ports:
-  - name: http
+  - name: https
     protocol: TCP
-    port: 8080
+    port: 8443
 endpoints:
   - addresses:
-      - 192.168.1.29
-    conditions: {}
+      - 10.10.10.10
+    conditions: { }
