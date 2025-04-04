@@ -46,24 +46,13 @@ kubeconfig:
 k8s-apply: cloudflare-ddns-gen
 	@echo "Patch the default storage class..."
 	kubectl patch storageclass proxmox-csi -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
-	@echo "Applying Kubernetes configuration..."
+	@echo "Applying critical bootstrap components..."
 	kubectl apply -k ./k8s/infra/crds
 	kubectl kustomize --enable-helm ./k8s/infra/network/cilium | kubectl apply -f -
 	kubectl kustomize --enable-helm ./k8s/infra/security/cert-manager | kubectl apply -f -
-	kubectl kustomize ./k8s/infra/network/gateway | kubectl apply -f -
-	kubectl kustomize ./k8s/infra/network/cloudflare-ddns | kubectl apply -f -
 	@echo "Deploying ArgoCD..."
 	kubectl kustomize --enable-helm ./k8s/infra/argocd | kubectl apply -f -
-	# Apply all external services
-	@echo "Applying external services..."
-	@for service in $$(find ./k8s/apps/external -maxdepth 1 -mindepth 1 -type d -not -path "*/\.*" | sort); do \
-		echo "Applying $$(basename $$service)"; \
-		kubectl kustomize $$service | kubectl apply -f -; \
-	done
-	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
-	#kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
-	#kubectl kustomize ./k8s/apps/internal/hoarder | kubectl apply -f - // disabled
+	@echo "Bootstrap complete. Further application deployments will be managed by ArgoCD."
 
 # ArgoCD management commands
 argocd-password:
