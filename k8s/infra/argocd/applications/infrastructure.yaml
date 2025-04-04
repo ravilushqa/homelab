@@ -20,6 +20,7 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - Replace=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -36,13 +37,14 @@ spec:
     path: k8s/infra/network/cilium
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: kube-system
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - Replace=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -59,13 +61,14 @@ spec:
     path: k8s/infra/security/cert-manager
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: cert-manager
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - Replace=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -82,13 +85,14 @@ spec:
     path: k8s/infra/network/gateway
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: gateway
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - Replace=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -105,10 +109,11 @@ spec:
     path: k8s/infra/network/cloudflare-ddns
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: ddns
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true 
+      - CreateNamespace=true
+      - Replace=true 
