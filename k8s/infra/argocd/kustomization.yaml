@@ -46,4 +46,4 @@ helmCharts:
             p, role:org-admin, clusters, get, *, allow
             p, role:org-admin, repositories, *, *, allow
             p, role:org-admin, projects, *, *, allow
-            g, admin, role:org-admin 
+            g, admin, role:org-admin
