@@ -11,8 +11,11 @@ SERVICE_NAME=$1
 PORT=$2
 IP=$3
 
+# Get the project root directory (parent of scripts directory)
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 # Create directory for the service
-SERVICE_DIR="/Users/ravil/projects/homelab/k8s/apps/external/$SERVICE_NAME"
+SERVICE_DIR="$PROJECT_ROOT/k8s/apps/external/$SERVICE_NAME"
 mkdir -p "$SERVICE_DIR"
 
 # Create kustomization.yaml with the component and patches

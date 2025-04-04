@@ -1,9 +1,12 @@
 #!/bin/bash
 set -e
 
+# Get the project root directory (parent of scripts directory)
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 # Directories
-SOURCE_DIR="/Users/ravil/projects/homelab/k8s/apps/external"
-TARGET_DIR="/Users/ravil/projects/homelab/k8s/apps/external-components"
+SOURCE_DIR="$PROJECT_ROOT/k8s/apps/external"
+TARGET_DIR="$PROJECT_ROOT/k8s/apps/external-components"
 
 # Skip Proxmox
 SKIP_SERVICES=("proxmox")
@@ -68,7 +71,7 @@ for service_dir in "$SOURCE_DIR"/*; do
     echo "Creating component-based service for $service_name..."
     # Create service using our script (special handling for services with different service name)
     if [ "$service_ns" = "$svc_name" ]; then
-      /Users/ravil/projects/homelab/scripts/create-external-service-component.sh "$service_ns" "$port" "$ip"
+      "$PROJECT_ROOT/scripts/create-external-service-component.sh" "$service_ns" "$port" "$ip"
     else
       # Create directory for the service
       TARGET_SERVICE_DIR="$TARGET_DIR/$service_ns"
