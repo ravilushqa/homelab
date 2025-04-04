@@ -4,6 +4,24 @@ DEFAULT_GOAL := bootstrap
 
 include k8s/infra/network/cloudflare-ddns/Makefile
 
+# Create a new external service configuration
+create-external-service:
+	@echo "Creating a new external service using components..."
+	@echo "Usage: make create-external-service SERVICE=name PORT=port IP=ip"
+	@[ -n "$(SERVICE)" ] || { echo "Error: SERVICE parameter is required"; exit 1; }
+	@[ -n "$(PORT)" ] || { echo "Error: PORT parameter is required"; exit 1; }
+	@[ -n "$(IP)" ] || { echo "Error: IP parameter is required"; exit 1; }
+	@./scripts/create-external-service-component.sh "$(SERVICE)" "$(PORT)" "$(IP)"
+
+# Create a new TLS service configuration
+create-tls-service:
+	@echo "Creating a new TLS service using components..."
+	@echo "Usage: make create-tls-service SERVICE=name PORT=port IP=ip"
+	@[ -n "$(SERVICE)" ] || { echo "Error: SERVICE parameter is required"; exit 1; }
+	@[ -n "$(PORT)" ] || { echo "Error: PORT parameter is required"; exit 1; }
+	@[ -n "$(IP)" ] || { echo "Error: IP parameter is required"; exit 1; }
+	@./scripts/create-tls-service-component.sh "$(SERVICE)" "$(PORT)" "$(IP)"
+
 bootstrap: terraform-init terraform-plan terraform-apply kubeconfig k8s-apply
 
 terraform-init:
@@ -34,16 +52,12 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize --enable-helm ./k8s/infra/security/cert-manager | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/gateway | kubectl apply -f -
 	kubectl kustomize ./k8s/infra/network/cloudflare-ddns | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/proxmox | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/haos | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/openwebui | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/grafana | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/n8n | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/dockge | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/changedetection | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/hoarder | kubectl apply -f -
-	kubectl kustomize ./k8s/apps/external/dify | kubectl apply -f -
+	# Apply all external services
+	@echo "Applying external services..."
+	@for service in $$(find ./k8s/apps/external -maxdepth 1 -mindepth 1 -type d -not -path "*/\.*" | sort); do \
+		echo "Applying $$(basename $$service)"; \
+		kubectl kustomize $$service | kubectl apply -f -; \
+	done
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
 	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -
 	#kubectl apply -f ./k8s/infra/network/testing/net-utils-pod.yaml
