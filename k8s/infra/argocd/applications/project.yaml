@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: homelab
+  namespace: argocd
+spec:
+  description: Homelab applications project
+  
+  # Allow manifests to deploy only to specific namespaces
+  destinations:
+    - namespace: '*'  # All namespaces
+      server: https://kubernetes.default.svc
+  
+  # Only allow resources to be created in specific API groups
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # Allow any source repository
+  sourceRepos:
+    - '*'
+
+  # Enables namespace auto-creation
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*' 
