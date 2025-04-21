@@ -41,7 +41,7 @@ pages:
                 icon: si:docker
               - title: OpenWebUI
                 url: https://openwebui.ravil.space
-                icon: si:openai
+                icon: di:open-webui-light
               - title: PDF Tools
                 url: https://pdf.ravil.space
                 icon: si:adobeacrobatreader
@@ -56,7 +56,7 @@ pages:
                 icon: si:openai
               - title: IT Tools
                 url: https://it-tools.ravil.space
-                icon: di:it-tools
+                icon: di:it-tools-light
       - size: full
         widgets:
           - type: reddit
