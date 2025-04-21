@@ -36,6 +36,27 @@ pages:
                 check-url: http://192.168.1.1
                 allow-insecure: true
                 icon: si:ubiquiti
+              - title: Dockge
+                url: https://dockge.ravil.space
+                icon: si:docker
+              - title: OpenWebUI
+                url: https://openwebui.ravil.space
+                icon: si:openai
+              - title: PDF Tools
+                url: https://pdf.ravil.space
+                icon: si:adobeacrobatreader
+              - title: N8N
+                url: https://n8n.ravil.space
+                icon: si:n8n
+              - title: ChangeDetection
+                url: https://changedetection.ravil.space
+                icon: di:changedetection
+              - title: Dify
+                url: https://dify.ravil.space
+                icon: si:openai
+              - title: IT Tools
+                url: https://it-tools.ravil.space
+                icon: di:it-tools
       - size: full
         widgets:
           - type: reddit
