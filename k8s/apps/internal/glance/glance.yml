@@ -67,6 +67,7 @@ pages:
             channels:
               - UCOk-gHyjcWZNj3Br4oxwh0A # Techno Tim
               - UCZNhwA1B5YqiY1nLzmM0ZRg # Christian Lempa
+              - UCUUTdohVElFLSP4NBnlPEwA # Jim's Garage
       - size: full
         widgets:
           - type: rss
