@@ -99,6 +99,8 @@ pages:
                 title: Go Blog
               - url: https://antonz.ru/rss/
                 title: Anton Zhiyanov
+              - url: https://smcleod.net/posts/index.xml
+                title: Sam McLeod
       - size: full
         widgets:
           - type: hacker-news
