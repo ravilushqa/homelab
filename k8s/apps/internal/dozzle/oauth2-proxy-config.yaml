@@ -7,6 +7,7 @@ data:
   oauth2-proxy.cfg: |
     # OAuth2 Provider Configuration
     provider = "oidc"
+    scope = "openid email profile groups"
     provider_display_name = "PocketID"
     oidc_issuer_url = "https://pocketid.ravil.space"
     
@@ -15,7 +16,7 @@ data:
     client_secret = "$(OAUTH2_PROXY_CLIENT_SECRET)"
     
     # Cookie Configuration
-    cookie_name = "_oauth2_proxy_dozzle"
+    cookie_name = "_oauth2_proxy"
     cookie_secret = "$(OAUTH2_PROXY_COOKIE_SECRET)"
     cookie_secure = true
     cookie_httponly = true
