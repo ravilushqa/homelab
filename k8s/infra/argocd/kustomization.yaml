@@ -6,6 +6,7 @@ namespace: argocd
 resources:
   - namespace.yaml
   - gateway-route.yaml
+  - sealed-config.yaml
   - applications/
 
 helmCharts:
@@ -27,6 +28,15 @@ helmCharts:
           # Additional settings for better UX
           statusbadge.enabled: 'true'
           kustomize.buildOptions: --enable-helm
+          # OIDC Configuration for PocketID
+          oidc.config: |
+            name: PocketID
+            issuer: https://pocketid.ravil.space
+            clientId: $oidc.pocketid.clientId
+            clientSecret: $oidc.pocketid.clientSecret
+            requestedScopes: ["openid", "profile", "email"]
+            requestedIDTokenClaims: {"groups": {"essential": true}}
+            groupsClaim: groups
           resource.customizations.health.argoproj.io_Application: |
             hs = {}
             hs.status = "Progressing"
