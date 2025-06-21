@@ -35,6 +35,7 @@ data:
     
     # Email Configuration
     email_domains = ["*"]
+    insecure_oidc_allow_unverified_email = true
     
     # Security Configuration
     pass_basic_auth = false
