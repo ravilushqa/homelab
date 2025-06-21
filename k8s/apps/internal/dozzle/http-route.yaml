@@ -13,5 +13,5 @@ spec:
     - "dozzle.ravil.space"
   rules:
     - backendRefs:
-        - name: dozzle
-          port: 8080
+        - name: dozzle-oauth2-proxy
+          port: 80
