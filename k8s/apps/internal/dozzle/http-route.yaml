@@ -1,0 +1,17 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dozzle
+  namespace: dozzle
+spec:
+  parentRefs:
+    - name: external
+      namespace: gateway
+    - name: internal
+      namespace: gateway
+  hostnames:
+    - "dozzle.ravil.space"
+  rules:
+    - backendRefs:
+        - name: dozzle
+          port: 8080
