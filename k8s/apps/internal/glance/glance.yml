@@ -101,6 +101,8 @@ pages:
                 title: Anton Zhiyanov
               - url: https://smcleod.net/posts/index.xml
                 title: Sam McLeod
+              - url: https://blog.stonegarden.dev/index.xml
+                title: Vegard S. Hagen
       - size: full
         widgets:
           - type: hacker-news
