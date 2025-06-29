@@ -7,6 +7,9 @@ pages:
             cache: 1m
             title: Services
             sites:
+              - title: Grafana
+                url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
+                icon: si:grafana
               - title: Immich
                 url: https://immich.ravil.space
                 icon: si:immich
@@ -21,16 +24,13 @@ pages:
               - title: Home Assistant
                 url: https://ha.ravil.space
                 icon: si:homeassistant
-              - title: Hoarder
-                url: https://hoarder.ravil.space
-                icon: si:htop
+              - title: Karakeep
+                url: https://karakeep.ravil.space
+                icon: si:keras
               - title: Proxmox
                 url: https://proxmox.ravil.space
                 allow-insecure: true
                 icon: si:proxmox
-              - title: Grafana
-                url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
-                icon: si:grafana
               - title: Unifi
                 url: https://unifi.ui.com
                 check-url: http://192.168.1.1
@@ -45,9 +45,9 @@ pages:
               - title: PDF Tools
                 url: https://pdf.ravil.space
                 icon: si:adobeacrobatreader
-              - title: N8N
-                url: https://n8n.ravil.space
-                icon: si:n8n
+#              - title: N8N
+#                url: https://n8n.ravil.space
+#                icon: si:n8n
               - title: ChangeDetection
                 url: https://changedetection.ravil.space
                 icon: di:changedetection
