@@ -76,6 +76,26 @@ pages:
             feeds:
               - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/all.xml
                 title: GitHub Trending All
+          - type: rss
+            name: Tech Blogs
+            collapse-after: 5
+            feeds:
+              - url: https://netflixtechblog.medium.com/feed
+                title: Netflix TechBlog
+#              - url: https://cloudblog.withgoogle.com/rss
+#                title: Google Cloud Blog
+              - url: https://engineering.atspotify.com/feed
+                title: Spotify Engineering
+              - url: https://dropbox.tech/feed
+                title: Dropbox Tech Blog
+              - url: https://www.uber.com/en-DE/blog/berlin/engineering/rss/
+                title: Uber Engineering
+                headers:
+                  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+              - url: http://feeds.feedburner.com/HighScalability
+                title: High Scalability
+              - url: https://www.ardanlabs.com/blog/index.xml
+                title: Ardan labs
   - name: Home
     columns:
       - size: small
