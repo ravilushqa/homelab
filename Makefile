@@ -66,8 +66,8 @@ argocd-restart:
 	kubectl kustomize --enable-helm ./k8s/infra/argocd | kubectl apply -f -
 
 glance-restart:
-	kubectl delete pod -l app=glance -n glance
 	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
+	kubectl delete pod -l app=glance -n glance
 
 cloudflare-ddns-gen:
 	$(MAKE) -C k8s/infra/network/cloudflare-ddns gen
