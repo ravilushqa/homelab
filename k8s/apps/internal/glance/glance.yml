@@ -114,12 +114,6 @@ pages:
                 title: Uber Engineering
                 headers:
                   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-              - url: http://feeds.feedburner.com/HighScalability
-                title: High Scalability
-              - url: https://blog.stonegarden.dev/index.xml
-                title: Vegard S. Hagen
-              - url: https://smcleod.net/posts/index.xml
-                title: Sam McLeod
           - type: rss
             title: Personal
             collapse-after: 5
