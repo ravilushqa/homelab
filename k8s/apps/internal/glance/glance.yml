@@ -1,66 +1,70 @@
 pages:
-  - name: Self-hosted
+  - name: Infrastructure
     columns:
       - size: small
         widgets:
           - type: monitor
             cache: 1m
-            title: Services
+            title: Core Infrastructure
             sites:
-              - title: Grafana
-                url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
-                icon: si:grafana
-              - title: Immich
-                url: https://immich.ravil.space
-                icon: si:immich
-              - title: Pi-hole
-                url: https://pi.hole/admin
-                check-url: http://192.168.1.3
-                icon: si:pihole
-              - title: Glance
-                url: https://glance.ravil.space
-                same-tab: true
-                icon: si:goodreads
-              - title: Home Assistant
-                url: https://ha.ravil.space
-                icon: si:homeassistant
-              - title: Karakeep
-                url: https://karakeep.ravil.space
-                icon: si:keras
               - title: Proxmox
                 url: https://proxmox.ravil.space
                 allow-insecure: true
                 icon: si:proxmox
+                check-url: http://192.168.1.100:8006
               - title: Unifi
                 url: https://unifi.ui.com
                 check-url: http://192.168.1.1
                 allow-insecure: true
                 icon: si:ubiquiti
+              - title: Pi-hole
+                url: https://pi.hole/admin
+                check-url: http://192.168.1.3/admin/login
+                icon: si:pihole
+              - title: Grafana
+                url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
+                icon: si:grafana
               - title: Dockge
                 url: https://dockge.ravil.space
                 icon: si:docker
-              - title: OpenWebUI
-                url: https://openwebui.ravil.space
-                icon: di:open-webui-light
-              - title: PDF Tools
-                url: https://pdf.ravil.space
-                icon: si:adobeacrobatreader
-#              - title: N8N
-#                url: https://n8n.ravil.space
-#                icon: si:n8n
+          - type: monitor
+            cache: 1m
+            title: Applications
+            sites:
+              - title: Home Assistant
+                url: https://ha.ravil.space
+                icon: si:homeassistant
+              - title: Immich
+                url: https://immich.ravil.space
+                icon: si:immich
+              - title: Karakeep
+                url: https://karakeep.ravil.space
+                icon: si:keras
               - title: ChangeDetection
                 url: https://changedetection.ravil.space
                 icon: di:changedetection
+          - type: monitor
+            cache: 1m
+            title: Productivity & AI
+            sites:
+              - title: OpenWebUI
+                url: https://openwebui.ravil.space
+                icon: di:open-webui-light
               - title: Dify
                 url: https://dify.ravil.space
                 icon: si:openai
+              - title: PDF Tools
+                url: https://pdf.ravil.space
+                icon: si:adobeacrobatreader
               - title: IT Tools
                 url: https://it-tools.ravil.space
                 icon: di:it-tools-light
+              - title: Glance
+                url: https://glance.ravil.space
+                same-tab: true
+                icon: si:goodreads
       - size: full
         widgets:
-          - type: reddit
-            subreddit: selfhosted
           - type: videos
             style: grid-cards
             collapse-after-rows: 1
@@ -68,22 +72,14 @@ pages:
               - UCOk-gHyjcWZNj3Br4oxwh0A # Techno Tim
               - UCZNhwA1B5YqiY1nLzmM0ZRg # Christian Lempa
               - UCUUTdohVElFLSP4NBnlPEwA # Jim's Garage
-      - size: full
-        widgets:
+          - type: reddit
+            subreddit: selfhosted
           - type: rss
-            name: Github Trending
-            thumbnail-height: 100
-            feeds:
-              - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/all.xml
-                title: GitHub Trending All
-          - type: rss
-            name: Tech Blogs
+            title: Engineering Blogs
             collapse-after: 5
             feeds:
               - url: https://netflixtechblog.medium.com/feed
                 title: Netflix TechBlog
-#              - url: https://cloudblog.withgoogle.com/rss
-#                title: Google Cloud Blog
               - url: https://engineering.atspotify.com/feed
                 title: Spotify Engineering
               - url: https://dropbox.tech/feed
@@ -94,9 +90,11 @@ pages:
                   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
               - url: http://feeds.feedburner.com/HighScalability
                 title: High Scalability
-              - url: https://www.ardanlabs.com/blog/index.xml
-                title: Ardan labs
-  - name: Home
+              - url: https://blog.stonegarden.dev/index.xml
+                title: Vegard S. Hagen
+              - url: https://smcleod.net/posts/index.xml
+                title: Sam McLeod
+  - name: Development
     columns:
       - size: small
         widgets:
@@ -108,21 +106,16 @@ pages:
                 label: Berlin
               - timezone: Europe/Moscow
                 label: Moscow
-          - type: rss
-            name: Go RSS
-            # style: detailed-list
-            collapse-after: 5
-            feeds:
-              - url: https://golangweekly.com/rss/1bq6k6i2
-                title: Golang Weekly
-              - url: https://blog.golang.org/feed.atom
-                title: Go Blog
-              - url: https://antonz.ru/rss/
-                title: Anton Zhiyanov
-              - url: https://smcleod.net/posts/index.xml
-                title: Sam McLeod
-              - url: https://blog.stonegarden.dev/index.xml
-                title: Vegard S. Hagen
+          - type: weather
+            location: "Berlin, Germany"
+          - type: markets
+            markets:
+              - symbol: SPY
+                name: S&P 500
+              - symbol: BTC-USD
+                name: Bitcoin
+              - symbol: DHER.DE
+                name: Delivery Hero
       - size: full
         widgets:
           - type: hacker-news
@@ -134,21 +127,26 @@ pages:
             collapse-after: 5
           - type: reddit
             subreddit: golang
-      - size: small
-        widgets:
-          - type: weather
-            location: "Berlin, Germany"
-          - type: markets
-            markets:
-              - symbol: SPY
-                name: S&P 500
-              - symbol: BTC-USD
-                name: Bitcoin
-              - symbol: DHER.DE
-                name: Delivery Hero\
           - type: rss
-            name: GitHub Go Trending
+            title: GitHub Trending
+            thumbnail-height: 100
             collapse-after: 5
             feeds:
+              - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/all.xml
+                title: GitHub Trending All
               - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/go.xml
                 title: GitHub Trending Go
+      - size: small
+        widgets:
+          - type: rss
+            title: Go Ecosystem
+            collapse-after: 5
+            feeds:
+              - url: https://golangweekly.com/rss/1bq6k6i2
+                title: Golang Weekly
+              - url: https://blog.golang.org/feed.atom
+                title: Go Blog
+              - url: https://antonz.ru/rss/
+                title: Anton Zhiyanov
+              - url: https://www.ardanlabs.com/blog/index.xml
+                title: Ardan Labs
