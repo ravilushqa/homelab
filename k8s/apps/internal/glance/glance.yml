@@ -74,26 +74,6 @@ pages:
               - UCUUTdohVElFLSP4NBnlPEwA # Jim's Garage
           - type: reddit
             subreddit: selfhosted
-          - type: rss
-            title: Engineering Blogs
-            collapse-after: 5
-            feeds:
-              - url: https://netflixtechblog.medium.com/feed
-                title: Netflix TechBlog
-              - url: https://engineering.atspotify.com/feed
-                title: Spotify Engineering
-              - url: https://dropbox.tech/feed
-                title: Dropbox Tech Blog
-              - url: https://www.uber.com/en-DE/blog/berlin/engineering/rss/
-                title: Uber Engineering
-                headers:
-                  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-              - url: http://feeds.feedburner.com/HighScalability
-                title: High Scalability
-              - url: https://blog.stonegarden.dev/index.xml
-                title: Vegard S. Hagen
-              - url: https://smcleod.net/posts/index.xml
-                title: Sam McLeod
   - name: Development
     columns:
       - size: small
@@ -112,21 +92,47 @@ pages:
             markets:
               - symbol: SPY
                 name: S&P 500
+              - symbol: BRYN.BE
+                name: Berkshire Hathaway
               - symbol: BTC-USD
                 name: Bitcoin
               - symbol: DHER.DE
                 name: Delivery Hero
       - size: full
         widgets:
-          - type: hacker-news
-          - type: lobsters
-            sort-by: hot
-            tags:
-              - go
-            limit: 15
+          - type: rss
+            title: Big Tech
             collapse-after: 5
-          - type: reddit
-            subreddit: golang
+            feeds:
+              - url: https://netflixtechblog.medium.com/feed
+                title: Netflix TechBlog
+              - url: https://engineering.atspotify.com/feed
+                title: Spotify Engineering
+              - url: https://dropbox.tech/feed
+                title: Dropbox Tech Blog
+              - url: https://www.uber.com/en-DE/blog/berlin/engineering/rss/
+                title: Uber Engineering
+                headers:
+                  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+              - url: http://feeds.feedburner.com/HighScalability
+                title: High Scalability
+              - url: https://blog.stonegarden.dev/index.xml
+                title: Vegard S. Hagen
+              - url: https://smcleod.net/posts/index.xml
+                title: Sam McLeod
+          - type: rss
+            title: Personal
+            collapse-after: 5
+            feeds:
+              - url: http://feeds.feedburner.com/HighScalability
+                title: High Scalability
+              - url: https://blog.stonegarden.dev/index.xml
+                title: Vegard S. Hagen
+              - url: https://smcleod.net/posts/index.xml
+                title: Sam McLeod
+          - type: hacker-news
+      - size: small
+        widgets:
           - type: rss
             title: GitHub Trending
             thumbnail-height: 100
@@ -134,9 +140,9 @@ pages:
             feeds:
               - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/all.xml
                 title: GitHub Trending All
-              - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/go.xml
-                title: GitHub Trending Go
-      - size: small
+  - name: Golang
+    columns:
+      - size: full
         widgets:
           - type: rss
             title: Go Ecosystem
@@ -146,7 +152,32 @@ pages:
                 title: Golang Weekly
               - url: https://blog.golang.org/feed.atom
                 title: Go Blog
+              - url: https://go.dev/blog/feed.atom
+                title: Go.dev Blog
               - url: https://antonz.ru/rss/
                 title: Anton Zhiyanov
               - url: https://www.ardanlabs.com/blog/index.xml
                 title: Ardan Labs
+              - url: https://dave.cheney.net/feed
+                title: Dave Cheney
+              - url: https://threedots.tech/index.xml
+                title: Three Dots
+          - type: reddit
+            subreddit: golang
+      - size: full
+        widgets:
+          - type: lobsters
+            sort-by: hot
+            tags:
+              - go
+            limit: 15
+            collapse-after: 5
+          - type: rss
+            title: GitHub Trending Go
+            thumbnail-height: 100
+            collapse-after: 5
+            feeds:
+              - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/go.xml
+                title: GitHub Trending Go
+              - url: https://mshibanami.github.io/GitHubTrendingRSS/daily/go.xml
+                title: GitHub Trending Go (Daily)
