@@ -23,9 +23,11 @@ pages:
                 icon: si:pihole
               - title: Grafana
                 url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
+                check-url: http://grafana.grafana.svc.cluster.local:3000
                 icon: si:grafana
               - title: Dockge
                 url: https://dockge.ravil.space
+                check-url: http://dockge.dockge.svc.cluster.local:5001
                 icon: si:docker
           - type: monitor
             cache: 1m
@@ -33,31 +35,51 @@ pages:
             sites:
               - title: Home Assistant
                 url: https://ha.ravil.space
+                check-url: http://home-assistant.haos.svc.cluster.local:8123
                 icon: si:homeassistant
               - title: Immich
                 url: https://immich.ravil.space
+                check-url: http://immich.immich.svc.cluster.local:2283
                 icon: si:immich
               - title: Karakeep
                 url: https://karakeep.ravil.space
+                check-url: http://karakeep.karakeep.svc.cluster.local:3000
                 icon: si:keras
               - title: ChangeDetection
                 url: https://changedetection.ravil.space
+                check-url: http://changedetection.changedetection.svc.cluster.local:5000
                 icon: di:changedetection
+              - title: Spotify
+                url: https://spotify.ravil.space
+                check-url: http://spotify.spotify.svc.cluster.local:3000
+                icon: si:spotify
+              - title: Bytestash
+                url: https://bytestash.ravil.space
+                check-url: http://bytestash.bytestash.svc.cluster.local:5000
+                icon: si:databricks
+              - title: Paperless
+                url: https://paperless.ravil.space
+                check-url: http://paperless.paperless.svc.cluster.local:8000
+                icon: si:paperlessngx
           - type: monitor
             cache: 1m
             title: Productivity & AI
             sites:
               - title: OpenWebUI
                 url: https://openwebui.ravil.space
+                check-url: http://openwebui.openwebui.svc.cluster.local:8080
                 icon: di:open-webui-light
               - title: Dify
                 url: https://dify.ravil.space
+                check-url: http://dify.dify.svc.cluster.local:80
                 icon: si:openai
               - title: PDF Tools
                 url: https://pdf.ravil.space
+                check-url: http://pdf.pdf.svc.cluster.local:8080
                 icon: si:adobeacrobatreader
               - title: IT Tools
                 url: https://it-tools.ravil.space
+                check-url: http://it-tools.it-tools.svc.cluster.local:80
                 icon: di:it-tools-light
               - title: Glance
                 url: https://glance.ravil.space
@@ -72,6 +94,7 @@ pages:
               - UCOk-gHyjcWZNj3Br4oxwh0A # Techno Tim
               - UCZNhwA1B5YqiY1nLzmM0ZRg # Christian Lempa
               - UCUUTdohVElFLSP4NBnlPEwA # Jim's Garage
+              - UCgdTVe88YVSrOZ9qKumhULQ # Hardware Haven
           - type: reddit
             subreddit: selfhosted
   - name: Development
