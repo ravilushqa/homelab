@@ -70,7 +70,7 @@ glance-restart:
 	kubectl delete pod -l app=glance -n glance
 
 cloudflare-ddns-gen:
-	$(MAKE) -C k8s/infra/network/cloudflare-ddns gen
+	#$(MAKE) -C k8s/infra/network/cloudflare-ddns gen
 
 isponsorblocktv-restart:
 	kubectl delete pod -l app=isponsorblocktv -n isponsorblocktv
