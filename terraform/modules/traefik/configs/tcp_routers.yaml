@@ -3,12 +3,12 @@ tcp:
     test-ravil-space-tcp-router:
       entryPoints:
         - websecure
-      rule: "HostSNIRegexp(`^.+\\.test\\.ravil\\.space$`)"
+      rule: "HostSNIRegexp(`^.+\\.test\\.ravil\\.space$`) || HostSNI(`paperless.ravil.space`)"
       service: test-ravil-space-tcp-service
       priority: 100
       tls:
         passthrough: true
-    
+
     tcp-router:
       entryPoints:
         - websecure
@@ -23,7 +23,7 @@ tcp:
       loadBalancer:
         servers:
           - address: "192.168.1.237:443"
-    
+
     tcp-service:
       loadBalancer:
         servers:
