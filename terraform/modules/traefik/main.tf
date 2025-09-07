@@ -4,6 +4,8 @@ resource "proxmox_virtual_environment_container" "traefik" {
   node_name    = "pve01"
   unprivileged = true
 
+
+
   memory {
     swap = 512
   }
@@ -45,9 +47,9 @@ resource "proxmox_virtual_environment_container" "traefik" {
   }
 
   connection {
-    type = "ssh"
-    host = "192.168.1.4" # Container's IP
-    user = "root"
+    type        = "ssh"
+    host        = "192.168.1.4" # Container's IP
+    user        = "root"
     private_key = trimspace(tls_private_key.ubuntu_container_key.private_key_openssh)
   }
 
@@ -98,4 +100,36 @@ resource "random_password" "ubuntu_container_password" {
 resource "tls_private_key" "ubuntu_container_key" {
   algorithm = "RSA"
   rsa_bits  = 2048
+}
+
+resource "null_resource" "traefik_config_sync" {
+  triggers = {
+    tcp_routers_hash    = filemd5("${path.module}/configs/tcp_routers.yaml")
+    traefik_config_hash = filemd5("${path.module}/configs/traefik.yml")
+  }
+
+  connection {
+    type        = "ssh"
+    host        = "192.168.1.4"
+    user        = "root"
+    private_key = trimspace(tls_private_key.ubuntu_container_key.private_key_openssh)
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/configs/tcp_routers.yaml"
+    destination = "/etc/traefik/conf.d/tcp_routers.yaml"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/configs/traefik.yml"
+    destination = "/etc/traefik/traefik.yml"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "systemctl restart traefik || service traefik restart"
+    ]
+  }
+
+  depends_on = [proxmox_virtual_environment_container.traefik]
 }
