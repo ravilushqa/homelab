@@ -1,6 +1,6 @@
 .ONESHELL: # Applies to every targets in the file!
 DEFAULT_KUBECONFIG := ~/.kube/config
-DEFAULT_GOAL := bootstrap
+.DEFAULT_GOAL := bootstrap
 
 include k8s/infra/network/cloudflare-ddns/Makefile
 
