@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: inbox-zero
+
+resources:
+  - ns.yaml
+  - deployment.yaml
+  - svc.yaml
+  - http-route.yaml
+  - sealed-config.yaml
+
+labels:
+  - pairs:
+      app: inbox-zero

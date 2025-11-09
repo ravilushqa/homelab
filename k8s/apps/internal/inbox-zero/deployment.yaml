@@ -1,0 +1,174 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inbox-zero
+  namespace: inbox-zero
+  labels:
+    app: inbox-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inbox-zero
+  template:
+    metadata:
+      labels:
+        app: inbox-zero
+    spec:
+      dnsPolicy: "None"
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+        searches:
+          - inbox-zero.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+        options:
+          - name: ndots
+            value: "2"
+      containers:
+      - name: inbox-zero
+        image: ravilushqa/inbox-zero:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        # Database
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: database-url
+        - name: DIRECT_URL
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: database-url
+
+        # Base URL
+        - name: NEXT_PUBLIC_BASE_URL
+          value: "https://inbox-zero.ravil.space"
+        - name: NEXTAUTH_URL
+          value: "https://inbox-zero.ravil.space"
+        - name: APP_URL
+          value: "https://inbox-zero.ravil.space"
+
+        # Auth
+        - name: AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: auth-secret
+
+        # Gmail OAuth
+        - name: GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: google-client-id
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: google-client-secret
+        - name: EMAIL_ENCRYPT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: email-encrypt-secret
+        - name: EMAIL_ENCRYPT_SALT
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: email-encrypt-salt
+        - name: GOOGLE_ENCRYPT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: google-encrypt-secret
+        - name: GOOGLE_ENCRYPT_SALT
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: google-encrypt-salt
+        - name: GOOGLE_PUBSUB_TOPIC_NAME
+          value: "projects/inbox-zero-prod/topics/gmail-notifications"
+
+        # LLM Config
+        - name: DEFAULT_LLM_PROVIDER
+          value: "openrouter"
+        - name: DEFAULT_LLM_MODEL
+          value: ""
+        - name: ECONOMY_LLM_PROVIDER
+          value: "openrouter"
+        - name: ECONOMY_LLM_MODEL
+          value: ""
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: openrouter-api-key
+
+        # Internal API
+        - name: INTERNAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: internal-api-key
+        - name: API_KEY_SALT
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: api-key-salt
+
+        # Redis (Upstash)
+        - name: UPSTASH_REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: upstash-redis-url
+        - name: UPSTASH_REDIS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-secrets
+              key: upstash-redis-token
+
+        # Admin
+        - name: ADMINS
+          value: "galaktionov.r@gmail.com"
+
+        # Optional
+        - name: NEXT_PUBLIC_APP_HOME_PATH
+          value: "/assistant"
+        - name: LOG_ZOD_ERRORS
+          value: "true"
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
