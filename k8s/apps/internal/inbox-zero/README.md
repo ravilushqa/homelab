@@ -122,7 +122,7 @@ kubectl logs -n inbox-zero -l app=inbox-zero
 
 Common issues:
 - Database connection failed - check DATABASE_URL and DNS configuration
-- Missing secrets - ensure sealed-secret.yaml is applied
+- Missing secrets - ensure sealed-config.yaml is applied
 - Image pull errors - check image tag and registry
 
 ### Database Migrations
