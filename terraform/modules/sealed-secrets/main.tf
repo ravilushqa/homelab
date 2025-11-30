@@ -30,7 +30,7 @@ resource "helm_release" "sealed_secrets" {
   repository = "oci://registry-1.docker.io/bitnamicharts"
   chart      = "sealed-secrets"
   namespace  = "sealed-secrets"
-  version    = "2.4.9"
+  version    = "2.5.19"
 
   values = [var.helm_values]
 
