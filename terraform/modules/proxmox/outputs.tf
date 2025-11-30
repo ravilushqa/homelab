@@ -15,3 +15,16 @@ output "vm_ids" {
   )
   description = "Map of all VM names to their IDs"
 }
+
+output "node_name" {
+  value       = var.node_name
+  description = "Proxmox node name where VMs are created"
+}
+
+output "vm_hostnames" {
+  value = {
+    control_plane = keys({ for k, v in local.vms : k => v if !lookup(v, "depends_on_cp", false) })[0]
+    worker        = keys({ for k, v in local.vms : k => v if lookup(v, "depends_on_cp", false) })[0]
+  }
+  description = "Hostnames for control plane and worker VMs"
+}
