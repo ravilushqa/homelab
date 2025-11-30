@@ -39,6 +39,9 @@ module "talos" {
 
   talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
   talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
+  talos_cp_hostname       = module.proxmox.vm_hostnames.control_plane
+  talos_worker_hostname   = module.proxmox.vm_hostnames.worker
+  proxmox_node_name       = module.proxmox.node_name
 
   cilium = {
     values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")

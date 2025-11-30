@@ -20,8 +20,8 @@ resource "talos_machine_configuration_apply" "cp_config_apply" {
   node                        = var.talos_cp_01_ip_addr
   config_patches = [
     templatefile("${path.module}/patches/control-plane.yaml.tmpl", {
-      hostname       = "talos-cp-01"
-      node_name      = "pve01"
+      hostname       = var.talos_cp_hostname
+      node_name      = var.proxmox_node_name
       cluster_name   = var.cluster_name
       cilium_values  = var.cilium.values
       cilium_install = var.cilium.install
@@ -43,8 +43,8 @@ resource "talos_machine_configuration_apply" "worker_config_apply" {
   node                        = var.talos_worker_01_ip_addr
   config_patches = [
     templatefile("${path.module}/patches/worker.yaml.tmpl", {
-      hostname     = "talos-worker-01"
-      node_name    = "pve01"
+      hostname     = var.talos_worker_hostname
+      node_name    = var.proxmox_node_name
       cluster_name = var.cluster_name
     }),
   ]
