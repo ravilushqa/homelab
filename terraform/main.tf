@@ -10,7 +10,7 @@ provider "proxmox" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     host                   = local.k8s_cluster.host
     client_certificate     = local.k8s_client.client_certificate
     client_key             = local.k8s_client.client_key
