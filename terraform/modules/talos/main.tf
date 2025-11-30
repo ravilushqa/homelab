@@ -43,9 +43,9 @@ resource "talos_machine_configuration_apply" "worker_config_apply" {
   node                        = var.talos_worker_01_ip_addr
   config_patches = [
     templatefile("${path.module}/patches/worker.yaml.tmpl", {
-      hostname       = "talos-worker-01"
-      node_name      = "pve01"
-      cluster_name   = var.cluster_name
+      hostname     = "talos-worker-01"
+      node_name    = "pve01"
+      cluster_name = var.cluster_name
     }),
   ]
 }

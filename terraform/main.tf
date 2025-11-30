@@ -11,18 +11,18 @@ provider "proxmox" {
 
 provider "helm" {
   kubernetes {
-    host                   = yamldecode(module.talos.kubeconfig)["clusters"][0]["cluster"]["server"]
-    client_certificate     = base64decode(yamldecode(module.talos.kubeconfig)["users"][0]["user"]["client-certificate-data"])
-    client_key             = base64decode(yamldecode(module.talos.kubeconfig)["users"][0]["user"]["client-key-data"])
-    cluster_ca_certificate = base64decode(yamldecode(module.talos.kubeconfig)["clusters"][0]["cluster"]["certificate-authority-data"])
+    host                   = local.k8s_cluster.host
+    client_certificate     = local.k8s_client.client_certificate
+    client_key             = local.k8s_client.client_key
+    cluster_ca_certificate = local.k8s_cluster.cluster_ca_certificate
   }
 }
 
 provider "kubernetes" {
-  host                   = yamldecode(module.talos.kubeconfig)["clusters"][0]["cluster"]["server"]
-  client_certificate     = base64decode(yamldecode(module.talos.kubeconfig)["users"][0]["user"]["client-certificate-data"])
-  client_key             = base64decode(yamldecode(module.talos.kubeconfig)["users"][0]["user"]["client-key-data"])
-  cluster_ca_certificate = base64decode(yamldecode(module.talos.kubeconfig)["clusters"][0]["cluster"]["certificate-authority-data"])
+  host                   = local.k8s_cluster.host
+  client_certificate     = local.k8s_client.client_certificate
+  client_key             = local.k8s_client.client_key
+  cluster_ca_certificate = local.k8s_cluster.cluster_ca_certificate
 }
 
 module "proxmox" {
@@ -30,6 +30,7 @@ module "proxmox" {
   default_gateway         = var.default_gateway
   talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
   talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
+  datastore_id            = var.datastore_id
 }
 
 module "talos" {

@@ -34,6 +34,12 @@ variable "talos_worker_01_ip_addr" {
   description = "IP address for worker node"
 }
 
+variable "datastore_id" {
+  type        = string
+  default     = "local-lvm"
+  description = "Datastore ID for Proxmox storage"
+}
+
 # Monitoring
 variable "monitoring_enabled" {
   type    = bool

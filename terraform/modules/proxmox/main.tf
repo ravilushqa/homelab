@@ -1,44 +1,47 @@
-resource "proxmox_virtual_environment_vm" "talos_cp_01" {
-  name        = "talos-cp-01"
-  description = "Managed by Terraform"
-  tags        = ["terraform"]
-  node_name   = "pve01"
-  on_boot     = true
+# Control plane node
+resource "proxmox_virtual_environment_vm" "talos_cp" {
+  for_each = { for k, v in local.vms : k => v if !lookup(v, "depends_on_cp", false) }
+
+  name        = each.key
+  description = local.common_vm_config.description
+  tags        = local.common_vm_config.tags
+  node_name   = local.common_vm_config.node_name
+  on_boot     = local.common_vm_config.on_boot
 
   cpu {
-    cores = 2
-    type  = "x86-64-v2-AES"
+    cores = each.value.cpu.cores
+    type  = each.value.cpu.type
   }
 
   memory {
-    dedicated = 4096
+    dedicated = each.value.memory.dedicated
   }
 
   agent {
-    enabled = true
+    enabled = local.common_vm_config.agent.enabled
   }
 
   network_device {
-    bridge = "vmbr0"
+    bridge = local.common_vm_config.network_device.bridge
   }
 
   disk {
-    datastore_id = "local-lvm"
+    datastore_id = local.common_vm_config.disk.datastore_id
     file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
-    file_format  = "raw"
-    interface    = "virtio0"
-    size         = 20
+    file_format  = local.common_vm_config.disk.file_format
+    interface    = local.common_vm_config.disk.interface
+    size         = local.common_vm_config.disk.size
   }
 
   operating_system {
-    type = "l26" # Linux Kernel 2.6 - 5.X.
+    type = local.common_vm_config.operating_system.type
   }
 
   initialization {
-    datastore_id = "local-lvm"
+    datastore_id = local.common_vm_config.disk.datastore_id
     ip_config {
       ipv4 {
-        address = "${var.talos_cp_01_ip_addr}/24"
+        address = "${each.value.ip_addr}/24"
         gateway = var.default_gateway
       }
       ipv6 {
@@ -48,48 +51,52 @@ resource "proxmox_virtual_environment_vm" "talos_cp_01" {
   }
 }
 
-resource "proxmox_virtual_environment_vm" "talos_worker_01" {
-  depends_on  = [proxmox_virtual_environment_vm.talos_cp_01]
-  name        = "talos-worker-01"
-  description = "Managed by Terraform"
-  tags        = ["terraform"]
-  node_name   = "pve01"
-  on_boot     = true
+# Worker nodes (depend on control plane)
+resource "proxmox_virtual_environment_vm" "talos_workers" {
+  for_each = { for k, v in local.vms : k => v if lookup(v, "depends_on_cp", false) }
+
+  depends_on = [proxmox_virtual_environment_vm.talos_cp]
+
+  name        = each.key
+  description = local.common_vm_config.description
+  tags        = local.common_vm_config.tags
+  node_name   = local.common_vm_config.node_name
+  on_boot     = local.common_vm_config.on_boot
 
   cpu {
-    cores = 4
-    type  = "x86-64-v2-AES"
+    cores = each.value.cpu.cores
+    type  = each.value.cpu.type
   }
 
   memory {
-    dedicated = 8192
+    dedicated = each.value.memory.dedicated
   }
 
   agent {
-    enabled = true
+    enabled = local.common_vm_config.agent.enabled
   }
 
   network_device {
-    bridge = "vmbr0"
+    bridge = local.common_vm_config.network_device.bridge
   }
 
   disk {
-    datastore_id = "local-lvm"
+    datastore_id = local.common_vm_config.disk.datastore_id
     file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
-    file_format  = "raw"
-    interface    = "virtio0"
-    size         = 20
+    file_format  = local.common_vm_config.disk.file_format
+    interface    = local.common_vm_config.disk.interface
+    size         = local.common_vm_config.disk.size
   }
 
   operating_system {
-    type = "l26" # Linux Kernel 2.6 - 5.X.
+    type = local.common_vm_config.operating_system.type
   }
 
   initialization {
-    datastore_id = "local-lvm"
+    datastore_id = local.common_vm_config.disk.datastore_id
     ip_config {
       ipv4 {
-        address = "${var.talos_worker_01_ip_addr}/24"
+        address = "${each.value.ip_addr}/24"
         gateway = var.default_gateway
       }
       ipv6 {
