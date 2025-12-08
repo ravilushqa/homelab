@@ -52,6 +52,10 @@ k8s-apply: cloudflare-ddns-gen
 	kubectl kustomize --enable-helm ./k8s/infra/security/cert-manager | kubectl apply -f -
 	@echo "Deploying ArgoCD..."
 	kubectl kustomize --enable-helm ./k8s/infra/argocd | kubectl apply -f -
+	@echo "Waiting for ArgoCD CRDs to be ready..."
+	@sleep 5
+	@echo "Applying ArgoCD applications..."
+	kubectl apply -k ./k8s/infra/argocd/applications
 	@echo "Bootstrap complete. Further application deployments will be managed by ArgoCD."
 
 # ArgoCD management commands
