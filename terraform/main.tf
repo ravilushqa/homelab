@@ -25,28 +25,30 @@ provider "kubernetes" {
   cluster_ca_certificate = local.k8s_cluster.cluster_ca_certificate
 }
 
+module "talos" {
+  source = "./modules/talos"
+
+  talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
+  talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
+  talos_cp_hostname       = "talos-cp-01"
+  talos_worker_hostname   = "talos-worker-01"
+  proxmox_node_name       = "pve01"
+  vm_ids                  = module.proxmox.vm_ids
+
+  cilium = {
+    values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
+    install = file("${path.module}/modules/talos/inline-manifests/cilium-install.yaml")
+  }
+}
+
 module "proxmox" {
   source                  = "./modules/proxmox"
   default_gateway         = var.default_gateway
   talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
   talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
   datastore_id            = var.datastore_id
-}
-
-module "talos" {
-  depends_on = [module.proxmox]
-  source     = "./modules/talos"
-
-  talos_cp_01_ip_addr     = var.talos_cp_01_ip_addr
-  talos_worker_01_ip_addr = var.talos_worker_01_ip_addr
-  talos_cp_hostname       = module.proxmox.vm_hostnames.control_plane
-  talos_worker_hostname   = module.proxmox.vm_hostnames.worker
-  proxmox_node_name       = module.proxmox.node_name
-
-  cilium = {
-    values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
-    install = file("${path.module}/modules/talos/inline-manifests/cilium-install.yaml")
-  }
+  talos_image_url         = module.talos.disk_image_url
+  talos_version           = module.talos.talos_version
 }
 
 module "monitoring" {

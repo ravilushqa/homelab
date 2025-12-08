@@ -28,8 +28,3 @@ output "vm_hostnames" {
   }
   description = "Hostnames for control plane and worker VMs"
 }
-
-output "talos_image_urls" {
-  value       = data.talos_image_factory_urls.this.urls
-  description = "Generated Talos image factory URLs"
-}
