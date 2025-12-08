@@ -24,3 +24,13 @@ variable "datastore_id" {
   default     = "local-lvm"
   description = "Datastore ID for Proxmox storage"
 }
+
+variable "talos_image_url" {
+  type        = string
+  description = "URL to download the Talos disk image"
+}
+
+variable "talos_version" {
+  type        = string
+  description = "Talos version for image naming"
+}

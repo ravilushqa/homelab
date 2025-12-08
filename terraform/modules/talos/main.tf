@@ -14,6 +14,9 @@ data "talos_machine_configuration" "machineconfig_cp" {
 }
 
 resource "talos_machine_configuration_apply" "cp_config_apply" {
+  # Ensure VMs are created before applying configuration
+  depends_on = [var.vm_ids]
+
   client_configuration        = talos_machine_secrets.machine_secrets.client_configuration
   machine_configuration_input = data.talos_machine_configuration.machineconfig_cp.machine_configuration
   count                       = 1
@@ -37,6 +40,9 @@ data "talos_machine_configuration" "machineconfig_worker" {
 }
 
 resource "talos_machine_configuration_apply" "worker_config_apply" {
+  # Ensure VMs are created before applying configuration
+  depends_on = [var.vm_ids]
+
   client_configuration        = talos_machine_secrets.machine_secrets.client_configuration
   machine_configuration_input = data.talos_machine_configuration.machineconfig_worker.machine_configuration
   count                       = 1
