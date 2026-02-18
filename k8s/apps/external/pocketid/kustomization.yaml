@@ -42,7 +42,7 @@ patches:
         value: 1411
       - op: replace
         path: /endpoints/0/addresses/0
-        value: 192.168.1.220
+        value: 192.168.1.112
     target:
       kind: EndpointSlice
       name: service-name
