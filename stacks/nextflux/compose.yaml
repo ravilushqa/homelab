@@ -1,0 +1,7 @@
+services:
+  nextflux:
+    image: electh/nextflux:latest
+    container_name: nextflux
+    restart: unless-stopped
+    ports:
+      - 8071:3000

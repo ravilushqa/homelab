@@ -1,0 +1,35 @@
+services:
+  miniflux-db:
+    image: postgres:16-alpine
+    container_name: miniflux-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: miniflux
+      POSTGRES_PASSWORD: ${MINIFLUX_DB_PASSWORD}
+      POSTGRES_DB: miniflux
+    volumes:
+      - miniflux-db:/var/lib/postgresql/data
+
+  miniflux:
+    image: miniflux/miniflux:latest
+    container_name: miniflux
+    restart: unless-stopped
+    depends_on:
+      - miniflux-db
+    ports:
+      - 8070:8080
+    environment:
+      DATABASE_URL: postgres://miniflux:${MINIFLUX_DB_PASSWORD}@miniflux-db/miniflux?sslmode=disable
+      RUN_MIGRATIONS: "1"
+      CREATE_ADMIN: "1"
+      ADMIN_USERNAME: ${MINIFLUX_ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${MINIFLUX_ADMIN_PASSWORD}
+      OAUTH2_PROVIDER: oidc
+      OAUTH2_CLIENT_ID: ${MINIFLUX_OIDC_CLIENT_ID}
+      OAUTH2_CLIENT_SECRET: ${MINIFLUX_OIDC_CLIENT_SECRET}
+      OAUTH2_REDIRECT_URL: https://miniflux.ravil.space/oauth2/oidc/callback
+      OAUTH2_OIDC_DISCOVERY_ENDPOINT: https://pocketid.ravil.space
+      OAUTH2_USER_CREATION: "1"
+
+volumes:
+  miniflux-db:
