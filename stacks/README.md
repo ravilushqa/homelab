@@ -9,6 +9,22 @@ Secrets are stored in Komodo Variables/Secrets — never in this repo.
 
 ## Required Secrets in Komodo
 
+### traefik
+- `DOMAIN`
+- `ACME_EMAIL`
+- `CF_DNS_API_TOKEN`
+- `TRAEFIK_OIDC_CLIENT_ID`
+- `TRAEFIK_OIDC_CLIENT_SECRET`
+- `OIDC_SECRET`
+
+### paperless-ngx
+- `PAPERLESS_DB_PASSWORD`
+- `PAPERLESS_SECRET_KEY`
+- `PAPERLESS_OIDC_CLIENT_ID`
+- `PAPERLESS_OIDC_CLIENT_SECRET`
+- `PAPERLESS_API_TOKEN`
+- `PAPERLESS_GPT_OPENAI_KEY`
+
 ### bytestash
 - `BYTESTASH_JWT_SECRET`
 - `BYTESTASH_OIDC_CLIENT_ID`

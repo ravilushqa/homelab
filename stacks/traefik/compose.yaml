@@ -1,0 +1,84 @@
+services:
+  traefik:
+    image: traefik:v3.6.7
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # API and dashboard
+      - --api.dashboard=true
+      - --api.debug=true
+
+      # EntryPoints with global OIDC middleware
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.middlewares=oidc-auth@docker
+
+      # HTTP to HTTPS redirect
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+
+      # Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+
+      # Let's Encrypt with Cloudflare DNS challenge
+      - --certificatesresolvers.cloudflare.acme.dnschallenge=true
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      - --certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme.json
+
+      # Logging
+      - --log.level=INFO
+      - --accesslog=true
+
+      # Global settings
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+
+      # OIDC auth plugin
+      - --experimental.plugins.traefik-oidc-auth.modulename=github.com/sevensolutions/traefik-oidc-auth
+      - --experimental.plugins.traefik-oidc-auth.version=v0.15.0
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"
+
+    environment:
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      DOMAIN: ${DOMAIN}
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+
+    labels:
+      - "traefik.enable=true"
+      # Dashboard
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.priority=100"
+      # Global OIDC middleware
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.Url=https://pocketid.ravil.space"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.ClientId=${TRAEFIK_OIDC_CLIENT_ID}"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.ClientSecret=${TRAEFIK_OIDC_CLIENT_SECRET}"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Scopes=openid,profile,email"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Secret=${OIDC_SECRET}"
+
+  whoami:
+    image: traefik/whoami
+    container_name: whoami
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
+      - "traefik.http.routers.whoami.entrypoints=web,websecure"
+      - "traefik.http.routers.whoami.tls.certresolver=cloudflare"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+
+volumes:
+  letsencrypt:
