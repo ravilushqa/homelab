@@ -29,6 +29,7 @@ services:
       - "traefik.http.routers.n8n.tls.certresolver=cloudflare"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
       - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.n8n.middlewares="
 
 volumes:
   n8n_data:
