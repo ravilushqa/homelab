@@ -38,6 +38,7 @@ services:
       - "traefik.http.routers.miniflux.tls.certresolver=cloudflare"
       - "traefik.http.services.miniflux.loadbalancer.server.port=8080"
       - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.miniflux.middlewares="
 
 volumes:
   miniflux-db:

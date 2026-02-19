@@ -31,6 +31,7 @@ services:
       - "traefik.http.routers.karakeep.tls.certresolver=cloudflare"
       - "traefik.http.services.karakeep.loadbalancer.server.port=3000"
       - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.karakeep.middlewares="
 
   chrome:
     image: gcr.io/zenika-hub/alpine-chrome:124
