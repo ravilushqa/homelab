@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+
+components:
+  - ../../../components/external-service
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: rsshub
+      - op: replace
+        path: /metadata/namespace
+        value: rsshub
+      - op: replace
+        path: /spec/ports/0/port
+        value: 1200
+    target:
+      kind: Service
+      name: service-name
+
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: rsshub
+      - op: replace
+        path: /metadata/namespace
+        value: rsshub
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: rsshub
+      - op: replace
+        path: /ports/0/port
+        value: 1200
+      - op: replace
+        path: /endpoints/0/addresses/0
+        value: 192.168.1.49
+    target:
+      kind: EndpointSlice
+      name: service-name
+
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: rsshub
+      - op: replace
+        path: /metadata/namespace
+        value: rsshub
+      - op: replace
+        path: /spec/hostnames/0
+        value: rsshub.ravil.space
+      - op: replace
+        path: /spec/rules/0/backendRefs/0/name
+        value: rsshub
+      - op: replace
+        path: /spec/rules/0/backendRefs/0/port
+        value: 1200
+    target:
+      kind: HTTPRoute
+      name: service-name
