@@ -43,7 +43,7 @@ pages:
                 icon: si:immich
               - title: Karakeep
                 url: https://karakeep.ravil.space
-                check-url: http://karakeep.karakeep.svc.cluster.local:3000
+                check-url: http://karakeep.karakeep.svc.cluster.local:3003
                 icon: si:keras
               - title: ChangeDetection
                 url: https://changedetection.ravil.space
