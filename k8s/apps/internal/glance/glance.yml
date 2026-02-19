@@ -72,7 +72,7 @@ pages:
               - title: RSSHub
                 url: https://rsshub.ravil.space
                 check-url: http://rsshub.rsshub.svc.cluster.local:1200
-                icon: si:rssdotcom
+                icon: si:rss
           - type: monitor
             cache: 1m
             title: Productivity & AI
