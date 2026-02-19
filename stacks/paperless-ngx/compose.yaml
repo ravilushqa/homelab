@@ -1,0 +1,104 @@
+networks:
+  default:
+    name: paperless-ngx_default
+  traefik:
+    name: traefik_default
+    external: true
+
+services:
+  broker:
+    image: docker.io/library/redis:8
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  db:
+    image: docker.io/library/postgres:17
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paperless.rule=Host(`paperless.ravil.space`)"
+      - "traefik.http.routers.paperless.entrypoints=websecure"
+      - "traefik.http.routers.paperless.tls.certresolver=cloudflare"
+      - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.paperless.middlewares="
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+      - gotenberg
+      - tika
+    ports:
+      - "8000:8000"
+    volumes:
+      - data:/usr/src/paperless/data
+      - /mnt/raid1/paperless/media:/usr/src/paperless/media
+      - /mnt/raid1/paperless/export:/usr/src/paperless/export
+      - /mnt/raid1/paperless/consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_URL: https://paperless.ravil.space
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_APPS: allauth.socialaccount.providers.openid_connect
+      PAPERLESS_SOCIALACCOUNT_PROVIDERS: >-
+        {"openid_connect":{"SCOPE":["openid","profile","email"],"OAUTH_PKCE_ENABLED":true,"APPS":[{"provider_id":"pocket-id","name":"Pocket-ID","client_id":"${PAPERLESS_OIDC_CLIENT_ID}","secret":"${PAPERLESS_OIDC_CLIENT_SECRET}","settings":{"server_url":"https://pocketid.ravil.space"}}]}}
+
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:8.20
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  tika:
+    image: docker.io/apache/tika:latest
+    restart: unless-stopped
+
+  paperless-gpt:
+    image: icereed/paperless-gpt:latest
+    restart: unless-stopped
+    environment:
+      PAPERLESS_BASE_URL: "http://webserver:8000"
+      PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN}
+      MANUAL_TAG: "paperless-gpt"
+      AUTO_TAG: "paperless-gpt-auto"
+      LLM_PROVIDER: "openai"
+      LLM_MODEL: "gpt-4o"
+      OPENAI_API_KEY: ${PAPERLESS_GPT_OPENAI_KEY}
+      OPENAI_BASE_URL: "https://openrouter.ai/api/v1"
+      OCR_PROVIDER: "llm"
+      VISION_LLM_PROVIDER: "openai"
+      VISION_LLM_MODEL: "gpt-4o"
+      AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
+      OCR_LIMIT_PAGES: "5"
+      LOG_LEVEL: "info"
+    volumes:
+      - ./prompts:/app/prompts
+    ports:
+      - "8083:8080"
+    depends_on:
+      - webserver
+
+volumes:
+  data:
+  pgdata:
+  redisdata:
