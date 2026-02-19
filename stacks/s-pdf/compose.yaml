@@ -21,6 +21,7 @@ services:
       - "traefik.http.routers.s-pdf.tls.certresolver=cloudflare"
       - "traefik.http.services.s-pdf.loadbalancer.server.port=8080"
       - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.s-pdf.middlewares=oidc-auth@docker"
 
 volumes:
   trainingData:
