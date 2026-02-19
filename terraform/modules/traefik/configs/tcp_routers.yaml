@@ -1,30 +1,43 @@
 tcp:
   routers:
-    test-ravil-space-tcp-router:
+    komodo-tcp-router:
       entryPoints:
         - websecure
-      rule: "HostSNIRegexp(`^.+\\.test\\.ravil\\.space$`) || HostSNI(`paperless.ravil.space`)"
-      service: test-ravil-space-tcp-service
+      rule: >-
+        HostSNIRegexp(`^.+\.test\.ravil\.space$`)
+        || HostSNI(`paperless.ravil.space`)
+        || HostSNI(`bytestash.ravil.space`)
+        || HostSNI(`dozzle.ravil.space`)
+        || HostSNI(`nextflux.ravil.space`)
+        || HostSNI(`rsshub.ravil.space`)
+        || HostSNI(`pdf.ravil.space`)
+        || HostSNI(`n8n.ravil.space`)
+        || HostSNI(`miniflux.ravil.space`)
+        || HostSNI(`karakeep.ravil.space`)
+        || HostSNI(`spotify.ravil.space`)
+        || HostSNI(`spotify-server.ravil.space`)
+        || HostSNI(`pocketid.ravil.space`)
+      service: komodo-tcp-service
       priority: 100
       tls:
         passthrough: true
 
-    tcp-router:
+    k8s-tcp-router:
       entryPoints:
         - websecure
       rule: 'HostSNI("*")'
-      service: tcp-service
+      service: k8s-tcp-service
       priority: 50
       tls:
         passthrough: true
 
   services:
-    test-ravil-space-tcp-service:
+    komodo-tcp-service:
       loadBalancer:
         servers:
-          - address: "192.168.1.237:443"
+          - address: "192.168.1.166:443"
 
-    tcp-service:
+    k8s-tcp-service:
       loadBalancer:
         servers:
           - address: "192.168.1.222:443"
