@@ -4,8 +4,6 @@ services:
     restart: always
     volumes:
       - bytestash_data:/data/snippets
-    ports:
-      - 5000:5000
     environment:
       BASE_PATH: ""
       JWT_SECRET: ${BYTESTASH_JWT_SECRET}
@@ -20,6 +18,23 @@ services:
       OIDC_CLIENT_ID: ${BYTESTASH_OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${BYTESTASH_OIDC_CLIENT_SECRET}
       OIDC_SCOPES: openid profile email
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bytestash.rule=Host(`bytestash.ravil.space`)"
+      - "traefik.http.routers.bytestash.entrypoints=websecure"
+      - "traefik.http.routers.bytestash.tls.certresolver=cloudflare"
+      - "traefik.http.services.bytestash.loadbalancer.server.port=5000"
+      - "traefik.docker.network=traefik_default"
 
 volumes:
   bytestash_data:
+
+networks:
+  default:
+    name: bytestash_default
+  traefik:
+    name: traefik_default
+    external: true

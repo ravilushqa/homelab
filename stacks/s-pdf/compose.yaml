@@ -3,8 +3,6 @@ services:
     image: frooodle/s-pdf:latest
     container_name: stirling-pdf
     restart: always
-    ports:
-      - 8080:8080
     volumes:
       - trainingData:/usr/share/tessdata
       - extraConfigs:/configs
@@ -13,8 +11,25 @@ services:
       DOCKER_ENABLE_SECURITY: "false"
       INSTALL_BOOK_AND_ADVANCED_HTML_OPS: "false"
       LANGS: en_GB
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.s-pdf.rule=Host(`pdf.ravil.space`)"
+      - "traefik.http.routers.s-pdf.entrypoints=websecure"
+      - "traefik.http.routers.s-pdf.tls.certresolver=cloudflare"
+      - "traefik.http.services.s-pdf.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
 
 volumes:
   trainingData:
   extraConfigs:
   logs:
+
+networks:
+  default:
+    name: s-pdf_default
+  traefik:
+    name: traefik_default
+    external: true

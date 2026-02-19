@@ -3,5 +3,20 @@ services:
     image: electh/nextflux:latest
     container_name: nextflux
     restart: unless-stopped
-    ports:
-      - 8071:3000
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextflux.rule=Host(`nextflux.ravil.space`)"
+      - "traefik.http.routers.nextflux.entrypoints=websecure"
+      - "traefik.http.routers.nextflux.tls.certresolver=cloudflare"
+      - "traefik.http.services.nextflux.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik_default"
+
+networks:
+  default:
+    name: nextflux_default
+  traefik:
+    name: traefik_default
+    external: true

@@ -5,8 +5,6 @@ services:
     restart: unless-stopped
     volumes:
       - karakeep_data:/data
-    ports:
-      - 3003:3000
     environment:
       MEILI_ADDR: http://meilisearch:7700
       BROWSER_WEB_URL: http://chrome:9222
@@ -23,6 +21,16 @@ services:
       OPENAI_API_KEY: ${KARAKEEP_OPENAI_API_KEY}
       INFERENCE_TEXT_MODEL: meta-llama/llama-4-scout
       INFERENCE_IMAGE_MODEL: meta-llama/llama-4-scout
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.karakeep.rule=Host(`karakeep.ravil.space`)"
+      - "traefik.http.routers.karakeep.entrypoints=websecure"
+      - "traefik.http.routers.karakeep.tls.certresolver=cloudflare"
+      - "traefik.http.services.karakeep.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik_default"
 
   chrome:
     image: gcr.io/zenika-hub/alpine-chrome:124
@@ -49,3 +57,10 @@ services:
 volumes:
   karakeep_data:
   karakeep_meilisearch:
+
+networks:
+  default:
+    name: karakeep_default
+  traefik:
+    name: traefik_default
+    external: true

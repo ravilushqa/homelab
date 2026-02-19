@@ -8,3 +8,20 @@ services:
     environment:
       NODE_ENV: production
       CACHE_TYPE: memory
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rsshub.rule=Host(`rsshub.ravil.space`)"
+      - "traefik.http.routers.rsshub.entrypoints=websecure"
+      - "traefik.http.routers.rsshub.tls.certresolver=cloudflare"
+      - "traefik.http.services.rsshub.loadbalancer.server.port=1200"
+      - "traefik.docker.network=traefik_default"
+
+networks:
+  default:
+    name: rsshub_default
+  traefik:
+    name: traefik_default
+    external: true
