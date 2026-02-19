@@ -61,6 +61,18 @@ pages:
                 url: https://paperless.ravil.space
                 check-url: http://paperless.paperless.svc.cluster.local:8000
                 icon: si:paperlessngx
+              - title: Miniflux
+                url: https://miniflux.ravil.space
+                check-url: http://miniflux.miniflux.svc.cluster.local:8070
+                icon: si:rss
+              - title: NextFlux
+                url: https://nextflux.ravil.space
+                check-url: http://nextflux.nextflux.svc.cluster.local:8071
+                icon: si:rss
+              - title: RSSHub
+                url: https://rsshub.ravil.space
+                check-url: http://rsshub.rsshub.svc.cluster.local:1200
+                icon: si:rssdotcom
           - type: monitor
             cache: 1m
             title: Productivity & AI
