@@ -19,7 +19,6 @@ services:
       - "traefik.http.routers.spotify-server.tls.certresolver=cloudflare"
       - "traefik.http.services.spotify-server.loadbalancer.server.port=8080"
       - "traefik.docker.network=traefik_default"
-      - "traefik.http.routers.spotify-server.middlewares="
 
   mongo:
     container_name: your-spotify-mongo
@@ -43,7 +42,6 @@ services:
       - "traefik.http.routers.spotify-web.tls.certresolver=cloudflare"
       - "traefik.http.services.spotify-web.loadbalancer.server.port=3000"
       - "traefik.docker.network=traefik_default"
-      - "traefik.http.routers.spotify-web.middlewares="
 
 volumes:
   spotify_db:

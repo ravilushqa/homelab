@@ -8,10 +8,9 @@ services:
       - --api.dashboard=true
       - --api.debug=true
 
-      # EntryPoints with global OIDC middleware
+      # EntryPoints
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --entrypoints.websecure.http.middlewares=oidc-auth@docker
 
       # HTTP to HTTPS redirect
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
@@ -62,6 +61,7 @@ services:
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=cloudflare"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.priority=100"
+      - "traefik.http.routers.traefik-dashboard.middlewares=oidc-auth@docker"
       # Global OIDC middleware
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.Url=https://pocketid.ravil.space"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.ClientId=${TRAEFIK_OIDC_CLIENT_ID}"
