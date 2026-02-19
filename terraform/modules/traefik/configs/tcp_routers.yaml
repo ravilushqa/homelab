@@ -16,7 +16,6 @@ tcp:
         || HostSNI(`karakeep.ravil.space`)
         || HostSNI(`spotify.ravil.space`)
         || HostSNI(`spotify-server.ravil.space`)
-        || HostSNI(`pocketid.ravil.space`)
       service: komodo-tcp-service
       priority: 100
       tls:
