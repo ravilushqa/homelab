@@ -1,0 +1,25 @@
+services:
+  bytestash:
+    image: ghcr.io/jordan-dalby/bytestash:latest
+    restart: always
+    volumes:
+      - bytestash_data:/data/snippets
+    ports:
+      - 5000:5000
+    environment:
+      BASE_PATH: ""
+      JWT_SECRET: ${BYTESTASH_JWT_SECRET}
+      TOKEN_EXPIRY: 24h
+      ALLOW_NEW_ACCOUNTS: "false"
+      DEBUG: "true"
+      DISABLE_ACCOUNTS: "false"
+      DISABLE_INTERNAL_ACCOUNTS: "false"
+      OIDC_ENABLED: "true"
+      OIDC_DISPLAY_NAME: Pocket ID
+      OIDC_ISSUER_URL: https://pocketid.ravil.space
+      OIDC_CLIENT_ID: ${BYTESTASH_OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${BYTESTASH_OIDC_CLIENT_SECRET}
+      OIDC_SCOPES: openid profile email
+
+volumes:
+  bytestash_data:

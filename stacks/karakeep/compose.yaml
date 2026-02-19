@@ -1,0 +1,51 @@
+services:
+  web:
+    image: ghcr.io/karakeep-app/karakeep:release
+    container_name: karakeep
+    restart: unless-stopped
+    volumes:
+      - karakeep_data:/data
+    ports:
+      - 3003:3000
+    environment:
+      MEILI_ADDR: http://meilisearch:7700
+      BROWSER_WEB_URL: http://chrome:9222
+      DATA_DIR: /data
+      NEXTAUTH_SECRET: ${KARAKEEP_NEXTAUTH_SECRET}
+      MEILI_MASTER_KEY: ${KARAKEEP_MEILI_MASTER_KEY}
+      NEXTAUTH_URL: https://karakeep.ravil.space
+      OAUTH_PROVIDER_NAME: PocketID
+      OAUTH_CLIENT_ID: ${KARAKEEP_OIDC_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${KARAKEEP_OIDC_CLIENT_SECRET}
+      OAUTH_WELLKNOWN_URL: https://pocketid.ravil.space/.well-known/openid-configuration
+      OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING: "true"
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      OPENAI_API_KEY: ${KARAKEEP_OPENAI_API_KEY}
+      INFERENCE_TEXT_MODEL: meta-llama/llama-4-scout
+      INFERENCE_IMAGE_MODEL: meta-llama/llama-4-scout
+
+  chrome:
+    image: gcr.io/zenika-hub/alpine-chrome:124
+    container_name: karakeep-chrome
+    restart: unless-stopped
+    command:
+      - --no-sandbox
+      - --disable-gpu
+      - --disable-dev-shm-usage
+      - --remote-debugging-address=0.0.0.0
+      - --remote-debugging-port=9222
+      - --hide-scrollbars
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.13.3
+    container_name: karakeep-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MASTER_KEY: ${KARAKEEP_MEILI_MASTER_KEY}
+    volumes:
+      - karakeep_meilisearch:/meili_data
+
+volumes:
+  karakeep_data:
+  karakeep_meilisearch:
