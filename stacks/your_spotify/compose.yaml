@@ -1,0 +1,31 @@
+services:
+  server:
+    image: yooooomi/your_spotify_server
+    restart: always
+    ports:
+      - 8082:8080
+    depends_on:
+      - mongo
+    environment:
+      API_ENDPOINT: https://spotify-server.ravil.space
+      CLIENT_ENDPOINT: https://spotify.ravil.space
+      SPOTIFY_PUBLIC: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_SECRET: ${SPOTIFY_CLIENT_SECRET}
+
+  mongo:
+    container_name: your-spotify-mongo
+    restart: always
+    image: mongo:6
+    volumes:
+      - spotify_db:/data/db
+
+  web:
+    image: yooooomi/your_spotify_client
+    restart: always
+    ports:
+      - 3000:3000
+    environment:
+      API_ENDPOINT: https://spotify-server.ravil.space
+
+volumes:
+  spotify_db:

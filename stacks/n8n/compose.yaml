@@ -1,0 +1,26 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: always
+    ports:
+      - 5678:5678
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_HOST: ${N8N_DB_HOST}
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_USER: ravilushqa
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: public
+      DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED: "false"
+      DB_POSTGRESDB_SSL_MODE: require
+      N8N_HOST: n8n.ravil.space
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.ravil.space
+      GENERIC_TIMEZONE: Europe/Berlin
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
