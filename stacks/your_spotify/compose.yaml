@@ -2,8 +2,6 @@ services:
   server:
     image: yooooomi/your_spotify_server
     restart: always
-    ports:
-      - 8082:8080
     depends_on:
       - mongo
     environment:
@@ -11,6 +9,16 @@ services:
       CLIENT_ENDPOINT: https://spotify.ravil.space
       SPOTIFY_PUBLIC: ${SPOTIFY_CLIENT_ID}
       SPOTIFY_SECRET: ${SPOTIFY_CLIENT_SECRET}
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spotify-server.rule=Host(`spotify-server.ravil.space`)"
+      - "traefik.http.routers.spotify-server.entrypoints=websecure"
+      - "traefik.http.routers.spotify-server.tls.certresolver=cloudflare"
+      - "traefik.http.services.spotify-server.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
 
   mongo:
     container_name: your-spotify-mongo
@@ -22,10 +30,25 @@ services:
   web:
     image: yooooomi/your_spotify_client
     restart: always
-    ports:
-      - 3000:3000
     environment:
       API_ENDPOINT: https://spotify-server.ravil.space
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spotify-web.rule=Host(`spotify.ravil.space`)"
+      - "traefik.http.routers.spotify-web.entrypoints=websecure"
+      - "traefik.http.routers.spotify-web.tls.certresolver=cloudflare"
+      - "traefik.http.services.spotify-web.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik_default"
 
 volumes:
   spotify_db:
+
+networks:
+  default:
+    name: your_spotify_default
+  traefik:
+    name: traefik_default
+    external: true

@@ -16,8 +16,6 @@ services:
     restart: unless-stopped
     depends_on:
       - miniflux-db
-    ports:
-      - 8070:8080
     environment:
       DATABASE_URL: postgres://miniflux:${MINIFLUX_DB_PASSWORD}@miniflux-db/miniflux?sslmode=disable
       RUN_MIGRATIONS: "1"
@@ -30,6 +28,23 @@ services:
       OAUTH2_REDIRECT_URL: https://miniflux.ravil.space/oauth2/oidc/callback
       OAUTH2_OIDC_DISCOVERY_ENDPOINT: https://pocketid.ravil.space
       OAUTH2_USER_CREATION: "1"
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.miniflux.rule=Host(`miniflux.ravil.space`)"
+      - "traefik.http.routers.miniflux.entrypoints=websecure"
+      - "traefik.http.routers.miniflux.tls.certresolver=cloudflare"
+      - "traefik.http.services.miniflux.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
 
 volumes:
   miniflux-db:
+
+networks:
+  default:
+    name: miniflux_default
+  traefik:
+    name: traefik_default
+    external: true
