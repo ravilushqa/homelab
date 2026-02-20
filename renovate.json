@@ -7,21 +7,31 @@
     "enabled": true
   },
   "kubernetes": {
-    "fileMatch": ["(^|/)kustomization\\.yaml$"]
+    "managerFilePatterns": [
+      "/(^|/)kustomization\\.yaml$/"
+    ]
   },
   "helm-values": {
-    "fileMatch": ["(^|/)values\\.yaml$"]
+    "managerFilePatterns": [
+      "/(^|/)values\\.yaml$/"
+    ]
   },
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": ["(^|/)kustomization\\.yaml$"],
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)kustomization\\.yaml$/"
+      ],
       "matchStrings": [
         "# renovate: github-releases=(?<depName>[^\\s]+)\\s+version:\\s*(?<currentValue>.*)"
       ],
       "datasourceTemplate": "github-releases"
     },
     {
-      "fileMatch": ["(^|/)\\.tf$"],
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)\\.tf$/"
+      ],
       "matchStrings": [
         "source\\s*=\\s*\"oci://(?<registryUrl>[^/]+)/(?<depName>[^\"]+)\"\\s+version\\s*=\\s*\"(?<currentValue>[^\"]+)\""
       ],
@@ -31,35 +41,58 @@
   "packageRules": [
     {
       "description": "Automerge minor+patch Docker image updates",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Major Docker updates need manual review",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["major"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false
     },
     {
       "description": "Automerge patch Terraform provider updates",
-      "matchDatasources": ["terraform-provider"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDatasources": [
+        "terraform-provider"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Automerge patch Helm updates",
-      "matchDatasources": ["helm"],
-      "matchUpdateTypes": ["patch"],
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Automerge GitHub releases (minor+patch)",
-      "matchDatasources": ["github-releases"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true,
       "automergeType": "pr"
     }
