@@ -45,7 +45,7 @@ services:
       - --hide-scrollbars
 
   meilisearch:
-    image: getmeili/meilisearch:v1.13.3
+    image: getmeili/meilisearch:v1.35.1
     container_name: karakeep-meilisearch
     restart: unless-stopped
     environment:
