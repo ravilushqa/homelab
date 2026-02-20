@@ -1,0 +1,65 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yaml'
+
+jobs:
+  terraform:
+    runs-on: [self-hosted, homelab]
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_VAR_proxmox_endpoint: "https://192.168.1.100:8006"
+      TF_VAR_proxmox_api_token: "${{ secrets.PM_API_TOKEN_ID }}=${{ secrets.PM_API_TOKEN_SECRET }}"
+      TF_VAR_default_gateway: "${{ secrets.TF_VAR_DEFAULT_GATEWAY }}"
+      TF_VAR_talos_cp_01_ip_addr: "${{ secrets.TF_VAR_TALOS_CP_01_IP }}"
+      TF_VAR_talos_worker_01_ip_addr: "${{ secrets.TF_VAR_TALOS_WORKER_01_IP }}"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write sealed-secrets certs
+        run: |
+          mkdir -p modules/sealed-secrets/certs
+          echo "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
+          echo "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -input=false
+        id: plan
+
+      - name: Comment Plan on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan ${{ steps.plan.outcome == 'success' && '✅' || '❌' }}
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+            *Triggered by @${{ github.actor }}*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });

@@ -11,12 +11,22 @@ variable "proxmox_endpoint" {
 
 variable "proxmox_username" {
   type        = string
-  description = "Proxmox username"
+  description = "Proxmox username (used for local runs)"
+  default     = ""
 }
 
 variable "proxmox_password" {
   type        = string
-  description = "Proxmox password"
+  description = "Proxmox password (used for local runs)"
+  default     = ""
+  sensitive   = true
+}
+
+variable "proxmox_api_token" {
+  type        = string
+  description = "Proxmox API token in format user@realm!tokenid=secret (used for CI)"
+  default     = ""
+  sensitive   = true
 }
 
 variable "default_gateway" {
@@ -52,38 +62,46 @@ variable "monitoring_namespace" {
 }
 
 variable "externalservices_prometheus_host" {
-  type        = string
-  description = "Prometheus host"
+  type    = string
+  default = ""
 }
 
 variable "externalservices_prometheus_basicauth_username" {
-  type = number
+  type    = number
+  default = 0
 }
 
 variable "externalservices_prometheus_basicauth_password" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_loki_host" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_loki_basicauth_username" {
-  type = number
+  type    = number
+  default = 0
 }
 
 variable "externalservices_loki_basicauth_password" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_tempo_host" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_tempo_basicauth_username" {
-  type = number
+  type    = number
+  default = 0
 }
 
 variable "externalservices_tempo_basicauth_password" {
-  type = string
+  type    = string
+  default = ""
 }
