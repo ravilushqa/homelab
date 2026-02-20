@@ -5,10 +5,17 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform.yaml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yaml'
 
 jobs:
-  terraform:
+  plan:
     runs-on: [self-hosted, homelab]
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     defaults:
       run:
         working-directory: terraform
@@ -65,3 +72,40 @@ jobs:
               repo: context.repo.repo,
               body: output
             });
+
+  apply:
+    runs-on: [self-hosted, homelab]
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_TOKEN_app_terraform_io: "${{ secrets.TF_API_TOKEN }}"
+      TF_VAR_proxmox_endpoint: "https://192.168.1.100:8006"
+      TF_VAR_proxmox_api_token: "${{ secrets.PM_API_TOKEN_ID }}=${{ secrets.PM_API_TOKEN_SECRET }}"
+      TF_VAR_default_gateway: "${{ secrets.TF_VAR_DEFAULT_GATEWAY }}"
+      TF_VAR_talos_cp_01_ip_addr: "${{ secrets.TF_VAR_TALOS_CP_01_IP }}"
+      TF_VAR_talos_worker_01_ip_addr: "${{ secrets.TF_VAR_TALOS_WORKER_01_IP }}"
+      TF_VAR_datastore_id: "${{ secrets.TF_VAR_DATASTORE_ID }}"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write sealed-secrets certs
+        run: |
+          mkdir -p modules/sealed-secrets/certs
+          printf %s "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
+          printf %s "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -no-color -input=false
