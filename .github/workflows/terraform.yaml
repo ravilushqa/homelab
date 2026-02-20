@@ -14,6 +14,7 @@ jobs:
         working-directory: terraform
 
     env:
+      TF_TOKEN_app_terraform_io: "${{ secrets.TF_API_TOKEN }}"
       TF_VAR_proxmox_endpoint: "https://192.168.1.100:8006"
       TF_VAR_proxmox_api_token: "${{ secrets.PM_API_TOKEN_ID }}=${{ secrets.PM_API_TOKEN_SECRET }}"
       TF_VAR_default_gateway: "${{ secrets.TF_VAR_DEFAULT_GATEWAY }}"
