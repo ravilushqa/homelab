@@ -43,7 +43,7 @@ services:
 
   redis:
     container_name: immich_redis
-    image: docker.io/redis:6.2-alpine
+    image: docker.io/redis:8.6-alpine
     healthcheck:
       test: redis-cli ping || exit 1
     restart: always
