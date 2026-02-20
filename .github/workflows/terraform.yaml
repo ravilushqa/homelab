@@ -30,7 +30,7 @@ jobs:
       TF_VAR_datastore_id: "${{ secrets.TF_VAR_DATASTORE_ID }}"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Write sealed-secrets certs
         run: |
@@ -92,7 +92,7 @@ jobs:
       TF_VAR_datastore_id: "${{ secrets.TF_VAR_DATASTORE_ID }}"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Write sealed-secrets certs
         run: |
