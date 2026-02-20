@@ -41,58 +41,40 @@
   "packageRules": [
     {
       "description": "Automerge minor+patch Docker image updates",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Major Docker updates need manual review",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Meilisearch breaks between minors - always manual",
+      "matchPackageNames": ["getmeili/meilisearch"],
       "automerge": false
     },
     {
       "description": "Automerge patch Terraform provider updates",
-      "matchDatasources": [
-        "terraform-provider"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchDatasources": ["terraform-provider"],
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Automerge patch Helm updates",
-      "matchDatasources": [
-        "helm"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["patch"],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Automerge GitHub releases (minor+patch)",
-      "matchDatasources": [
-        "github-releases"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchDatasources": ["github-releases"],
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "automergeType": "pr"
     }
