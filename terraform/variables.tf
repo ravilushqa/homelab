@@ -11,12 +11,22 @@ variable "proxmox_endpoint" {
 
 variable "proxmox_username" {
   type        = string
-  description = "Proxmox username"
+  description = "Proxmox username (used for local runs)"
+  default     = ""
 }
 
 variable "proxmox_password" {
   type        = string
-  description = "Proxmox password"
+  description = "Proxmox password (used for local runs)"
+  default     = ""
+  sensitive   = true
+}
+
+variable "proxmox_api_token" {
+  type        = string
+  description = "Proxmox API token in format user@realm!tokenid=secret (used for CI)"
+  default     = ""
+  sensitive   = true
 }
 
 variable "default_gateway" {
