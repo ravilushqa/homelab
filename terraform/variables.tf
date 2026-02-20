@@ -62,38 +62,46 @@ variable "monitoring_namespace" {
 }
 
 variable "externalservices_prometheus_host" {
-  type        = string
-  description = "Prometheus host"
+  type    = string
+  default = ""
 }
 
 variable "externalservices_prometheus_basicauth_username" {
-  type = number
+  type    = number
+  default = 0
 }
 
 variable "externalservices_prometheus_basicauth_password" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_loki_host" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_loki_basicauth_username" {
-  type = number
+  type    = number
+  default = 0
 }
 
 variable "externalservices_loki_basicauth_password" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_tempo_host" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "externalservices_tempo_basicauth_username" {
-  type = number
+  type    = number
+  default = 0
 }
 
 variable "externalservices_tempo_basicauth_password" {
-  type = string
+  type    = string
+  default = ""
 }

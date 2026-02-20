@@ -19,15 +19,6 @@ jobs:
       TF_VAR_default_gateway: "${{ secrets.TF_VAR_DEFAULT_GATEWAY }}"
       TF_VAR_talos_cp_01_ip_addr: "${{ secrets.TF_VAR_TALOS_CP_01_IP }}"
       TF_VAR_talos_worker_01_ip_addr: "${{ secrets.TF_VAR_TALOS_WORKER_01_IP }}"
-      TF_VAR_externalservices_prometheus_host: "${{ secrets.TF_VAR_PROMETHEUS_HOST }}"
-      TF_VAR_externalservices_prometheus_basicauth_username: "${{ secrets.TF_VAR_PROMETHEUS_USERNAME }}"
-      TF_VAR_externalservices_prometheus_basicauth_password: "${{ secrets.TF_VAR_PROMETHEUS_PASSWORD }}"
-      TF_VAR_externalservices_loki_host: "${{ secrets.TF_VAR_LOKI_HOST }}"
-      TF_VAR_externalservices_loki_basicauth_username: "${{ secrets.TF_VAR_LOKI_USERNAME }}"
-      TF_VAR_externalservices_loki_basicauth_password: "${{ secrets.TF_VAR_LOKI_PASSWORD }}"
-      TF_VAR_externalservices_tempo_host: "${{ secrets.TF_VAR_TEMPO_HOST }}"
-      TF_VAR_externalservices_tempo_basicauth_username: "${{ secrets.TF_VAR_TEMPO_USERNAME }}"
-      TF_VAR_externalservices_tempo_basicauth_password: "${{ secrets.TF_VAR_TEMPO_PASSWORD }}"
 
     steps:
       - uses: actions/checkout@v4
