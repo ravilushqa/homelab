@@ -5,7 +5,7 @@ services:
     environment:
       REPO_URL: https://github.com/ravilushqa/homelab
       RUNNER_NAME: komodo-runner
-      RUNNER_TOKEN: "${RUNNER_TOKEN}"
+      ACCESS_TOKEN: "${ACCESS_TOKEN}"
       RUNNER_WORKDIR: /tmp/runner/work
       LABELS: self-hosted,linux,x64,homelab
     volumes:
