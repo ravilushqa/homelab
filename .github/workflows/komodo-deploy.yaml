@@ -1,0 +1,49 @@
+name: Komodo Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'stacks/**'
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, homelab]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed stacks
+        id: changed
+        run: |
+          stacks=$(git diff --name-only HEAD~1 HEAD -- stacks/ | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+          echo "stacks=$stacks" >> "$GITHUB_OUTPUT"
+          echo "Changed stacks: $stacks"
+
+      - name: Deploy to Komodo
+        if: steps.changed.outputs.stacks != ''
+        env:
+          KOMODO_API: http://localhost:9120
+          KOMODO_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+        run: |
+          for stack in ${{ steps.changed.outputs.stacks }}; do
+            echo "🚀 Deploying $stack..."
+            # Pull latest from git
+            curl -sf -X POST "$KOMODO_API/execute" \
+              -H "X-Api-Key: $KOMODO_KEY" \
+              -H "X-Api-Secret: $KOMODO_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\": \"PullStack\", \"params\": {\"stack\": \"$stack\"}}"
+            echo ""
+            # Deploy
+            curl -sf -X POST "$KOMODO_API/execute" \
+              -H "X-Api-Key: $KOMODO_KEY" \
+              -H "X-Api-Secret: $KOMODO_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\": \"DeployStack\", \"params\": {\"stack\": \"$stack\"}}"
+            echo ""
+            echo "✅ $stack deployed"
+          done
