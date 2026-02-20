@@ -25,7 +25,7 @@ jobs:
       - name: Deploy to Komodo
         if: steps.changed.outputs.stacks != ''
         env:
-          KOMODO_API: http://localhost:9120
+          KOMODO_API: http://192.168.1.166:9120
           KOMODO_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_SECRET: ${{ secrets.KOMODO_API_SECRET }}
         run: |
