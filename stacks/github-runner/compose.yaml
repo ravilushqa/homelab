@@ -1,6 +1,6 @@
 services:
   github-runner:
-    image: myoung34/docker-github-actions-runner:latest
+    image: myoung34/github-runner:latest
     restart: always
     environment:
       REPO_URL: https://github.com/ravilushqa/homelab
