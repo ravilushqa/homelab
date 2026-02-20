@@ -37,6 +37,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write sealed-secrets certs
+        run: |
+          mkdir -p modules/sealed-secrets/certs
+          echo "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
+          echo "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: latest
