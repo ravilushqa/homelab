@@ -5,6 +5,7 @@ terraform {
       name = "homelab"
     }
   }
+
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
