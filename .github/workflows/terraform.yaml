@@ -20,6 +20,7 @@ jobs:
       TF_VAR_default_gateway: "${{ secrets.TF_VAR_DEFAULT_GATEWAY }}"
       TF_VAR_talos_cp_01_ip_addr: "${{ secrets.TF_VAR_TALOS_CP_01_IP }}"
       TF_VAR_talos_worker_01_ip_addr: "${{ secrets.TF_VAR_TALOS_WORKER_01_IP }}"
+      TF_VAR_datastore_id: "${{ secrets.TF_VAR_DATASTORE_ID }}"
 
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +28,8 @@ jobs:
       - name: Write sealed-secrets certs
         run: |
           mkdir -p modules/sealed-secrets/certs
-          echo "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
-          echo "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
+          printf %s "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
+          printf %s "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
 
       - uses: hashicorp/setup-terraform@v3
         with:

@@ -2,5 +2,50 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
-  ]
+  ],
+  "terraform": {
+    "enabled": true
+  },
+  "kubernetes": {
+    "fileMatch": ["(^|/)kustomization\\.yaml$"]
+  },
+  "helm-values": {
+    "fileMatch": ["(^|/)values\\.yaml$"]
+  },
+  "regexManagers": [
+    {
+      "fileMatch": ["(^|/)kustomization\\.yaml$"],
+      "matchStrings": [
+        "# renovate: github-releases=(?<depName>[^\\s]+)\\s+version:\\s*(?<currentValue>.*)"
+      ],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "fileMatch": ["(^|/)\\.tf$"],
+      "matchStrings": [
+        "source\\s*=\\s*\"oci://(?<registryUrl>[^/]+)/(?<depName>[^\"]+)\"\\s+version\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "automerge": false
+    },
+    {
+      "matchDatasources": ["terraform-provider"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": false
+    }
+  ],
+  "separateMajorMinor": true,
+  "separateMinorPatch": false
 }
