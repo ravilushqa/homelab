@@ -8,9 +8,7 @@ services:
       ACCESS_TOKEN: "${ACCESS_TOKEN}"
       RUNNER_WORKDIR: /tmp/runner/work
       LABELS: self-hosted,linux,x64,homelab
+      EPHEMERAL: "true"
+      DISABLE_AUTO_UPDATE: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - runner-work:/tmp/runner/work
-
-volumes:
-  runner-work:
