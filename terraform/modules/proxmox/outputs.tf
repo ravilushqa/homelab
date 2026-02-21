@@ -16,9 +16,9 @@ output "vm_ids" {
   description = "Map of all VM names to their IDs"
 }
 
-output "node_name" {
-  value       = var.node_name
-  description = "Proxmox node name where VMs are created"
+output "node_names" {
+  value       = { for k, v in local.vms : k => v.node_name }
+  description = "Map of VM names to their Proxmox node names"
 }
 
 output "vm_hostnames" {

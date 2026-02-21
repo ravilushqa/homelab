@@ -27,7 +27,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
 
   disk {
     datastore_id = local.common_vm_config.disk.datastore_id
-    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image[each.value.node_name].id
     file_format  = local.common_vm_config.disk.file_format
     interface    = local.common_vm_config.disk.interface
     size         = local.common_vm_config.disk.size
@@ -82,7 +82,7 @@ resource "proxmox_virtual_environment_vm" "talos_workers" {
 
   disk {
     datastore_id = local.common_vm_config.disk.datastore_id
-    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image[each.value.node_name].id
     file_format  = local.common_vm_config.disk.file_format
     interface    = local.common_vm_config.disk.interface
     size         = local.common_vm_config.disk.size
