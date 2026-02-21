@@ -23,11 +23,11 @@ pages:
                 icon: si:pihole
               - title: Grafana
                 url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
-                check-url: http://grafana.grafana.svc.cluster.local:3000
+                check-url: https://grafana.ravil.space
                 icon: si:grafana
               - title: Dockge
                 url: https://dockge.ravil.space
-                check-url: http://dockge.dockge.svc.cluster.local:5001
+                check-url: https://dockge.ravil.space
                 icon: si:docker
           - type: monitor
             cache: 1m
@@ -39,39 +39,39 @@ pages:
                 icon: si:homeassistant
               - title: Immich
                 url: https://immich.ravil.space
-                check-url: http://immich.immich.svc.cluster.local:2283
+                check-url: https://immich.ravil.space
                 icon: si:immich
               - title: Karakeep
                 url: https://karakeep.ravil.space
-                check-url: http://karakeep.karakeep.svc.cluster.local:3003
+                check-url: https://karakeep.ravil.space
                 icon: si:keras
               - title: ChangeDetection
                 url: https://changedetection.ravil.space
-                check-url: http://changedetection.changedetection.svc.cluster.local:5000
+                check-url: https://changedetection.ravil.space
                 icon: di:changedetection
               - title: Spotify
                 url: https://spotify.ravil.space
-                check-url: http://spotify.spotify.svc.cluster.local:3000
+                check-url: https://spotify.ravil.space
                 icon: si:spotify
               - title: Bytestash
                 url: https://bytestash.ravil.space
-                check-url: http://bytestash.bytestash.svc.cluster.local:5000
+                check-url: https://bytestash.ravil.space
                 icon: si:databricks
               - title: Paperless
                 url: https://paperless.ravil.space
-                check-url: http://paperless.paperless.svc.cluster.local:8000
+                check-url: https://paperless.ravil.space
                 icon: si:paperlessngx
               - title: Miniflux
                 url: https://miniflux.ravil.space
-                check-url: http://miniflux.miniflux.svc.cluster.local:8070
+                check-url: https://miniflux.ravil.space
                 icon: si:rss
               - title: NextFlux
                 url: https://nextflux.ravil.space
-                check-url: http://nextflux.nextflux.svc.cluster.local:8071
+                check-url: https://nextflux.ravil.space
                 icon: si:rss
               - title: RSSHub
                 url: https://rsshub.ravil.space
-                check-url: http://rsshub.rsshub.svc.cluster.local:1200
+                check-url: https://rsshub.ravil.space
                 icon: si:rss
           - type: monitor
             cache: 1m
@@ -79,19 +79,19 @@ pages:
             sites:
               - title: OpenWebUI
                 url: https://openwebui.ravil.space
-                check-url: http://openwebui.openwebui.svc.cluster.local:8080
+                check-url: https://openwebui.ravil.space
                 icon: di:open-webui-light
               - title: Dify
                 url: https://dify.ravil.space
-                check-url: http://dify.dify.svc.cluster.local:80
+                check-url: https://dify.ravil.space
                 icon: si:openai
               - title: PDF Tools
                 url: https://pdf.ravil.space
-                check-url: http://pdf.pdf.svc.cluster.local:8080
+                check-url: https://pdf.ravil.space
                 icon: si:adobeacrobatreader
               - title: IT Tools
                 url: https://it-tools.ravil.space
-                check-url: http://it-tools.it-tools.svc.cluster.local:80
+                check-url: https://it-tools.ravil.space
                 icon: di:it-tools-light
               - title: Glance
                 url: https://glance.ravil.space
