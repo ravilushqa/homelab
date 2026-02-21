@@ -18,14 +18,41 @@ deployment.
 - [Gateway API](https://gateway-api.sigs.k8s.io/) Next generation of Kubernetes Ingress.
 - [Grafana Cloud](https://grafana.com/) Monitoring and observability of the cluster.
 - [ArgoCD](https://argo-cd.readthedocs.io/) GitOps continuous delivery tool for declarative Kubernetes management.
+- [Komodo](https://komo.do/) Docker stack management — deploys compose stacks from the `stacks/` directory.
 
 ---
 
 ## Applications 📦
-- [Home Assistant Operating System (HAOS)](https://www.home-assistant.io/installation/operating-system) - Home automation.
+
+### Running in Kubernetes (`k8s/apps/internal/`)
+- [Glance](https://github.com/glanceapp/glance) - Personal dashboard.
+- [Dozzle](https://dozzle.dev/) - Real-time container log viewer.
+- [IT Tools](https://github.com/CorentinTh/it-tools) - Collection of IT utility tools.
+- [iSponsorBlockTV](https://github.com/dmunozv04/iSponsorBlockTV) - YouTube sponsor block for smart TVs.
+- [Inbox Zero](https://www.inboxzero.com/) - Email management.
+
+### Running on Proxmox, routed via Kubernetes (`k8s/apps/external/`)
+- [Home Assistant OS](https://www.home-assistant.io/) - Home automation platform.
+- [Open WebUI](https://openwebui.com/) - Web interface for AI models.
+- [Grafana](https://grafana.com/) - Monitoring dashboards.
+- [PocketID](https://github.com/stonith404/pocket-id) - OIDC identity provider.
+- [Change Detection](https://changedetection.io/) - Website change monitoring.
+- [Proxmox](https://www.proxmox.com/) - Proxmox VE external access.
+
+### Docker Stacks — Komodo (`stacks/`)
 - [Immich](https://immich.app/) - Google Photos alternative.
-- [Pi-hole](https://pi-hole.net/) - DNS and DHCP server. (currently under the scope of the repository)
-- many more to come...
+- [Paperless-ngx](https://docs.paperless-ngx.com/) - Document management with OCR.
+- [n8n](https://n8n.io/) - Workflow automation and integrations.
+- [Miniflux](https://miniflux.app/) - RSS feed reader.
+- [Nextflux](https://github.com/electh/nextflux) - Miniflux web frontend.
+- [RSSHub](https://rsshub.app/) - RSS feed generator.
+- [Karakeep](https://karakeep.app/) - Bookmark and read-it-later manager.
+- [ByteStash](https://github.com/jordan-dalby/ByteStash) - Code snippet manager.
+- [Your Spotify](https://github.com/Yooooomi/your_spotify) - Spotify listening stats.
+- [S-PDF](https://github.com/Stirling-Tools/Stirling-PDF) - PDF tools.
+- [Dozzle](https://dozzle.dev/) - Container log viewer.
+- [Traefik](https://traefik.io/) - Reverse proxy for Docker stacks.
+- [GitHub Runner](https://github.com/actions/runner) - Self-hosted GitHub Actions runner.
 
 ---
 
@@ -35,13 +62,15 @@ deployment.
 .
 ├── k8s
 │   ├── apps  # applications
-│   │   ├── external  # external-facing applications
+│   │   ├── external  # external-facing applications (Gateway API routes)
 │   │   └── internal  # internal services
-│   └── infra # k8s infrastructure
+│   ├── components    # reusable kustomize components
+│   └── infra         # k8s infrastructure
 │       ├── argocd    # gitops deployment
 │       ├── network   # networking components
 │       ├── security  # security components
 │       └── storage   # storage components
+├── stacks            # docker compose stacks managed by Komodo
 └── terraform
     └── modules
         ├── monitoring          # grafana cloud monitoring
@@ -76,13 +105,6 @@ make argocd-restart
 # View application status
 kubectl -n argocd get applications
 ```
-
-## 🚀 Next Features
-
-Planned features for this project include:
-
-- [**OIDC**](https://openid.net/connect/): OpenID Connect integration for authentication. such as [Authelia](https://www.authelia.com/) 
-or [Zitadel](https://github.com/zitadel/zitadel).
 
 ---
 
