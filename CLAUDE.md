@@ -35,6 +35,20 @@
   ```
 - **Networking**: Use Gateway API (HTTP/TLS routes) for ingress traffic
 
+## Traefik TCP Routing (terraform/modules/traefik/configs/tcp_routers.yaml)
+Traffic enters via a Traefik instance that does TLS passthrough to two backends:
+- **Komodo host** (`192.168.1.166:443`) — Docker Compose stacks managed by Komodo
+- **K8s cluster** (`192.168.1.222:443`) — Kubernetes-served services
+
+**Routing logic**: `komodo-tcp-router` is the catch-all (`HostSNI("*")`, priority 50).
+`k8s-tcp-router` has an explicit list of K8s domains (priority 100).
+
+- **Adding a new Komodo service**: no change needed in `tcp_routers.yaml`
+- **Adding a new K8s service**: add its hostname to `k8s-tcp-router` rule
+
+K8s domains (as of last update): `argocd`, `glance`, `dozzle`, `it-tools`, `inbox-zero`,
+`changedetection`, `grafana`, `ha`, `openwebui`, `pocketid`, `proxmox` (all `.ravil.space`)
+
 ## Best Practices
 - Document major components in README.md
 - Keep infrastructure as code (Terraform, Kubernetes manifests)
