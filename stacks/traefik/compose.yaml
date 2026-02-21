@@ -47,7 +47,6 @@ services:
 
     environment:
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
-      DOMAIN: ${DOMAIN}
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -56,7 +55,7 @@ services:
     labels:
       - "traefik.enable=true"
       # Dashboard
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.ravil.space`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=cloudflare"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
@@ -75,7 +74,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.ravil.space`)"
       - "traefik.http.routers.whoami.entrypoints=web,websecure"
       - "traefik.http.routers.whoami.tls.certresolver=cloudflare"
       - "traefik.http.services.whoami.loadbalancer.server.port=80"
