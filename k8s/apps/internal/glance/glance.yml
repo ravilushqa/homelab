@@ -25,10 +25,7 @@ pages:
                 url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
                 check-url: https://grafana.ravil.space
                 icon: si:grafana
-              - title: Dockge
-                url: https://dockge.ravil.space
-                check-url: https://dockge.ravil.space
-                icon: si:docker
+
           - type: monitor
             cache: 1m
             title: Applications
