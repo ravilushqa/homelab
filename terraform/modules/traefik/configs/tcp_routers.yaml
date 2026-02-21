@@ -1,33 +1,34 @@
 tcp:
   routers:
-    komodo-tcp-router:
+    # K8s services are listed explicitly here (priority 100).
+    # Everything else falls through to komodo-tcp-router (catch-all).
+    # When adding a new K8s-served domain, add it here.
+    # When adding a new Komodo-served domain, no change needed here.
+    k8s-tcp-router:
       entryPoints:
         - websecure
       rule: >-
-        HostSNIRegexp(`^.+\.test\.ravil\.space$`)
-        || HostSNI(`paperless.ravil.space`)
-        || HostSNI(`bytestash.ravil.space`)
+        HostSNI(`argocd.ravil.space`)
+        || HostSNI(`glance.ravil.space`)
         || HostSNI(`dozzle.ravil.space`)
-        || HostSNI(`nextflux.ravil.space`)
-        || HostSNI(`rsshub.ravil.space`)
-        || HostSNI(`pdf.ravil.space`)
-        || HostSNI(`n8n.ravil.space`)
-        || HostSNI(`miniflux.ravil.space`)
-        || HostSNI(`karakeep.ravil.space`)
-        || HostSNI(`spotify.ravil.space`)
-        || HostSNI(`spotify-server.ravil.space`)
-        || HostSNI(`immich.ravil.space`)
-        || HostSNI(`komodo.ravil.space`)
-      service: komodo-tcp-service
+        || HostSNI(`it-tools.ravil.space`)
+        || HostSNI(`inbox-zero.ravil.space`)
+        || HostSNI(`changedetection.ravil.space`)
+        || HostSNI(`grafana.ravil.space`)
+        || HostSNI(`ha.ravil.space`)
+        || HostSNI(`openwebui.ravil.space`)
+        || HostSNI(`pocketid.ravil.space`)
+        || HostSNI(`proxmox.ravil.space`)
+      service: k8s-tcp-service
       priority: 100
       tls:
         passthrough: true
 
-    k8s-tcp-router:
+    komodo-tcp-router:
       entryPoints:
         - websecure
       rule: 'HostSNI("*")'
-      service: k8s-tcp-service
+      service: komodo-tcp-service
       priority: 50
       tls:
         passthrough: true
