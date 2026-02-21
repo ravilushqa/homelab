@@ -44,6 +44,18 @@ variable "talos_worker_01_ip_addr" {
   description = "IP address for worker node"
 }
 
+variable "talos_cp_01_node_name" {
+  type        = string
+  description = "Proxmox node name for control plane"
+  default     = "pve01"
+}
+
+variable "talos_worker_01_node_name" {
+  type        = string
+  description = "Proxmox node name for worker node"
+  default     = "pve01"
+}
+
 variable "datastore_id" {
   type        = string
   default     = "local-lvm"

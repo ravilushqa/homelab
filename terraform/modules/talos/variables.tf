@@ -26,9 +26,15 @@ variable "talos_worker_hostname" {
   default     = "talos-worker-01"
 }
 
-variable "proxmox_node_name" {
+variable "talos_cp_01_node_name" {
   type        = string
-  description = "Name of the Proxmox node where VMs are created"
+  description = "Proxmox node name for control plane"
+  default     = "pve01"
+}
+
+variable "talos_worker_01_node_name" {
+  type        = string
+  description = "Proxmox node name for worker node"
   default     = "pve01"
 }
 

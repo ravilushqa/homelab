@@ -3,7 +3,6 @@ locals {
   common_vm_config = {
     description = "Managed by Terraform"
     tags        = ["terraform"]
-    node_name   = var.node_name
     on_boot     = true
 
     network_device = {
@@ -29,7 +28,8 @@ locals {
   # VM-specific configurations
   vms = {
     talos-cp-01 = {
-      ip_addr = var.talos_cp_01_ip_addr
+      ip_addr   = var.talos_cp_01_ip_addr
+      node_name = var.talos_cp_01_node_name
       cpu = {
         cores = 2
         type  = "x86-64-v2-AES"
@@ -40,7 +40,8 @@ locals {
     }
 
     talos-worker-01 = {
-      ip_addr = var.talos_worker_01_ip_addr
+      ip_addr   = var.talos_worker_01_ip_addr
+      node_name = var.talos_worker_01_node_name
       cpu = {
         cores = 4
         type  = "x86-64-v2-AES"

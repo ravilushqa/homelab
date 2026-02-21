@@ -5,7 +5,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
   name        = each.key
   description = local.common_vm_config.description
   tags        = local.common_vm_config.tags
-  node_name   = local.common_vm_config.node_name
+  node_name   = each.value.node_name
   on_boot     = local.common_vm_config.on_boot
 
   cpu {
@@ -60,7 +60,7 @@ resource "proxmox_virtual_environment_vm" "talos_workers" {
   name        = each.key
   description = local.common_vm_config.description
   tags        = local.common_vm_config.tags
-  node_name   = local.common_vm_config.node_name
+  node_name   = each.value.node_name
   on_boot     = local.common_vm_config.on_boot
 
   cpu {
