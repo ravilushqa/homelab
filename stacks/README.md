@@ -10,7 +10,6 @@ Secrets are stored in Komodo Variables/Secrets — never in this repo.
 ## Required Secrets in Komodo
 
 ### traefik
-- `DOMAIN`
 - `ACME_EMAIL`
 - `CF_DNS_API_TOKEN`
 - `TRAEFIK_OIDC_CLIENT_ID`
