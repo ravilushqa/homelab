@@ -27,6 +27,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.karakeep.rule=Host(`karakeep.ravil.space`)"
+      - "traefik.http.routers.karakeep.middlewares=umami@docker"
       - "traefik.http.routers.karakeep.entrypoints=websecure"
       - "traefik.http.routers.karakeep.tls.certresolver=cloudflare"
       - "traefik.http.services.karakeep.loadbalancer.server.port=3000"

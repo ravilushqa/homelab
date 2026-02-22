@@ -64,7 +64,7 @@ services:
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=cloudflare"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.priority=100"
-      - "traefik.http.routers.traefik-dashboard.middlewares=oidc-auth@docker"
+      - "traefik.http.routers.traefik-dashboard.middlewares=oidc-auth@docker,umami@docker"
       # Global OIDC middleware
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.Url=https://pocketid.ravil.space"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.ClientId=${TRAEFIK_OIDC_CLIENT_ID}"

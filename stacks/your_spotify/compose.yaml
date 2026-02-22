@@ -15,6 +15,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.spotify-server.rule=Host(`spotify-server.ravil.space`)"
+      - "traefik.http.routers.spotify-server.middlewares=umami@docker"
       - "traefik.http.routers.spotify-server.entrypoints=websecure"
       - "traefik.http.routers.spotify-server.tls.certresolver=cloudflare"
       - "traefik.http.services.spotify-server.loadbalancer.server.port=8080"
@@ -38,6 +39,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.spotify-web.rule=Host(`spotify.ravil.space`)"
+      - "traefik.http.routers.spotify-web.middlewares=umami@docker"
       - "traefik.http.routers.spotify-web.entrypoints=websecure"
       - "traefik.http.routers.spotify-web.tls.certresolver=cloudflare"
       - "traefik.http.services.spotify-web.loadbalancer.server.port=3000"

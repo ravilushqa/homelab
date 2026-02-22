@@ -34,6 +34,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.miniflux.rule=Host(`miniflux.ravil.space`)"
+      - "traefik.http.routers.miniflux.middlewares=umami@docker"
       - "traefik.http.routers.miniflux.entrypoints=websecure"
       - "traefik.http.routers.miniflux.tls.certresolver=cloudflare"
       - "traefik.http.services.miniflux.loadbalancer.server.port=8080"
