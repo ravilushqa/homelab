@@ -105,3 +105,8 @@ resource "proxmox_virtual_environment_vm" "talos_workers" {
     }
   }
 }
+
+moved {
+  from = proxmox_virtual_environment_download_file.talos_nocloud_image
+  to   = proxmox_virtual_environment_download_file.talos_nocloud_image["pve01"]
+}

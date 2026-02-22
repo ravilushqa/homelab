@@ -89,3 +89,13 @@ resource "talos_cluster_kubeconfig" "kubeconfig" {
     read = "1m"
   }
 }
+
+moved {
+  from = talos_machine_configuration_apply.cp_config_apply[0]
+  to   = talos_machine_configuration_apply.cp_config_apply["talos-cp-01"]
+}
+
+moved {
+  from = talos_machine_configuration_apply.worker_config_apply[0]
+  to   = talos_machine_configuration_apply.worker_config_apply["talos-worker-01"]
+}
