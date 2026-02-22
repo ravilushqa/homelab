@@ -17,9 +17,6 @@ services:
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.web.http.redirections.entrypoint.permanent=true
 
-      # Default middlewares for all routers
-      - --entrypoints.websecure.http.middlewares=http-cat@docker
-
       # Docker provider
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -70,11 +67,6 @@ services:
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.ClientSecret=${TRAEFIK_OIDC_CLIENT_SECRET}"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Scopes=openid,profile,email"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Secret=${OIDC_SECRET}"
-      # http.cat error pages middleware
-      - "traefik.http.middlewares.http-cat.errors.status=400-599"
-      - "traefik.http.middlewares.http-cat.errors.service=http-cat-svc@docker"
-      - "traefik.http.middlewares.http-cat.errors.query=/{status}"
-      - "traefik.http.services.http-cat-svc.loadbalancer.server.url=https://http.cat"
 
   whoami:
     image: traefik/whoami
