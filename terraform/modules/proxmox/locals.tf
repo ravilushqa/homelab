@@ -32,11 +32,11 @@ locals {
       node_name = v.host_node
       type      = v.type
       cpu = {
-        cores = v.type == "controlplane" ? 2 : 4
+        cores = v.cpu
         type  = "x86-64-v2-AES"
       }
       memory = {
-        dedicated = 8192
+        dedicated = v.memory
       }
     }
   }

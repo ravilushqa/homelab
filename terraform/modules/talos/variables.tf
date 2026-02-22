@@ -10,6 +10,8 @@ variable "nodes" {
     host_node = string
     ip        = string
     type      = string
+    cpu       = number
+    memory    = number
   }))
 }
 
