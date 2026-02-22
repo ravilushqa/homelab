@@ -12,6 +12,9 @@ services:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
 
+      # Default middlewares for websecure
+      - --entrypoints.websecure.http.middlewares=umami@docker
+
       # HTTP to HTTPS redirect
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
