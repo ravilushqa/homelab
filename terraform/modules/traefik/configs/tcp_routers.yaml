@@ -10,7 +10,7 @@ tcp:
       rule: >-
         HostSNI(`argocd.ravil.space`)
         || HostSNI(`glance.ravil.space`)
-        || HostSNI(`dozzle.ravil.space`)
+        || HostSNI(`dozzle.k8s.ravil.space`)
         || HostSNI(`it-tools.ravil.space`)
         || HostSNI(`inbox-zero.ravil.space`)
         || HostSNI(`changedetection.ravil.space`)
