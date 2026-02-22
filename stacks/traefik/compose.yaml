@@ -40,6 +40,10 @@ services:
       - --experimental.plugins.traefik-oidc-auth.modulename=github.com/sevensolutions/traefik-oidc-auth
       - --experimental.plugins.traefik-oidc-auth.version=v0.15.0
 
+      # Umami analytics plugin
+      - --experimental.plugins.umami-feeder.modulename=github.com/astappiev/traefik-umami-feeder
+      - --experimental.plugins.umami-feeder.version=v1.4.0
+
     ports:
       - "80:80"
       - "443:443"
@@ -67,6 +71,11 @@ services:
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Provider.ClientSecret=${TRAEFIK_OIDC_CLIENT_SECRET}"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Scopes=openid,profile,email"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc-auth.Secret=${OIDC_SECRET}"
+      # Umami analytics middleware
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.umamiHost=http://umami:3000"
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.umamiUsername=${UMAMI_USERNAME}"
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.umamiPassword=${UMAMI_PASSWORD}"
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.createNewWebsites=true"
 
   whoami:
     image: traefik/whoami
