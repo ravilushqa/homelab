@@ -1,0 +1,46 @@
+services:
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: grafana-lgtm
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/data
+      - ./prometheus.yaml:/otel-lgtm/prometheus.yaml
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana_beta.ravil.space`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
+      - "traefik.http.routers.grafana.middlewares=oidc-auth@docker"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik_default"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+
+volumes:
+  grafana-data:
+
+networks:
+  default:
+    name: grafana-lgtm_default
+  traefik:
+    name: traefik_default
+    external: true
