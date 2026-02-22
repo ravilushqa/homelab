@@ -14,7 +14,7 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`grafana_beta.ravil.space`)"
+      - "traefik.http.routers.grafana.rule=Host(`grafana-beta.ravil.space`)"
       - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
       - "traefik.http.routers.grafana.middlewares=oidc-auth@docker"
