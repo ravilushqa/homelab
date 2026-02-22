@@ -1,11 +1,11 @@
 # Control plane node
 resource "proxmox_virtual_environment_vm" "talos_cp" {
-  for_each = { for k, v in local.vms : k => v if !lookup(v, "depends_on_cp", false) }
+  for_each = { for k, v in local.vms : k => v if v.type == "controlplane" }
 
   name        = each.key
   description = local.common_vm_config.description
   tags        = local.common_vm_config.tags
-  node_name   = local.common_vm_config.node_name
+  node_name   = each.value.node_name
   on_boot     = local.common_vm_config.on_boot
 
   cpu {
@@ -27,7 +27,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
 
   disk {
     datastore_id = local.common_vm_config.disk.datastore_id
-    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image[each.value.node_name].id
     file_format  = local.common_vm_config.disk.file_format
     interface    = local.common_vm_config.disk.interface
     size         = local.common_vm_config.disk.size
@@ -53,14 +53,14 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
 
 # Worker nodes (depend on control plane)
 resource "proxmox_virtual_environment_vm" "talos_workers" {
-  for_each = { for k, v in local.vms : k => v if lookup(v, "depends_on_cp", false) }
+  for_each = { for k, v in local.vms : k => v if v.type == "worker" }
 
   depends_on = [proxmox_virtual_environment_vm.talos_cp]
 
   name        = each.key
   description = local.common_vm_config.description
   tags        = local.common_vm_config.tags
-  node_name   = local.common_vm_config.node_name
+  node_name   = each.value.node_name
   on_boot     = local.common_vm_config.on_boot
 
   cpu {
@@ -82,7 +82,7 @@ resource "proxmox_virtual_environment_vm" "talos_workers" {
 
   disk {
     datastore_id = local.common_vm_config.disk.datastore_id
-    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image[each.value.node_name].id
     file_format  = local.common_vm_config.disk.file_format
     interface    = local.common_vm_config.disk.interface
     size         = local.common_vm_config.disk.size

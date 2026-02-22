@@ -1,22 +1,15 @@
-variable "talos_cp_01_ip_addr" {
-  type        = string
-  description = "IP address for the Talos control plane node"
-}
-
-variable "talos_worker_01_ip_addr" {
-  type        = string
-  description = "IP address for the Talos worker node"
+variable "nodes" {
+  description = "Configuration for cluster nodes"
+  type = map(object({
+    host_node = string
+    ip        = string
+    type      = string
+  }))
 }
 
 variable "default_gateway" {
   type        = string
   description = "Default gateway for network configuration"
-}
-
-variable "node_name" {
-  type        = string
-  default     = "pve01"
-  description = "Name of the Proxmox node where VMs are created"
 }
 
 variable "datastore_id" {
