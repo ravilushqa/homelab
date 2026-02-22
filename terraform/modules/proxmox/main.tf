@@ -1,6 +1,6 @@
 # Control plane node
 resource "proxmox_virtual_environment_vm" "talos_cp" {
-  for_each = { for k, v in local.vms : k => v if !lookup(v, "depends_on_cp", false) }
+  for_each = { for k, v in local.vms : k => v if v.type == "controlplane" }
 
   name        = each.key
   description = local.common_vm_config.description
@@ -53,7 +53,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
 
 # Worker nodes (depend on control plane)
 resource "proxmox_virtual_environment_vm" "talos_workers" {
-  for_each = { for k, v in local.vms : k => v if lookup(v, "depends_on_cp", false) }
+  for_each = { for k, v in local.vms : k => v if v.type == "worker" }
 
   depends_on = [proxmox_virtual_environment_vm.talos_cp]
 

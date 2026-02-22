@@ -34,26 +34,25 @@ variable "default_gateway" {
   description = "IP address of your default gateway"
 }
 
-variable "talos_cp_01_ip_addr" {
-  type        = string
-  description = "IP address for control plane"
-}
-
-variable "talos_worker_01_ip_addr" {
-  type        = string
-  description = "IP address for worker node"
-}
-
-variable "talos_cp_01_node_name" {
-  type        = string
-  description = "Proxmox node name for control plane"
-  default     = "pve01"
-}
-
-variable "talos_worker_01_node_name" {
-  type        = string
-  description = "Proxmox node name for worker node"
-  default     = "pve01"
+variable "nodes" {
+  description = "Configuration for cluster nodes"
+  type = map(object({
+    host_node = string
+    ip        = string
+    type      = string
+  }))
+  default = {
+    "talos-cp-01" = {
+      host_node = "pve01"
+      ip        = "10.0.10.10"
+      type      = "controlplane"
+    }
+    "talos-worker-01" = {
+      host_node = "pve01"
+      ip        = "10.0.10.11"
+      type      = "worker"
+    }
+  }
 }
 
 variable "datastore_id" {

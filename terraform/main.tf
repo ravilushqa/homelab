@@ -29,13 +29,8 @@ provider "kubernetes" {
 module "talos" {
   source = "./modules/talos"
 
-  talos_cp_01_ip_addr       = var.talos_cp_01_ip_addr
-  talos_worker_01_ip_addr   = var.talos_worker_01_ip_addr
-  talos_cp_01_node_name     = var.talos_cp_01_node_name
-  talos_worker_01_node_name = var.talos_worker_01_node_name
-  talos_cp_hostname         = "talos-cp-01"
-  talos_worker_hostname     = "talos-worker-01"
-  vm_ids                    = module.proxmox.vm_ids
+  nodes  = var.nodes
+  vm_ids = module.proxmox.vm_ids
 
   cilium = {
     values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
@@ -44,15 +39,12 @@ module "talos" {
 }
 
 module "proxmox" {
-  source                    = "./modules/proxmox"
-  default_gateway           = var.default_gateway
-  talos_cp_01_ip_addr       = var.talos_cp_01_ip_addr
-  talos_worker_01_ip_addr   = var.talos_worker_01_ip_addr
-  talos_cp_01_node_name     = var.talos_cp_01_node_name
-  talos_worker_01_node_name = var.talos_worker_01_node_name
-  datastore_id              = var.datastore_id
-  talos_image_url           = module.talos.disk_image_url
-  talos_version             = module.talos.talos_version
+  source          = "./modules/proxmox"
+  default_gateway = var.default_gateway
+  nodes           = var.nodes
+  datastore_id    = var.datastore_id
+  talos_image_url = module.talos.disk_image_url
+  talos_version   = module.talos.talos_version
 }
 
 module "monitoring" {
