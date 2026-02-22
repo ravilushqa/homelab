@@ -31,17 +31,35 @@ variable "proxmox_api_token" {
 
 variable "default_gateway" {
   type        = string
+  default     = "192.168.1.1"
   description = "IP address of your default gateway"
 }
 
-variable "talos_cp_01_ip_addr" {
-  type        = string
-  description = "IP address for control plane"
-}
-
-variable "talos_worker_01_ip_addr" {
-  type        = string
-  description = "IP address for worker node"
+variable "nodes" {
+  description = "Configuration for cluster nodes"
+  type = map(object({
+    host_node = string
+    ip        = string
+    type      = string
+    cpu       = number
+    memory    = number
+  }))
+  default = {
+    "talos-cp-01" = {
+      host_node = "pve01"
+      ip        = "192.168.1.210"
+      type      = "controlplane"
+      cpu       = 2
+      memory    = 8192
+    }
+    "talos-worker-01" = {
+      host_node = "pve01"
+      ip        = "192.168.1.211"
+      type      = "worker"
+      cpu       = 4
+      memory    = 8192
+    }
+  }
 }
 
 variable "datastore_id" {
