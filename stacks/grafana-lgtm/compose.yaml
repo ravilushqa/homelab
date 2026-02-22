@@ -9,6 +9,8 @@ services:
     volumes:
       - grafana-data:/data
       - ./prometheus.yaml:/otel-lgtm/prometheus.yaml
+      - ./dashboards:/dashboards
+      - ./provisioning/dashboards:/otel-lgtm/grafana/conf/provisioning/dashboards
     networks:
       - default
       - traefik
