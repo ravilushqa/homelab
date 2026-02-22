@@ -10,7 +10,7 @@ spec:
     - name: internal
       namespace: gateway
   hostnames:
-    - "dozzle.ravil.space"
+    - "dozzle.k8s.ravil.space"
   rules:
     - backendRefs:
         - name: dozzle-oauth2-proxy
