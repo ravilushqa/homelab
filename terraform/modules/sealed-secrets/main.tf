@@ -1,3 +1,8 @@
+moved {
+  from = kubernetes_namespace.sealed-secrets
+  to   = kubernetes_namespace_v1.sealed-secrets
+}
+
 resource "kubernetes_namespace_v1" "sealed-secrets" {
   metadata {
     name = "sealed-secrets"

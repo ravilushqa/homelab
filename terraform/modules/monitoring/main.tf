@@ -1,3 +1,8 @@
+moved {
+  from = kubernetes_namespace.monitoring
+  to   = kubernetes_namespace_v1.monitoring
+}
+
 # create namespace and enforce it to priveleged
 resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
