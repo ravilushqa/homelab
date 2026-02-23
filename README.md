@@ -53,6 +53,9 @@ deployment.
 - [Dozzle](https://dozzle.dev/) - Container log viewer.
 - [Traefik](https://traefik.io/) - Reverse proxy for Docker stacks.
 - [GitHub Runner](https://github.com/actions/runner) - Self-hosted GitHub Actions runner.
+- [Grafana LGTM](https://grafana.com/) - Self-hosted OTEL observability stack (Loki, Grafana, Tempo, Mimir) with cAdvisor.
+- [Ntfy](https://ntfy.sh/) - Push notification service.
+- [Umami](https://umami.is/) - Privacy-focused web analytics.
 
 ---
 

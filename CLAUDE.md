@@ -46,8 +46,16 @@ Traffic enters via a Traefik instance that does TLS passthrough to two backends:
 - **Adding a new Komodo service**: no change needed in `tcp_routers.yaml`
 - **Adding a new K8s service**: add its hostname to `k8s-tcp-router` rule
 
-K8s domains (as of last update): `argocd`, `glance`, `dozzle`, `it-tools`, `inbox-zero`,
+K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero`,
 `changedetection`, `grafana`, `ha`, `openwebui`, `pocketid`, `proxmox` (all `.ravil.space`)
+
+## Adding a New Service (Docker/Komodo)
+
+1. Create `stacks/{name}/compose.yaml` with Traefik labels
+   - Hardcode domain as `ravil.space` in labels (not via env var)
+2. Add secrets to Komodo Variables/Secrets (never commit secrets to repo)
+3. Create Komodo stack pointing to this git repo
+4. Configure OIDC (Traefik middleware or native) — **mandatory for public services**
 
 ## Best Practices
 - Document major components in README.md

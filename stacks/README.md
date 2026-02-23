@@ -50,3 +50,10 @@ Secrets are stored in Komodo Variables/Secrets — never in this repo.
 ### your_spotify
 - `SPOTIFY_CLIENT_ID`
 - `SPOTIFY_CLIENT_SECRET`
+
+### umami
+- `UMAMI_DB_PASSWORD`
+- `UMAMI_APP_SECRET`
+
+### grafana-lgtm
+- `GF_ADMIN_PASSWORD`
