@@ -1,5 +1,5 @@
 # create namespace and enforce it to priveleged
-resource "kubernetes_namespace" "monitoring" {
+resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
     name = var.namespace
     labels = {
@@ -13,7 +13,7 @@ resource "helm_release" "grafana-k8s-monitoring" {
   name       = "grafana-k8s-monitoring"
   repository = "https://grafana.github.io/helm-charts"
   chart      = "k8s-monitoring"
-  namespace  = kubernetes_namespace.monitoring.metadata.0.name
+  namespace  = kubernetes_namespace_v1.monitoring.metadata.0.name
   version    = "3.6.1"
   atomic     = true
   timeout    = 300
