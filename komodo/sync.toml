@@ -1,0 +1,8 @@
+## Resource Sync — tells Komodo to watch this repo for resource declarations
+
+[[resource_sync]]
+name = "homelab-stacks"
+[resource_sync.config]
+repo = "ravilushqa/homelab"
+branch = "main"
+resource_path = ["komodo/stacks.toml"]
