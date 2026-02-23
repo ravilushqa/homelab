@@ -18,9 +18,17 @@ jobs:
       - name: Detect changed stacks
         id: changed
         run: |
-          stacks=$(git diff --name-only HEAD~1 HEAD -- stacks/ | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+          # Get changed dirs under stacks/, filter to only those with a compose file
+          candidates=$(git diff --name-only HEAD~1 HEAD -- stacks/ | grep '/' | cut -d'/' -f2 | sort -u)
+          stacks=""
+          for s in $candidates; do
+            if [ -f "stacks/$s/compose.yaml" ] || [ -f "stacks/$s/compose.yml" ] || [ -f "stacks/$s/docker-compose.yaml" ] || [ -f "stacks/$s/docker-compose.yml" ]; then
+              stacks="$stacks $s"
+            fi
+          done
+          stacks=$(echo "$stacks" | xargs)
           echo "stacks=$stacks" >> "$GITHUB_OUTPUT"
-          echo "Changed stacks: $stacks"
+          echo "Changed stacks: ${stacks:-none}"
 
       - name: Deploy to Komodo
         if: steps.changed.outputs.stacks != ''
