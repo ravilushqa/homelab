@@ -26,6 +26,11 @@ resource "proxmox_virtual_environment_user_token" "kubernetes-csi-token" {
   privileges_separation = false
 }
 
+moved {
+  from = kubernetes_namespace.csi-proxmox
+  to   = kubernetes_namespace_v1.csi-proxmox
+}
+
 resource "kubernetes_namespace_v1" "csi-proxmox" {
   metadata {
     name = "csi-proxmox"
