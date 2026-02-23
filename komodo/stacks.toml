@@ -1,5 +1,5 @@
 ## Komodo Resource Sync — Stack declarations
-## All stacks use the same git repo and server, only clone_path differs.
+## All stacks use the same git repo and server, only run_directory differs.
 ## Secrets use [[VAR]] syntax — resolved from Komodo Variables at deploy time.
 
 # ─── Infrastructure ──────────────────────────────────────────────
@@ -13,7 +13,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/traefik"
+run_directory = "stacks/traefik"
 environment = """
 ACME_EMAIL = [[ACME_EMAIL]]
 CF_DNS_API_TOKEN = [[CF_DNS_API_TOKEN]]
@@ -33,7 +33,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/github-runner"
+run_directory = "stacks/github-runner"
 environment = """
 ACCESS_TOKEN = [[GITHUB_PAT]]
 """
@@ -49,7 +49,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/grafana-lgtm"
+run_directory = "stacks/grafana-lgtm"
 environment = """
 GF_ADMIN_USER = [[GF_ADMIN_USER]]
 GF_ADMIN_PASSWORD = [[GF_ADMIN_PASSWORD]]
@@ -64,7 +64,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/dozzle"
+run_directory = "stacks/dozzle"
 
 [[stack]]
 name = "umami"
@@ -75,7 +75,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/umami"
+run_directory = "stacks/umami"
 environment = """
 UMAMI_APP_SECRET = [[UMAMI_APP_SECRET]]
 UMAMI_DB_PASSWORD = [[UMAMI_DB_PASSWORD]]
@@ -92,7 +92,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/miniflux"
+run_directory = "stacks/miniflux"
 environment = """
 MINIFLUX_DB_PASSWORD = [[MINIFLUX_DB_PASSWORD]]
 MINIFLUX_ADMIN_USERNAME = [[MINIFLUX_ADMIN_USERNAME]]
@@ -110,7 +110,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/nextflux"
+run_directory = "stacks/nextflux"
 
 [[stack]]
 name = "rsshub"
@@ -121,7 +121,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/rsshub"
+run_directory = "stacks/rsshub"
 
 [[stack]]
 name = "immich"
@@ -132,7 +132,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/immich"
+run_directory = "stacks/immich"
 environment = """
 DB_DATABASE_NAME = [[DB_DATABASE_NAME]]
 DB_USERNAME = [[DB_USERNAME]]
@@ -149,7 +149,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/your_spotify"
+run_directory = "stacks/your_spotify"
 environment = """
 SPOTIFY_CLIENT_ID = [[SPOTIFY_CLIENT_ID]]
 SPOTIFY_CLIENT_SECRET = [[SPOTIFY_CLIENT_SECRET]]
@@ -166,7 +166,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/n8n"
+run_directory = "stacks/n8n"
 
 [[stack]]
 name = "karakeep"
@@ -177,7 +177,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/karakeep"
+run_directory = "stacks/karakeep"
 environment = """
 KARAKEEP_NEXTAUTH_SECRET = [[KARAKEEP_NEXTAUTH_SECRET]]
 KARAKEEP_MEILI_MASTER_KEY = [[KARAKEEP_MEILI_MASTER_KEY]]
@@ -195,7 +195,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/paperless-ngx"
+run_directory = "stacks/paperless-ngx"
 environment = """
 PAPERLESS_DB_PASSWORD = [[PAPERLESS_DB_PASSWORD]]
 PAPERLESS_SECRET_KEY = [[PAPERLESS_SECRET_KEY]]
@@ -216,7 +216,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/bytestash"
+run_directory = "stacks/bytestash"
 environment = """
 BYTESTASH_JWT_SECRET = [[BYTESTASH_JWT_SECRET]]
 BYTESTASH_OIDC_CLIENT_ID = [[BYTESTASH_OIDC_CLIENT_ID]]
@@ -232,7 +232,7 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/s-pdf"
+run_directory = "stacks/s-pdf"
 
 [[stack]]
 name = "ntfy"
@@ -243,4 +243,4 @@ deploy = true
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-clone_path = "stacks/ntfy"
+run_directory = "stacks/ntfy"
