@@ -1,0 +1,188 @@
+## Komodo Resource Sync — Stack declarations
+## All stacks use the same git repo and server, only clone_path differs.
+
+# ─── Infrastructure ──────────────────────────────────────────────
+
+[[stack]]
+name = "traefik"
+description = "Reverse proxy and SSL termination"
+tags = ["infra"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/traefik"
+
+[[stack]]
+name = "github-runner"
+description = "Self-hosted GitHub Actions runner"
+tags = ["infra"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/github-runner"
+
+# ─── Monitoring ──────────────────────────────────────────────────
+
+[[stack]]
+name = "grafana-lgtm"
+description = "Grafana LGTM observability stack"
+tags = ["monitoring", "infra"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/grafana-lgtm"
+
+[[stack]]
+name = "dozzle"
+description = "Docker log viewer"
+tags = ["monitoring"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/dozzle"
+
+[[stack]]
+name = "umami"
+description = "Privacy-focused web analytics"
+tags = ["monitoring"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/umami"
+
+# ─── Media ───────────────────────────────────────────────────────
+
+[[stack]]
+name = "miniflux"
+description = "RSS reader with Postgres backend"
+tags = ["media", "rss"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/miniflux"
+
+[[stack]]
+name = "nextflux"
+description = "Alternative Miniflux web UI"
+tags = ["media", "rss"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/nextflux"
+
+[[stack]]
+name = "rsshub"
+description = "RSS feed generator for various sources"
+tags = ["media", "rss"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/rsshub"
+
+[[stack]]
+name = "immich"
+description = "Self-hosted photo and video management"
+tags = ["media", "photos"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/immich"
+
+[[stack]]
+name = "your_spotify"
+description = "Spotify listening stats dashboard"
+tags = ["media"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/your_spotify"
+
+# ─── Productivity ────────────────────────────────────────────────
+
+[[stack]]
+name = "n8n"
+description = "Workflow automation platform"
+tags = ["productivity"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/n8n"
+
+[[stack]]
+name = "karakeep"
+description = "Bookmark manager with full-text search"
+tags = ["productivity"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/karakeep"
+
+[[stack]]
+name = "paperless-ngx"
+description = "Document management system with OCR"
+tags = ["productivity"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/paperless-ngx"
+
+# ─── Tools ───────────────────────────────────────────────────────
+
+[[stack]]
+name = "bytestash"
+description = "Code snippet manager"
+tags = ["tools"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/bytestash"
+
+[[stack]]
+name = "s-pdf"
+description = "Self-hosted PDF tools"
+tags = ["tools"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/s-pdf"
+
+[[stack]]
+name = "ntfy"
+description = "Push notification service"
+tags = ["tools"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+clone_path = "stacks/ntfy"
