@@ -1,5 +1,6 @@
 ## Komodo Resource Sync — Stack declarations
 ## All stacks use the same git repo and server, only clone_path differs.
+## Secrets use [[VAR]] syntax — resolved from Komodo Variables at deploy time.
 
 # ─── Infrastructure ──────────────────────────────────────────────
 
@@ -13,6 +14,15 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/traefik"
+environment = """
+ACME_EMAIL = [[ACME_EMAIL]]
+CF_DNS_API_TOKEN = [[CF_DNS_API_TOKEN]]
+TRAEFIK_OIDC_CLIENT_ID = [[TRAEFIK_OIDC_CLIENT_ID]]
+TRAEFIK_OIDC_CLIENT_SECRET = [[TRAEFIK_OIDC_CLIENT_SECRET]]
+OIDC_SECRET = [[OIDC_SECRET]]
+UMAMI_USERNAME = [[UMAMI_USERNAME]]
+UMAMI_PASSWORD = [[UMAMI_PASSWORD]]
+"""
 
 [[stack]]
 name = "github-runner"
@@ -24,6 +34,9 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/github-runner"
+environment = """
+ACCESS_TOKEN = [[GITHUB_PAT]]
+"""
 
 # ─── Monitoring ──────────────────────────────────────────────────
 
@@ -37,6 +50,10 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/grafana-lgtm"
+environment = """
+GF_ADMIN_USER = [[GF_ADMIN_USER]]
+GF_ADMIN_PASSWORD = [[GF_ADMIN_PASSWORD]]
+"""
 
 [[stack]]
 name = "dozzle"
@@ -59,6 +76,10 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/umami"
+environment = """
+UMAMI_APP_SECRET = [[UMAMI_APP_SECRET]]
+UMAMI_DB_PASSWORD = [[UMAMI_DB_PASSWORD]]
+"""
 
 # ─── Media ───────────────────────────────────────────────────────
 
@@ -72,6 +93,13 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/miniflux"
+environment = """
+MINIFLUX_DB_PASSWORD = [[MINIFLUX_DB_PASSWORD]]
+MINIFLUX_ADMIN_USERNAME = [[MINIFLUX_ADMIN_USERNAME]]
+MINIFLUX_ADMIN_PASSWORD = [[MINIFLUX_ADMIN_PASSWORD]]
+MINIFLUX_OIDC_CLIENT_ID = [[MINIFLUX_OIDC_CLIENT_ID]]
+MINIFLUX_OIDC_CLIENT_SECRET = [[MINIFLUX_OIDC_CLIENT_SECRET]]
+"""
 
 [[stack]]
 name = "nextflux"
@@ -105,6 +133,12 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/immich"
+environment = """
+DB_DATABASE_NAME = [[DB_DATABASE_NAME]]
+DB_USERNAME = [[DB_USERNAME]]
+DB_PASSWORD = [[DB_PASSWORD]]
+UPLOAD_LOCATION = [[UPLOAD_LOCATION]]
+"""
 
 [[stack]]
 name = "your_spotify"
@@ -116,6 +150,10 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/your_spotify"
+environment = """
+SPOTIFY_CLIENT_ID = [[SPOTIFY_CLIENT_ID]]
+SPOTIFY_CLIENT_SECRET = [[SPOTIFY_CLIENT_SECRET]]
+"""
 
 # ─── Productivity ────────────────────────────────────────────────
 
@@ -140,6 +178,13 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/karakeep"
+environment = """
+KARAKEEP_NEXTAUTH_SECRET = [[KARAKEEP_NEXTAUTH_SECRET]]
+KARAKEEP_MEILI_MASTER_KEY = [[KARAKEEP_MEILI_MASTER_KEY]]
+KARAKEEP_OPENAI_API_KEY = [[KARAKEEP_OPENAI_API_KEY]]
+KARAKEEP_OIDC_CLIENT_ID = [[KARAKEEP_OIDC_CLIENT_ID]]
+KARAKEEP_OIDC_CLIENT_SECRET = [[KARAKEEP_OIDC_CLIENT_SECRET]]
+"""
 
 [[stack]]
 name = "paperless-ngx"
@@ -151,6 +196,14 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/paperless-ngx"
+environment = """
+PAPERLESS_DB_PASSWORD = [[PAPERLESS_DB_PASSWORD]]
+PAPERLESS_SECRET_KEY = [[PAPERLESS_SECRET_KEY]]
+PAPERLESS_API_TOKEN = [[PAPERLESS_API_TOKEN]]
+PAPERLESS_OIDC_CLIENT_ID = [[PAPERLESS_OIDC_CLIENT_ID]]
+PAPERLESS_OIDC_CLIENT_SECRET = [[PAPERLESS_OIDC_CLIENT_SECRET]]
+PAPERLESS_GPT_OPENAI_KEY = [[PAPERLESS_GPT_OPENAI_KEY]]
+"""
 
 # ─── Tools ───────────────────────────────────────────────────────
 
@@ -164,6 +217,11 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 clone_path = "stacks/bytestash"
+environment = """
+BYTESTASH_JWT_SECRET = [[BYTESTASH_JWT_SECRET]]
+BYTESTASH_OIDC_CLIENT_ID = [[BYTESTASH_OIDC_CLIENT_ID]]
+BYTESTASH_OIDC_CLIENT_SECRET = [[BYTESTASH_OIDC_CLIENT_SECRET]]
+"""
 
 [[stack]]
 name = "s-pdf"
