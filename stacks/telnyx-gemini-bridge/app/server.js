@@ -1,22 +1,45 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import fetch from 'node-fetch';
+import { createHmac } from 'crypto';
 import { mulawBufToPcm, pcmBufToMulaw, upsample8to16, downsample16to8 } from './audio.js';
 
 const {
   GEMINI_API_KEY,
   TELNYX_API_KEY,
+  TELNYX_PUBLIC_KEY,
   PUBLIC_HOST = 'bridge.ravil.space',
   PORT = 3000,
   SYSTEM_PROMPT = 'You are Claw, an AI assistant making calls on behalf of Ravil. Be concise and professional. Speak in the language the other person uses.',
 } = process.env;
+
+if (!GEMINI_API_KEY || !TELNYX_API_KEY) {
+  console.error('FATAL: Missing required environment variables: GEMINI_API_KEY, TELNYX_API_KEY');
+  process.exit(1);
+}
 
 const app = express();
 app.use(express.json());
 
 // callControlId -> { geminiWs, telnyxWs }
 const sessions = new Map();
+
+// ── Telnyx Signature Verification ──────────────────────────────
+function verifyTelnyxSignature(req) {
+  if (!TELNYX_PUBLIC_KEY) return true; // skip if not configured
+  const signature = req.headers['telnyx-signature-ed25519'];
+  const timestamp = req.headers['telnyx-timestamp'];
+  if (!signature || !timestamp) return false;
+  try {
+    const payload = timestamp + '|' + JSON.stringify(req.body);
+    const hmac = createHmac('sha256', Buffer.from(TELNYX_PUBLIC_KEY, 'base64'))
+      .update(payload)
+      .digest('base64');
+    return hmac === signature;
+  } catch {
+    return false;
+  }
+}
 
 // ── Telnyx API ──────────────────────────────────────────────────
 async function telnyxAction(callControlId, action, params = {}) {
@@ -85,31 +108,41 @@ function startGemini(callControlId) {
 
 // ── Telnyx Webhook ──────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
-  const eventType = req.body?.data?.event_type;
-  const payload = req.body?.data?.payload;
-  console.log('[webhook]', eventType);
-
-  if (eventType === 'call.initiated' && payload?.direction === 'incoming') {
-    await telnyxAction(payload.call_control_id, 'answer');
+  if (!verifyTelnyxSignature(req)) {
+    console.warn('[webhook] Invalid signature — rejected');
+    return res.sendStatus(403);
   }
 
-  if (eventType === 'call.answered') {
-    const { call_control_id } = payload;
-    sessions.set(call_control_id, { geminiWs: null, telnyxWs: null });
-    await telnyxAction(call_control_id, 'streaming_start', {
-      stream_url: `wss://${PUBLIC_HOST}/media`,
-      stream_track: 'inbound_track',
-    });
-  }
+  try {
+    const eventType = req.body?.data?.event_type;
+    const payload = req.body?.data?.payload;
+    console.log('[webhook]', eventType);
 
-  if (eventType === 'call.hangup') {
-    const { call_control_id } = payload;
-    const s = sessions.get(call_control_id);
-    if (s?.geminiWs) s.geminiWs.close();
-    sessions.delete(call_control_id);
-  }
+    if (eventType === 'call.initiated' && payload?.direction === 'incoming') {
+      await telnyxAction(payload.call_control_id, 'answer');
+    }
 
-  res.sendStatus(200);
+    if (eventType === 'call.answered') {
+      const { call_control_id } = payload;
+      sessions.set(call_control_id, { geminiWs: null, telnyxWs: null });
+      await telnyxAction(call_control_id, 'streaming_start', {
+        stream_url: `wss://${PUBLIC_HOST}/media`,
+        stream_track: 'inbound_track',
+      });
+    }
+
+    if (eventType === 'call.hangup') {
+      const { call_control_id } = payload;
+      const s = sessions.get(call_control_id);
+      if (s?.geminiWs) s.geminiWs.close();
+      sessions.delete(call_control_id);
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('[webhook] Error:', error);
+    res.sendStatus(500);
+  }
 });
 
 app.get('/health', (_, res) => res.json({ ok: true, sessions: sessions.size }));

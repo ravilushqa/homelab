@@ -41,6 +41,7 @@ export function pcmBufToMulaw(buf) {
 // Upsample PCM 8kHz → 16kHz (linear interpolation)
 export function upsample8to16(pcm8k) {
   const samples = pcm8k.length / 2;
+  if (samples === 0) return Buffer.alloc(0);
   const out = Buffer.alloc(samples * 4);
   for (let i = 0; i < samples - 1; i++) {
     const s0 = pcm8k.readInt16LE(i * 2);
@@ -48,6 +49,10 @@ export function upsample8to16(pcm8k) {
     out.writeInt16LE(s0, i * 4);
     out.writeInt16LE(Math.round((s0 + s1) / 2), i * 4 + 2);
   }
+  // Handle last sample
+  const lastSample = pcm8k.readInt16LE((samples - 1) * 2);
+  out.writeInt16LE(lastSample, (samples - 1) * 4);
+  out.writeInt16LE(lastSample, (samples - 1) * 4 + 2);
   return out;
 }
 
