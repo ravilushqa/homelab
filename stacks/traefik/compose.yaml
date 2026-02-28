@@ -38,6 +38,7 @@ services:
       # Global settings
       - --global.checknewversion=false
       - --global.sendanonymoususage=false
+      - --providers.file.filename=/etc/traefik/dynamic.yml
 
       # OIDC auth plugin
       - --experimental.plugins.traefik-oidc-auth.modulename=github.com/sevensolutions/traefik-oidc-auth
@@ -57,6 +58,7 @@ services:
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic.yml:/etc/traefik/dynamic.yml:ro
       - letsencrypt:/letsencrypt
 
     labels:
