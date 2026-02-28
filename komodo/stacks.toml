@@ -9,6 +9,7 @@ name = "traefik"
 description = "Reverse proxy and SSL termination"
 tags = ["infra"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -29,6 +30,7 @@ name = "github-runner"
 description = "Self-hosted GitHub Actions runner"
 tags = ["infra"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -45,6 +47,7 @@ name = "grafana-lgtm"
 description = "Grafana LGTM observability stack"
 tags = ["monitoring", "infra"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -60,6 +63,7 @@ name = "dozzle"
 description = "Docker log viewer"
 tags = ["monitoring"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -71,6 +75,7 @@ name = "umami"
 description = "Privacy-focused web analytics"
 tags = ["monitoring"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -88,6 +93,7 @@ name = "miniflux"
 description = "RSS reader with Postgres backend"
 tags = ["media", "rss"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -106,6 +112,7 @@ name = "nextflux"
 description = "Alternative Miniflux web UI"
 tags = ["media", "rss"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -117,6 +124,7 @@ name = "rsshub"
 description = "RSS feed generator for various sources"
 tags = ["media", "rss"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -128,6 +136,7 @@ name = "immich"
 description = "Self-hosted photo and video management"
 tags = ["media", "photos"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -145,6 +154,7 @@ name = "your_spotify"
 description = "Spotify listening stats dashboard"
 tags = ["media"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -162,6 +172,7 @@ name = "n8n"
 description = "Workflow automation platform"
 tags = ["productivity"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -173,6 +184,7 @@ name = "karakeep"
 description = "Bookmark manager with full-text search"
 tags = ["productivity"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -191,6 +203,7 @@ name = "paperless-ngx"
 description = "Document management system with OCR"
 tags = ["productivity"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -212,6 +225,7 @@ name = "bytestash"
 description = "Code snippet manager"
 tags = ["tools"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -228,6 +242,7 @@ name = "s-pdf"
 description = "Self-hosted PDF tools"
 tags = ["tools"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -239,6 +254,7 @@ name = "ntfy"
 description = "Push notification service"
 tags = ["tools"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
@@ -250,6 +266,7 @@ name = "openclaw"
 description = "OpenClaw AI gateway — exposed via Traefik + Pocket ID OIDC"
 tags = ["infra"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
