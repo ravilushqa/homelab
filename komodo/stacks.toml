@@ -255,14 +255,3 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "stacks/openclaw"
-
-[[stack]]
-name = "proxmox"
-description = "Proxmox dashboard — exposed via Traefik + Pocket ID OIDC"
-tags = ["infra"]
-deploy = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "stacks/proxmox"
