@@ -4,9 +4,9 @@ services:
     container_name: telnyx-gemini-bridge
     restart: unless-stopped
     environment:
-      GEMINI_API_KEY: [[GEMINI_API_KEY]]
-      TELNYX_API_KEY: [[TELNYX_API_KEY]]
-      TELNYX_PUBLIC_KEY: [[TELNYX_PUBLIC_KEY]]
+      GEMINI_API_KEY: "[[GEMINI_API_KEY]]"
+      TELNYX_API_KEY: "[[TELNYX_API_KEY]]"
+      TELNYX_PUBLIC_KEY: "[[TELNYX_PUBLIC_KEY]]"
       PUBLIC_HOST: bridge.ravil.space
       PORT: 3000
       SYSTEM_PROMPT: "You are Claw, an AI assistant making calls on behalf of Ravil. Be concise and professional. Speak in the language the other person uses."
