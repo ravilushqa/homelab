@@ -244,3 +244,14 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "stacks/ntfy"
+
+[[stack]]
+name = "openclaw"
+description = "OpenClaw AI gateway — exposed via Traefik + Pocket ID OIDC"
+tags = ["infra"]
+deploy = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "stacks/openclaw"
