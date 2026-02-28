@@ -250,6 +250,7 @@ name = "openclaw"
 description = "OpenClaw AI gateway — exposed via Traefik + Pocket ID OIDC"
 tags = ["infra"]
 deploy = true
+auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
