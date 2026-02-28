@@ -16,8 +16,8 @@ services:
       - "traefik.http.routers.openclaw.middlewares=oidc-auth@docker,openclaw-user-header@docker"
       - "traefik.http.routers.openclaw.service=openclaw-svc"
 
-      # Router — webhooks (no auth, path-restricted)
-      - "traefik.http.routers.openclaw-hooks.rule=Host(`hooks.ravil.space`)"
+      # Router — webhooks only (no auth, path-restricted)
+      - "traefik.http.routers.openclaw-hooks.rule=Host(`hooks.ravil.space`) && PathPrefix(`/webhooks/`)"
       - "traefik.http.routers.openclaw-hooks.entrypoints=websecure"
       - "traefik.http.routers.openclaw-hooks.tls.certresolver=cloudflare"
       - "traefik.http.routers.openclaw-hooks.service=openclaw-svc"
