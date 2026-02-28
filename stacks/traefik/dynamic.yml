@@ -1,4 +1,0 @@
-http:
-  serversTransports:
-    proxmox-transport:
-      insecureSkipVerify: true
