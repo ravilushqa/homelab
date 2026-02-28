@@ -1,0 +1,18 @@
+services:
+  # Dummy container — labels only. Traefik routes to Proxmox at 192.168.1.100:8006.
+  proxmox-router:
+    image: traefik/whoami
+    container_name: proxmox-router
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+
+      # Router
+      - "traefik.http.routers.proxmox.rule=Host(`proxmox.ravil.space`)"
+      - "traefik.http.routers.proxmox.entrypoints=websecure"
+      - "traefik.http.routers.proxmox.tls.certresolver=cloudflare"
+      - "traefik.http.routers.proxmox.middlewares=oidc-auth@docker"
+      - "traefik.http.routers.proxmox.service=proxmox-svc"
+
+      # External service
+      - "traefik.http.services.proxmox-svc.loadbalancer.server.url=https://192.168.1.100:8006"
