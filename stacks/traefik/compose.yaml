@@ -38,6 +38,7 @@ services:
       # Global settings
       - --global.checknewversion=false
       - --global.sendanonymoususage=false
+      - --serversTransport.insecureSkipVerify=true
 
       # OIDC auth plugin
       - --experimental.plugins.traefik-oidc-auth.modulename=github.com/sevensolutions/traefik-oidc-auth
