@@ -14,9 +14,5 @@ services:
       - "traefik.http.routers.proxmox.middlewares=oidc-auth@docker"
       - "traefik.http.routers.proxmox.service=proxmox-svc"
 
-      # External service (Proxmox uses HTTPS with self-signed cert)
+      # External service
       - "traefik.http.services.proxmox-svc.loadbalancer.server.url=https://192.168.1.100:8006"
-      - "traefik.http.services.proxmox-svc.loadbalancer.serverstransport=proxmox-transport@docker"
-
-      # Skip TLS verification for Proxmox self-signed cert
-      - "traefik.http.serverstransports.proxmox-transport.insecureskipverify=true"
