@@ -272,3 +272,19 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "stacks/openclaw"
+
+[[stack]]
+name = "telnyx-gemini-bridge"
+description = "Telnyx <-> Gemini Live Audio bridge for AI voice calls"
+tags = ["infra", "ai"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "stacks/telnyx-gemini-bridge"
+environment = """
+GEMINI_API_KEY = [[GEMINI_API_KEY]]
+TELNYX_API_KEY = [[TELNYX_API_KEY]]
+"""
