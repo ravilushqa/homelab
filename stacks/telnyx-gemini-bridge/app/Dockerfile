@@ -4,8 +4,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-COPY --chown=appuser:appgroup package.json .
-RUN npm install --production
+COPY --chown=appuser:appgroup package.json package-lock.json ./
+RUN npm ci --production
 
 COPY --chown=appuser:appgroup *.js .
 

@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { createHmac } from 'crypto';
+import { createPublicKey, verify } from 'crypto';
 import { mulawBufToPcm, pcmBufToMulaw, upsample8to16, downsample16to8 } from './audio.js';
 
 const {
@@ -19,24 +19,35 @@ if (!GEMINI_API_KEY || !TELNYX_API_KEY) {
 }
 
 const app = express();
-app.use(express.json());
+
+// Capture raw body for signature verification before JSON parsing
+app.use(express.json({
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
 
 // callControlId -> { geminiWs, telnyxWs }
 const sessions = new Map();
 
-// ── Telnyx Signature Verification ──────────────────────────────
+// ── Telnyx Ed25519 Signature Verification ───────────────────────
 function verifyTelnyxSignature(req) {
-  if (!TELNYX_PUBLIC_KEY) return true; // skip if not configured
+  if (!TELNYX_PUBLIC_KEY) {
+    console.warn('[webhook] TELNYX_PUBLIC_KEY not set — skipping signature check');
+    return true;
+  }
   const signature = req.headers['telnyx-signature-ed25519'];
   const timestamp = req.headers['telnyx-timestamp'];
   if (!signature || !timestamp) return false;
   try {
-    const payload = timestamp + '|' + JSON.stringify(req.body);
-    const hmac = createHmac('sha256', Buffer.from(TELNYX_PUBLIC_KEY, 'base64'))
-      .update(payload)
-      .digest('base64');
-    return hmac === signature;
-  } catch {
+    const payload = Buffer.from(`${timestamp}|${req.rawBody}`);
+    const sigBuf = Buffer.from(signature, 'base64');
+    const rawKey = Buffer.from(TELNYX_PUBLIC_KEY, 'base64');
+    const pubKey = createPublicKey({
+      key: { kty: 'OKP', crv: 'Ed25519', x: rawKey.toString('base64url') },
+      format: 'jwk',
+    });
+    return verify(null, payload, pubKey, sigBuf);
+  } catch (e) {
+    console.error('[webhook] Signature verification error:', e.message);
     return false;
   }
 }

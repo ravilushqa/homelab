@@ -287,4 +287,5 @@ run_directory = "stacks/telnyx-gemini-bridge"
 environment = """
 GEMINI_API_KEY = [[GEMINI_API_KEY]]
 TELNYX_API_KEY = [[TELNYX_API_KEY]]
+TELNYX_PUBLIC_KEY = [[TELNYX_PUBLIC_KEY]]
 """
