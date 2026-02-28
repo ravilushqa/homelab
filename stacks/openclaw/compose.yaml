@@ -9,12 +9,18 @@ services:
     labels:
       - "traefik.enable=true"
 
-      # Router
+      # Router — dashboard (with OIDC auth)
       - "traefik.http.routers.openclaw.rule=Host(`openclaw.ravil.space`)"
       - "traefik.http.routers.openclaw.entrypoints=websecure"
       - "traefik.http.routers.openclaw.tls.certresolver=cloudflare"
       - "traefik.http.routers.openclaw.middlewares=oidc-auth@docker,openclaw-user-header@docker"
       - "traefik.http.routers.openclaw.service=openclaw-svc"
+
+      # Router — webhooks only (no auth, path-restricted)
+      - "traefik.http.routers.openclaw-hooks.rule=Host(`hooks.ravil.space`) && PathPrefix(`/webhooks/`)"
+      - "traefik.http.routers.openclaw-hooks.entrypoints=websecure"
+      - "traefik.http.routers.openclaw-hooks.tls.certresolver=cloudflare"
+      - "traefik.http.routers.openclaw-hooks.service=openclaw-svc"
 
       # External service
       - "traefik.http.services.openclaw-svc.loadbalancer.server.url=http://192.168.1.65:18789"
