@@ -1,0 +1,29 @@
+services:
+  actual:
+    image: actualbudget/actual-server:26.3.0
+    container_name: actual
+    restart: unless-stopped
+    volumes:
+      - actual_data:/data
+    environment:
+      ACTUAL_OPENID_DISCOVERY_URL: https://pocketid.ravil.space/.well-known/openid-configuration
+      ACTUAL_OPENID_CLIENT_ID: ${ACTUAL_OIDC_CLIENT_ID}
+      ACTUAL_OPENID_CLIENT_SECRET: ${ACTUAL_OIDC_CLIENT_SECRET}
+      ACTUAL_OPENID_SERVER_HOSTNAME: https://actual.ravil.space
+    networks:
+      - default
+      - traefik
+    labels:
+      "traefik.enable": "true"
+      "traefik.http.routers.actual.rule": "Host(`actual.ravil.space`)"
+      "traefik.http.routers.actual.entrypoints": "websecure"
+      "traefik.http.routers.actual.tls.certresolver": "cloudflare"
+      "traefik.http.services.actual.loadbalancer.server.port": "5006"
+
+volumes:
+  actual_data:
+
+networks:
+  default:
+  traefik:
+    external: true
