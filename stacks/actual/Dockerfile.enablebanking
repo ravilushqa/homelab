@@ -1,0 +1,23 @@
+# Stage 1: Build web frontend from PR #5570 (Enable Banking integration)
+FROM node:22-bookworm AS web-builder
+
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN git clone --depth=1 --branch feature/enable-banking-integration \
+    https://github.com/realtwister/actual.git .
+
+RUN corepack enable && corepack prepare yarn@4.10.3 --activate
+
+RUN yarn install
+
+ENV NODE_OPTIONS="--max-old-space-size=6144"
+RUN yarn build:browser
+
+# Stage 2: Inject custom web build into official actual-server
+FROM actualbudget/actual-server:latest
+
+COPY --from=web-builder /build/packages/desktop-client/build /web-custom
+
+ENV ACTUAL_WEB_ROOT=/web-custom
