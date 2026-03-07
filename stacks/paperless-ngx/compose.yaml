@@ -75,6 +75,17 @@ services:
   paperless-gpt:
     image: icereed/paperless-gpt:latest
     restart: unless-stopped
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paperless-gpt.rule=Host(`paperless-gpt.ravil.space`)"
+      - "traefik.http.routers.paperless-gpt.entrypoints=websecure"
+      - "traefik.http.routers.paperless-gpt.tls.certresolver=cloudflare"
+      - "traefik.http.routers.paperless-gpt.middlewares=oidc-auth@docker"
+      - "traefik.http.services.paperless-gpt.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
     environment:
       PAPERLESS_BASE_URL: "http://webserver:8000"
       PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN}
