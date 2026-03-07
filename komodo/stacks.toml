@@ -291,16 +291,16 @@ TELNYX_PUBLIC_KEY = [[TELNYX_PUBLIC_KEY]]
 """
 
 [[stack]]
-name = actual
-description = Actual Budget - local-first personal finance
-tags = [finance]
+name = "actual"
+description = "Actual Budget - local-first personal finance"
+tags = ["finance"]
 deploy = true
 auto_update = true
 [stack.config]
-server_id = Local
-repo = ravilushqa/homelab
-branch = main
-run_directory = stacks/actual
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "stacks/actual"
 environment = """
 ACTUAL_OIDC_CLIENT_ID = [[ACTUAL_OIDC_CLIENT_ID]]
 ACTUAL_OIDC_CLIENT_SECRET = [[ACTUAL_OIDC_CLIENT_SECRET]]

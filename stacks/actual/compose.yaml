@@ -1,6 +1,6 @@
 services:
   actual:
-    image: actualbudget/actual-server:latest
+    image: actualbudget/actual-server:26.3.0
     container_name: actual
     restart: unless-stopped
     volumes:
@@ -14,11 +14,11 @@ services:
       - default
       - traefik
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.actual.rule=Host(`actual.ravil.space`)"
-      - "traefik.http.routers.actual.entrypoints=websecure"
-      - "traefik.http.routers.actual.tls.certresolver=cloudflare"
-      - "traefik.http.services.actual.loadbalancer.server.port=5006"
+      "traefik.enable": "true"
+      "traefik.http.routers.actual.rule": "Host(`actual.ravil.space`)"
+      "traefik.http.routers.actual.entrypoints": "websecure"
+      "traefik.http.routers.actual.tls.certresolver": "cloudflare"
+      "traefik.http.services.actual.loadbalancer.server.port": "5006"
 
 volumes:
   actual_data:

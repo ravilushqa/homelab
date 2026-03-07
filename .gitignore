@@ -47,3 +47,4 @@ _cfgs
 *secret*.yaml
 *secret*.json
 .aider*
+*.env
