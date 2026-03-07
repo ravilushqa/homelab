@@ -3,6 +3,8 @@
   "extends": [
     "config:recommended"
   ],
+  "timezone": "Europe/Berlin",
+  "schedule": ["every weekend"],
   "terraform": {
     "enabled": true
   },
@@ -40,34 +42,68 @@
   ],
   "packageRules": [
     {
+      "description": "Group all Docker major updates into one PR",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "docker major updates",
+      "automerge": false,
+      "stabilityDays": 3
+    },
+    {
       "description": "Automerge minor+patch Docker image updates",
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
-      "automergeType": "pr"
-    },
-    {
-      "description": "Major Docker updates need manual review",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["major"],
-      "automerge": false
+      "automergeType": "pr",
+      "groupName": "docker minor/patch updates"
     },
     {
       "description": "Meilisearch breaks between minors - always manual",
       "matchPackageNames": ["getmeili/meilisearch"],
+      "automerge": false,
+      "groupName": null
+    },
+    {
+      "description": "Group all Helm major updates",
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "helm major updates",
+      "automerge": false,
+      "stabilityDays": 3
+    },
+    {
+      "description": "Automerge minor+patch Helm updates",
+      "matchDatasources": ["helm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "groupName": "helm minor/patch updates"
+    },
+    {
+      "description": "Group all Terraform provider/module major updates",
+      "matchDatasources": ["terraform-provider", "terraform-module"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "terraform major updates",
       "automerge": false
     },
     {
-      "description": "Automerge patch Terraform provider updates",
-      "matchDatasources": ["terraform-provider"],
+      "description": "Automerge minor+patch Terraform updates",
+      "matchDatasources": ["terraform-provider", "terraform-module"],
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "automergeType": "pr"
     },
     {
-      "description": "Automerge patch Helm updates",
-      "matchDatasources": ["helm"],
-      "matchUpdateTypes": ["patch"],
+      "description": "Group GitHub Actions major updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "github-actions major updates",
+      "automerge": false
+    },
+    {
+      "description": "Automerge GitHub Actions minor/patch",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "automergeType": "pr"
     },
