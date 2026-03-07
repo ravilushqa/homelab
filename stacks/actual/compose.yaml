@@ -1,6 +1,6 @@
 services:
   actual:
-    image: actualbudget/actual-server:26.3.0
+    image: ghcr.io/ravilushqa/actual-enablebanking:latest
     container_name: actual
     restart: unless-stopped
     volumes:
