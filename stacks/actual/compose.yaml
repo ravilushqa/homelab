@@ -15,6 +15,7 @@ services:
       - traefik
     labels:
       "traefik.enable": "true"
+      "traefik.docker.network": "traefik_default"
       "traefik.http.routers.actual.rule": "Host(`actual.ravil.space`)"
       "traefik.http.routers.actual.entrypoints": "websecure"
       "traefik.http.routers.actual.tls.certresolver": "cloudflare"
