@@ -38,7 +38,7 @@ jobs:
           printf %s "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
           printf %s "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: latest
 
@@ -98,7 +98,7 @@ jobs:
           printf %s "${{ secrets.SEALED_SECRETS_CERT }}" > modules/sealed-secrets/certs/sealed-secrets.cert
           printf %s "${{ secrets.SEALED_SECRETS_KEY }}" > modules/sealed-secrets/certs/sealed-secrets.key
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: latest
 
