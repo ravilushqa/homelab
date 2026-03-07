@@ -26,4 +26,5 @@ volumes:
 networks:
   default:
   traefik:
+    name: traefik_default
     external: true
