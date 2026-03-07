@@ -112,4 +112,3 @@ kubectl -n argocd get applications
 ---
 
 
-# test
