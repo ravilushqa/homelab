@@ -51,7 +51,7 @@ K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `
 
 ## Adding a New Service (Docker/Komodo)
 
-1. Create `stacks/{name}/compose.yaml` with Traefik labels
+1. Create `komodo/stacks/{name}/compose.yaml` with Traefik labels
    - Hardcode domain as `ravil.space` in labels (not via env var)
 2. Add secrets to Komodo Variables/Secrets (never commit secrets to repo)
 3. Create Komodo stack pointing to this git repo

@@ -18,7 +18,7 @@ deployment.
 - [Gateway API](https://gateway-api.sigs.k8s.io/) Next generation of Kubernetes Ingress.
 - [Grafana Cloud](https://grafana.com/) Monitoring and observability of the cluster.
 - [ArgoCD](https://argo-cd.readthedocs.io/) GitOps continuous delivery tool for declarative Kubernetes management.
-- [Komodo](https://komo.do/) Docker stack management — deploys compose stacks from the `stacks/` directory.
+- [Komodo](https://komo.do/) Docker stack management — deploys compose stacks from the `komodo/stacks/` directory.
 
 ---
 
@@ -39,7 +39,7 @@ deployment.
 - [Change Detection](https://changedetection.io/) - Website change monitoring.
 - [Proxmox](https://www.proxmox.com/) - Proxmox VE external access.
 
-### Docker Stacks — Komodo (`stacks/`)
+### Docker Stacks — Komodo (`komodo/stacks/`)
 - [Immich](https://immich.app/) - Google Photos alternative.
 - [Paperless-ngx](https://docs.paperless-ngx.com/) - Document management with OCR.
 - [n8n](https://n8n.io/) - Workflow automation and integrations.

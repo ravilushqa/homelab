@@ -5,7 +5,6 @@ on:
     branches:
       - main
     paths:
-      - 'stacks/**'
       - 'komodo/**'
       - '.github/workflows/komodo-deploy.yaml'
 
@@ -20,9 +19,9 @@ jobs:
       - name: Detect changed stacks
         id: changed
         run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD -- stacks/ \
-            | grep '^stacks/' \
-            | awk -F'/' '{print $2}' \
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- komodo/stacks/ \
+            | grep '^komodo/stacks/' \
+            | awk -F'/' '{print $3}' \
             | sort -u \
             | tr '\n' ' ')
           echo "stacks=$CHANGED" >> $GITHUB_OUTPUT
