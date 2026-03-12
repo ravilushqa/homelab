@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'stacks/actual/Dockerfile.enablebanking'
+      - 'komodo/stacks/actual/Dockerfile.enablebanking'
   workflow_dispatch:
 
 env:
@@ -35,8 +35,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: stacks/actual
-          file: stacks/actual/Dockerfile.enablebanking
+          context: komodo/stacks/actual
+          file: komodo/stacks/actual/Dockerfile.enablebanking
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha

@@ -240,18 +240,18 @@ Services routed through the Kubernetes Gateway API and exposed via Cloudflare DN
 
 Services deployed as Docker compose stacks managed by Komodo. Traffic is routed directly through the Komodo host's Traefik instance, bypassing the Kubernetes Gateway API.
 
-- **Immich** — Photo management (`stacks/immich/`)
-- **Paperless-ngx** — Document management with OCR (`stacks/paperless-ngx/`)
-- **n8n** — Workflow automation (`stacks/n8n/`)
-- **Miniflux** — RSS feed reader (`stacks/miniflux/`)
-- **Karakeep** — Bookmark manager (`stacks/karakeep/`)
-- **ByteStash** — Code snippet storage (`stacks/bytestash/`)
+- **Immich** — Photo management (`komodo/stacks/immich/`)
+- **Paperless-ngx** — Document management with OCR (`komodo/stacks/paperless-ngx/`)
+- **n8n** — Workflow automation (`komodo/stacks/n8n/`)
+- **Miniflux** — RSS feed reader (`komodo/stacks/miniflux/`)
+- **Karakeep** — Bookmark manager (`komodo/stacks/karakeep/`)
+- **ByteStash** — Code snippet storage (`komodo/stacks/bytestash/`)
 - **Dify** — AI application platform (no stack yet)
-- **Your Spotify** — Spotify stats (`stacks/your_spotify/`)
-- **RSSHub** — RSS feed generator (`stacks/rsshub/`)
-- **Nextflux** — RSS reader frontend (`stacks/nextflux/`)
-- **S-PDF** — PDF tools (`stacks/s-pdf/`)
-- **Dozzle** — Container log viewer (`stacks/dozzle/`)
+- **Your Spotify** — Spotify stats (`komodo/stacks/your_spotify/`)
+- **RSSHub** — RSS feed generator (`komodo/stacks/rsshub/`)
+- **Nextflux** — RSS reader frontend (`komodo/stacks/nextflux/`)
+- **S-PDF** — PDF tools (`komodo/stacks/s-pdf/`)
+- **Dozzle** — Container log viewer (`komodo/stacks/dozzle/`)
 
 ## Service Communication Patterns
 
