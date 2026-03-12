@@ -1,0 +1,54 @@
+name: Komodo Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'stacks/**'
+      - 'komodo/**'
+      - '.github/workflows/komodo-deploy.yaml'
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, homelab]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed stacks
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- stacks/ \
+            | grep '^stacks/' \
+            | awk -F'/' '{print $2}' \
+            | sort -u \
+            | tr '\n' ' ')
+          echo "stacks=$CHANGED" >> $GITHUB_OUTPUT
+          echo "Changed stacks: $CHANGED"
+
+      - name: Deploy changed stacks
+        if: steps.changed.outputs.stacks != ''
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+        run: |
+          FAILED=0
+          for STACK in ${{ steps.changed.outputs.stacks }}; do
+            echo "Deploying stack: $STACK"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:9120/execute \
+              -H "Content-Type: application/json" \
+              -H "X-Api-Key: $KOMODO_API_KEY" \
+              -H "X-Api-Secret: $KOMODO_API_SECRET" \
+              -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -1)
+            if [ "$HTTP_CODE" -ne 200 ]; then
+              echo "FAIL: $STACK (HTTP $HTTP_CODE): $BODY"
+              FAILED=1
+            else
+              echo "OK: $STACK"
+            fi
+          done
+          exit $FAILED
