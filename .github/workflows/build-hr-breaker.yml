@@ -1,0 +1,30 @@
+name: Build hr-breaker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'  # Every Monday 04:00 UTC — pick up upstream updates
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest hr-breaker source
+        run: |
+          cd ~/builds/hr-breaker
+          git pull
+
+      - name: Build Docker image
+        run: |
+          cd ~/builds/hr-breaker
+          docker build -t hr-breaker:latest .
+
+      - name: Redeploy via Komodo
+        run: |
+          source ~/.komodo.env
+          curl -sf -X POST "http://192.168.1.166:9120/execute" \
+            -H "Content-Type: application/json" \
+            -H "X-Api-Key: $KOMODO_API_KEY" \
+            -H "X-Api-Secret: $KOMODO_API_SECRET" \
+            -d '{"type":"DeployStack","params":{"stack":"hr-breaker"}}' \
+            | jq '{success: .success, status: .status}'
