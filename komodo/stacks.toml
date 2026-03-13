@@ -302,7 +302,7 @@ repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/hr-breaker"
 environment = """
-GEMINI_API_KEY = [[HR_BREAKER_GEMINI_API_KEY]]
+OPENROUTER_API_KEY = [[HR_BREAKER_OPENROUTER_API_KEY]]
 """
 
 [[stack]]
