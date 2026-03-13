@@ -1,6 +1,7 @@
 services:
   hr-breaker:
     image: hr-breaker:latest
+    pull_policy: never
     container_name: hr-breaker
     restart: unless-stopped
     environment:
