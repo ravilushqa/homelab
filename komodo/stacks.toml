@@ -291,6 +291,21 @@ TELNYX_PUBLIC_KEY = [[TELNYX_PUBLIC_KEY]]
 """
 
 [[stack]]
+name = "hr-breaker"
+description = "AI resume optimizer — Streamlit UI, WeasyPrint PDF output"
+tags = ["ai", "tools"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/hr-breaker"
+environment = """
+GEMINI_API_KEY = [[HR_BREAKER_GEMINI_API_KEY]]
+"""
+
+[[stack]]
 name = "actual"
 description = "Actual Budget - local-first personal finance"
 tags = ["finance"]
