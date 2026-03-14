@@ -320,3 +320,18 @@ environment = """
 ACTUAL_OIDC_CLIENT_ID = [[ACTUAL_OIDC_CLIENT_ID]]
 ACTUAL_OIDC_CLIENT_SECRET = [[ACTUAL_OIDC_CLIENT_SECRET]]
 """
+[[stack]]
+name = "openhands"
+description = "OpenHands - AI autonomous coding agent"
+tags = ["ai", "tools"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/openhands"
+environment = """
+OPENHANDS_LLM_API_KEY = [[ANTHROPIC_API_KEY]]
+OPENHANDS_LLM_MODEL = anthropic/claude-sonnet-4-20250514
+"""
