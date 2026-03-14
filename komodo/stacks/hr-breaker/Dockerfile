@@ -20,11 +20,8 @@ COPY . .
 
 RUN uv sync --no-dev
 
-EXPOSE 8501
+EXPOSE 8899
 
-HEALTHCHECK CMD curl -f http://localhost:8501/_stcore/health || exit 1
+HEALTHCHECK CMD curl -f http://localhost:8899/ || exit 1
 
-CMD ["uv", "run", "streamlit", "run", "src/hr_breaker/main.py", \
-     "--server.address=0.0.0.0", \
-     "--server.port=8501", \
-     "--server.headless=true"]
+CMD ["uv", "run", "hr-breaker", "serve"]
