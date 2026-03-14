@@ -10,6 +10,7 @@ services:
       LLM_MODEL: ${OPENHANDS_LLM_MODEL}
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY}
       OH_WEB_URL: ${OH_WEB_URL}
+      WEB_HOST: ${WEB_HOST}
     ports:
       - "3000:3000"
     volumes:
