@@ -4,13 +4,15 @@ services:
     container_name: openhands
     restart: unless-stopped
     environment:
-      SANDBOX_RUNTIME_CONTAINER_IMAGE: ghcr.io/openhands/runtime:latest
+      AGENT_SERVER_IMAGE_REPOSITORY: ghcr.io/openhands/agent-server
+      AGENT_SERVER_IMAGE_TAG: 1.12.0-python
       LOG_ALL_EVENTS: "true"
       LLM_MODEL: ${OPENHANDS_LLM_MODEL}
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY}
+      OH_WEB_URL: ${OH_WEB_URL}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - openhands_state:/.openhands-state
+      - openhands_state:/.openhands
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -34,3 +36,4 @@ networks:
   traefik:
     name: traefik_default
     external: true
+
