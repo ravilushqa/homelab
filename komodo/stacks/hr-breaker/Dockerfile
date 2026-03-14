@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # WeasyPrint system deps
 RUN apt-get update && apt-get install -y \
