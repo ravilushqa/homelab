@@ -1,10 +1,10 @@
 services:
   openhands:
-    image: ghcr.io/all-hands-ai/openhands:latest
+    image: ghcr.io/openhands/openhands:latest
     container_name: openhands
     restart: unless-stopped
     environment:
-      SANDBOX_RUNTIME_CONTAINER_IMAGE: ghcr.io/all-hands-ai/runtime:latest
+      SANDBOX_RUNTIME_CONTAINER_IMAGE: ghcr.io/openhands/runtime:latest
       LOG_ALL_EVENTS: "true"
       LLM_MODEL: ${OPENHANDS_LLM_MODEL}
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY}
