@@ -5,8 +5,8 @@ services:
     restart: unless-stopped
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - PRO_MODEL=openrouter/google/gemini-2.5-pro-preview
-      - FLASH_MODEL=openrouter/google/gemini-2.0-flash-001
+      - PRO_MODEL=openrouter/google/gemini-2.5-pro
+      - FLASH_MODEL=openrouter/google/gemini-2.5-flash
     networks:
       - traefik
     labels:
@@ -14,7 +14,7 @@ services:
       - "traefik.http.routers.hr-breaker.rule=Host(`hr-breaker.ravil.space`)"
       - "traefik.http.routers.hr-breaker.entrypoints=websecure"
       - "traefik.http.routers.hr-breaker.tls.certresolver=cloudflare"
-      - "traefik.http.services.hr-breaker.loadbalancer.server.port=8501"
+      - "traefik.http.services.hr-breaker.loadbalancer.server.port=8899"
       - "traefik.docker.network=traefik_default"
       - "traefik.http.routers.hr-breaker.middlewares=oidc-auth@docker"
     healthcheck:
