@@ -6,8 +6,8 @@ services:
     restart: unless-stopped
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - PRO_MODEL=openrouter/google/gemini-2.5-pro-preview
-      - FLASH_MODEL=openrouter/google/gemini-2.0-flash-001
+      - PRO_MODEL=openrouter/google/gemini-2.5-pro
+      - FLASH_MODEL=openrouter/google/gemini-2.5-flash
     networks:
       - traefik
     labels:
