@@ -36,7 +36,7 @@ jobs:
           FAILED=0
           for STACK in ${{ steps.changed.outputs.stacks }}; do
             echo "Deploying stack: $STACK"
-            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:9120/execute \
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://192.168.1.166:9120/execute \
               -H "Content-Type: application/json" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
