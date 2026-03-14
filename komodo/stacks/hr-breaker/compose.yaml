@@ -18,7 +18,7 @@ services:
       - "traefik.docker.network=traefik_default"
       - "traefik.http.routers.hr-breaker.middlewares=oidc-auth@docker"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8899/"]
       interval: 30s
       timeout: 10s
       retries: 3
