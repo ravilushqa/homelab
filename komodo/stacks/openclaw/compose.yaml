@@ -31,6 +31,16 @@ services:
       # Add X-Forwarded-User header for OpenClaw trusted-proxy auth
       - "traefik.http.middlewares.openclaw-user-header.headers.customrequestheaders.X-Forwarded-User=ravilushqa"
 
+
+      # Router — voice webhooks (no auth, Telnyx calls)
+      - "traefik.http.routers.openclaw-voice.rule=Host(`hooks.ravil.space`) && PathPrefix(`/voice/`)"
+      - "traefik.http.routers.openclaw-voice.entrypoints=websecure"
+      - "traefik.http.routers.openclaw-voice.tls.certresolver=cloudflare"
+      - "traefik.http.routers.openclaw-voice.service=openclaw-voice-svc"
+
+      # Voice webhook service → port 3334
+      - "traefik.http.services.openclaw-voice-svc.loadbalancer.server.url=http://192.168.1.65:3334"
+      - "traefik.http.services.openclaw-voice-svc.loadbalancer.passHostHeader=true"
 networks:
   traefik_default:
     external: true
