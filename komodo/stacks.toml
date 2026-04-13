@@ -335,3 +335,15 @@ environment = """
 OPENHANDS_LLM_API_KEY = [[ANTHROPIC_API_KEY]]
 OPENHANDS_LLM_MODEL = anthropic/claude-sonnet-4-20250514
 """
+
+[[stack]]
+name = "hermes"
+description = "Hermes Agent web dashboard — exposed via Traefik + Pocket ID OIDC"
+tags = ["ai", "infra"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/hermes"
