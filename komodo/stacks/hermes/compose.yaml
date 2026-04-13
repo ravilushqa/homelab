@@ -1,0 +1,24 @@
+services:
+  # Dummy container — labels only. Traefik routes to local Hermes dashboard on localhost:9119.
+  hermes-router:
+    image: traefik/whoami
+    container_name: hermes-router
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+
+      # Router — dashboard (with OIDC auth)
+      - "traefik.http.routers.hermes.rule=Host(`hermes.ravil.space`)"
+      - "traefik.http.routers.hermes.entrypoints=websecure"
+      - "traefik.http.routers.hermes.tls.certresolver=cloudflare"
+      - "traefik.http.routers.hermes.middlewares=oidc-auth@docker"
+
+      # Service — local dashboard on port 9119
+      - "traefik.http.services.hermes-svc.loadbalancer.server.url=http://192.168.1.65:9119"
+      - "traefik.http.services.hermes-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true
