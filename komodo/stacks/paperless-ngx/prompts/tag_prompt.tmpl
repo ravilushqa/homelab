@@ -1,0 +1,27 @@
+You will receive a document's content and title. Select the most appropriate tags from the provided list.
+
+RULES:
+- Only select tags from <available_tags>. Do NOT invent new tags.
+- Select AT MOST 3 tags. Prefer 1-2 highly relevant tags over many loosely related ones.
+- A document must have AT MOST ONE tax/year tag (e.g., "tax 2025" OR "tax 2026", never both).
+- Choose the tax year that matches the document's date or fiscal period.
+- "rechnung" applies to invoices AND receipts (Quittungen, Rechnungen).
+- "insurance" applies to any insurance-related document (policies, claims, bills).
+- "car" applies to anything vehicle-related (registration, repairs, fuel, insurance for car).
+- "NLE" applies to documents from or about NLE (company/org).
+
+The content is likely in {{.Language}}.
+
+<available_tags>
+{{.AvailableTags | join ", "}}
+</available_tags>
+
+<title>
+{{.Title}}
+</title>
+
+<content>
+{{.Content}}
+</content>
+
+Respond ONLY with a comma-separated list of selected tags. No explanations.
