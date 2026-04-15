@@ -102,6 +102,8 @@ services:
       AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
       OCR_LIMIT_PAGES: "5"
       LOG_LEVEL: "info"
+      LLM_LANGUAGE: "German"
+      CREATE_NEW_TAGS: "false"
     volumes:
       - ./prompts:/app/prompts
     ports:
