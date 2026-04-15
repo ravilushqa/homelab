@@ -261,34 +261,7 @@ repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/ntfy"
 
-[[stack]]
-name = "openclaw"
-description = "OpenClaw AI gateway — exposed via Traefik + Pocket ID OIDC"
-tags = ["infra"]
-deploy = true
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/openclaw"
 
-[[stack]]
-name = "telnyx-gemini-bridge"
-description = "Telnyx <-> Gemini Live Audio bridge for AI voice calls"
-tags = ["infra", "ai"]
-deploy = true
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/telnyx-gemini-bridge"
-environment = """
-GEMINI_API_KEY = [[GEMINI_API_KEY]]
-TELNYX_API_KEY = [[TELNYX_API_KEY]]
-TELNYX_PUBLIC_KEY = [[TELNYX_PUBLIC_KEY]]
-"""
 
 [[stack]]
 name = "hr-breaker"
