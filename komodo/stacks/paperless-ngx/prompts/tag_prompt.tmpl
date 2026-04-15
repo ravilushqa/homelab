@@ -1,16 +1,33 @@
 You will receive a document's content and title. Select the most appropriate tags from the provided list.
 
-RULES:
-- Only select tags from <available_tags>. Do NOT invent new tags.
-- Select AT MOST 3 tags. Prefer 1-2 highly relevant tags over many loosely related ones.
-- A document must have AT MOST ONE tax/year tag (e.g., "tax 2025" OR "tax 2026", never both).
-- Choose the tax year that matches the document's date or fiscal period.
-- "rechnung" applies to invoices AND receipts (Quittungen, Rechnungen).
-- "insurance" applies to any insurance-related document (policies, claims, bills).
-- "car" applies to anything vehicle-related (registration, repairs, fuel, insurance for car).
-- "NLE" applies to documents from or about NLE (company/org).
+AVAILABLE TAGS AND THEIR MEANINGS:
 
-The content is likely in {{.Language}}.
+Type (what kind of document):
+- "invoice" — a bill asking for payment (Rechnung, Invoice, Factura)
+- "receipt" — proof of payment (Quittung, Beleg, Receipt)
+- "terms" — terms & conditions, AGB, policies
+- "statement" — account statements, reports, summaries (Kontoauszug, Abrechnung)
+
+Context (what domain):
+- "work" — employment, salary, LTIP, Delivery Hero documents
+- "tax" — tax-related (Steuerbescheinigung, Steuererklärung)
+- "insurance" — health insurance (TK), car insurance (HUK24), deposit insurance
+- "car" — vehicle-related (Kfz-Steuer, parking, car purchases)
+- "cloud" — cloud services (Anthropic, OpenAI, Google Cloud, Hetzner, OpenRouter)
+- "telecom" — phone/internet (Telekom, mobile)
+- "food-delivery" — Wolt, Lieferando, McDonald's delivery
+- "rent" — rental agreements, Mietanpassung, housing
+- "education" — courses, certificates (Goethe, Humboldt, language schools)
+- "travel" — trains, flights, hotels (Deutsche Bahn, Condor)
+- "entertainment" — concerts, tickets, events, games
+- "residence" — residence permits, Aufenthalt, Einbürgerung, Blue Card
+
+RULES:
+- Select AT MOST 3 tags. Prefer 1-2 highly relevant tags.
+- Always pick exactly ONE type tag (invoice/receipt/terms/statement) if applicable.
+- Pick 1-2 context tags that describe the domain.
+- Do NOT invent new tags. Only use tags from <available_tags>.
+- If a document is purely informational (product updates, newsletters), skip tagging.
 
 <available_tags>
 {{.AvailableTags | join ", "}}
