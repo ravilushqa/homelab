@@ -145,8 +145,9 @@ run_directory = "komodo/stacks/immich"
 environment = """
 DB_DATABASE_NAME = [[DB_DATABASE_NAME]]
 DB_USERNAME = [[DB_USERNAME]]
-DB_PASSWORD = [[DB_PASSWORD]]
+DB_PASSWORD=***
 UPLOAD_LOCATION = [[UPLOAD_LOCATION]]
+IMMICH_VERSION=v2.7.5
 """
 
 [[stack]]
