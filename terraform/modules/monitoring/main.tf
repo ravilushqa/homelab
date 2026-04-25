@@ -19,7 +19,7 @@ resource "helm_release" "grafana-k8s-monitoring" {
   repository = "https://grafana.github.io/helm-charts"
   chart      = "k8s-monitoring"
   namespace  = kubernetes_namespace_v1.monitoring.metadata.0.name
-  version    = "3.8.6"
+  version    = "3.8.7"
   atomic     = true
   timeout    = 300
   count      = var.enabled ? 1 : 0
