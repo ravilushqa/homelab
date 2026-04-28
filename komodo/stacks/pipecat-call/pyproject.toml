@@ -12,5 +12,8 @@ dependencies = [
     "loguru>=0.7.0",
 ]
 
+[tool.setuptools]
+py-modules = ["bot", "server"]
+
 [tool.uv]
 package = false
