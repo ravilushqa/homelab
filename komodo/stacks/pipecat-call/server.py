@@ -251,7 +251,7 @@ async def websocket_endpoint(
 
     # Import and run the bot
     from bot import bot
-    from pipecat.runner.types import RunnerArguments
+    from pipecat.runner.types import WebSocketRunnerArguments
 
     # Decode body
     body_data = {}
@@ -268,10 +268,9 @@ async def websocket_endpoint(
 
     logger.info(f"WebSocket connected, body: {body_data}")
 
-    runner_args = RunnerArguments(
+    runner_args = WebSocketRunnerArguments(
         websocket=websocket,
         body=body_data,
-        handle_sigint=False,
     )
 
     try:
