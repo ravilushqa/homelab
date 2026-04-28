@@ -159,8 +159,8 @@ async def start_call(request: Request, x_api_key: str = Header(None)):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    call_control_id = result.get("data", {}).get("call_control_id", "unknown")
-    logger.info(f"Call initiated: {call_control_id}")
+    call_control_id = result.get("data", {}).get("call_control_id") or result.get("call_control_id", "unknown")
+    logger.info(f"Call initiated: {call_control_id} (response: {json.dumps(result)[:300]})")
 
     # Register the future — bot.py will resolve it via report_result()
     # The WebSocket handler will use call_control_id as key
