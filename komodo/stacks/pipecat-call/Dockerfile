@@ -16,7 +16,8 @@ RUN uv pip install --system --no-cache \
     "uvicorn[standard]>=0.34.0" \
     "aiohttp>=3.11.0" \
     "python-dotenv>=1.0.0" \
-    "loguru>=0.7.0"
+    "loguru>=0.7.0" \
+    "python-multipart>=0.0.9"
 
 # Port
 EXPOSE 7860
