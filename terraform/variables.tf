@@ -3,6 +3,12 @@ variable "cluster_name" {
   default = "cluster01"
 }
 
+variable "kubernetes_version" {
+  type        = string
+  description = "Kubernetes version"
+  default     = "1.30.0"
+}
+
 # Proxmox
 variable "proxmox_endpoint" {
   type        = string

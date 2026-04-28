@@ -29,8 +29,9 @@ provider "kubernetes" {
 module "talos" {
   source = "./modules/talos"
 
-  nodes  = var.nodes
-  vm_ids = module.proxmox.vm_ids
+  nodes              = var.nodes
+  vm_ids             = module.proxmox.vm_ids
+  kubernetes_version = var.kubernetes_version
 
   cilium = {
     values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
