@@ -213,7 +213,17 @@ async def answer(request: Request):
 @app.post("/status")
 async def status(request: Request):
     """Telnyx status callback — log call events."""
-    body = await request.json()
+    content_type = request.headers.get("content-type", "")
+    if "json" in content_type:
+        body = await request.json()
+    else:
+        try:
+            body = await request.json()
+        except Exception:
+            raw = await request.body()
+            logger.warning(f"/status: non-JSON body: {raw[:200]}")
+            return JSONResponse({"status": "ok"})
+
     event_type = body.get("data", {}).get("event_type", "unknown")
     call_control_id = body.get("data", {}).get("payload", {}).get("call_control_id", "unknown")
     logger.info(f"Call status: {event_type} [{call_control_id}]")
