@@ -67,6 +67,7 @@ async def make_telnyx_call(
         "To": to_number,
         "From": from_number,
         "Url": texml_url,
+        "ApplicationSid": TELNYX_APPLICATION_SID,
     }
 
     async with session.post(url, headers=headers, data=data) as resp:
