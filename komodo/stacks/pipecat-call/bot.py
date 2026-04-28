@@ -1,9 +1,9 @@
 """
 Pipecat Call Agent — AI phone caller using Gemini Live S2S + Telnyx.
 
-Bot receives a task via custom body data and has a conversation.
-Uses a single "goodbye" function call so the bot can end the call gracefully.
-Also auto-ends after prolonged silence.
+No function calling — Gemini has a natural conversation.
+Call ends via: silence timeout (30s), max duration (3min), or hangup.
+Result is captured from the conversation transcript.
 """
 
 import asyncio
@@ -26,8 +26,6 @@ from pipecat.runner.types import WebSocketRunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
 from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
-from pipecat.services.llm_service import FunctionCallParams
-from pipecat.adapters.schemas.tools_schema import FunctionSchema, ToolsSchema
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
@@ -36,10 +34,7 @@ from pipecat.transports.websocket.fastapi import (
 
 load_dotenv(override=True)
 
-# Shared state for result reporting
 _results: dict[str, asyncio.Future] = {}
-
-# Silence tracking
 _last_activity: dict[str, float] = {}
 
 
@@ -54,60 +49,24 @@ async def run_bot(transport: BaseTransport, task: str, call_control_id: str, han
         task = "Have a brief, friendly conversation."
 
     _last_activity[call_control_id] = time.time()
-    min_exchanges = 2  # at least this many user turns before allowing goodbye
-    user_turn_count = [0]  # mutable counter
-    bot_ended = [False]  # flag to prevent double-ending
+    user_turn_count = [0]
+    conversation_ended = [False]
 
-    system_instruction = f"""Du bist ein freundlicher KI-Telefonassistent, der im Namen von Ravil anruft.
+    system_instruction = f"""Du bist ein freundlicher Assistent von Ravil und rufst jemanden an.
 
 DEINE AUFGABE:
 {task}
 
-REGELN:
-1. Begrüße die Person herzlich auf Deutsch: "Hallo! Guten Tag, ich rufe im Namen von Ravil an."
-2. Sprich Deutsch, es sei denn, die Person bevorzugt eine andere Sprache.
-3. Sei natürlich, warmherzig und gesprächig — dies ist ein echtes Telefonat.
-4. Führe ein echtes Gespräch — stelle Fragen, höre zu, antworte.
-5. Erwähne nicht, dass du eine KI bist, außer du wirst direkt gefragt.
-6. Halte Antworten kurz — Telefongespräche sollten effizient sein.
-7. Wenn du die Aufgabe erledigt hast oder das Gespräch sich natürlich dem Ende zuneigt, verabschiede dich herzlich und rufe die Funktion "goodbye" auf.
-8. Rufe "goodbye" auf, wenn:
-   - Die Aufgabe abgeschlossen ist
-   - Die Person sich verabschiedet oder auflegt
-   - Es nach mehreren Austauschen keine weiteren Fragen gibt
-   - Du mindestens 2-3 Austausche hatten hast
+WICHTIGSTE REGELN:
+1. Begrüße die Person WARMHERZIG auf Deutsch: "Hallo! Guten Tag! Ich rufe im Namen von Ravil an. Wie geht es Ihnen?"
+2. Sprich Deutsch.
+3. Führe ein GESPRÄCH — stelle Fragen, höre zu, reagiere auf Antworten.
+4. Erwähne NICHT dass du eine KI bist.
+5. Halte Antworten kurz (2-3 Sätze).
+6. WICHTIG: Wenn jemand "Hallo" sagt, antworte mit einer Begrüßung UND einer Frage. Beende das Gespräch NICHT nach der ersten Nachricht.
+7. Wenn du die Aufgabe erledigt hast, verabschiede dich kurz und höre auf zu sprechen. Das Gespräch endet automatisch.
+8. Versuche mindestens 3-4 Nachrichten auszutauschen bevor du dich verabschiedest.
 """
-
-    # Goodbye function — the ONLY way for the bot to end the call
-    async def goodbye_handler(params: FunctionCallParams):
-        summary = params.arguments.get("summary", "Gespräch beendet")
-        logger.info(f"Goodbye [{call_control_id}]: {summary}")
-
-        await params.result_callback({"status": "goodbye"})
-
-        # Resolve the future
-        future = _results.get(call_control_id)
-        if future and not future.done():
-            future.set_result(summary)
-
-        bot_ended[0] = True
-        # Let goodbye TTS play out, then hang up
-        await asyncio.sleep(5)
-        await params.llm.push_frame(EndTaskFrame())
-
-    goodbye_tool = FunctionSchema(
-        name="goodbye",
-        description="Verabschiede dich herzlich und beende das Gespräch. Rufe dies auf, wenn die Aufgabe erledigt ist oder das Gespräch zu Ende geht.",
-        properties={
-            "summary": {
-                "type": "string",
-                "description": "Kurze Zusammenfassung des Gesprächs: Was wurde besprochen, welche Informationen wurden gesammelt.",
-            }
-        },
-        required=["summary"],
-    )
-
-    tools = ToolsSchema(standard_tools=[goodbye_tool])
 
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
@@ -116,11 +75,8 @@ REGELN:
             voice="Charon",
             system_instruction=system_instruction,
         ),
-        tools=tools,
         inference_on_context_initialization=True,
     )
-
-    llm.register_function("goodbye", goodbye_handler)
 
     context = LLMContext()
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
@@ -157,50 +113,62 @@ REGELN:
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info(f"Call disconnected [{call_control_id}]")
-        future = _results.get(call_control_id)
-        if future and not future.done():
-            future.set_result("Call ended — person hung up")
+        if not conversation_ended[0]:
+            conversation_ended[0] = True
+            future = _results.get(call_control_id)
+            if future and not future.done():
+                future.set_result(f"Call ended — person hung up after {user_turn_count[0]} exchanges")
         _last_activity.pop(call_control_id, None)
         await task_obj.cancel()
 
-    # Silence detector: if no activity for 30s after min exchanges, end gracefully
-    async def silence_monitor():
-        while True:
-            await asyncio.sleep(10)
-            if bot_ended[0]:
+    async def end_call(reason: str):
+        """End the call gracefully."""
+        if conversation_ended[0]:
+            return
+        conversation_ended[0] = True
+        logger.info(f"Ending call [{call_control_id}]: {reason}")
+
+        future = _results.get(call_control_id)
+        if future and not future.done():
+            future.set_result(reason)
+
+        _last_activity.pop(call_control_id, None)
+        # Give a moment for final audio to play
+        await asyncio.sleep(2)
+        await task_obj.cancel()
+
+    # Monitor: end after silence or max duration
+    async def call_monitor():
+        max_duration = 180  # 3 minutes max
+        silence_timeout = 30  # 30 seconds of silence
+        min_exchanges_for_silence = 2  # don't silence-end before at least 2 user turns
+        start_time = time.time()
+
+        while not conversation_ended[0]:
+            await asyncio.sleep(5)
+
+            elapsed = time.time() - start_time
+            silence = time.time() - _last_activity.get(call_control_id, time.time())
+
+            # Max duration
+            if elapsed > max_duration:
+                await end_call(f"Call ended — max duration ({max_duration}s) reached after {user_turn_count[0]} exchanges")
                 break
-            elapsed = time.time() - _last_activity.get(call_control_id, time.time())
-            if user_turn_count[0] >= min_exchanges and elapsed > 30:
-                logger.info(f"Silence timeout [{call_control_id}] after {user_turn_count[0]} exchanges")
-                future = _results.get(call_control_id)
-                if future and not future.done():
-                    future.set_result(f"Call ended after {user_turn_count[0]} exchanges (silence timeout)")
-                _last_activity.pop(call_control_id, None)
-                await task_obj.cancel()
+
+            # Silence timeout (only after minimum exchanges)
+            if user_turn_count[0] >= min_exchanges_for_silence and silence > silence_timeout:
+                await end_call(f"Call ended — {silence_timeout}s silence after {user_turn_count[0]} exchanges")
                 break
 
-    # Track user activity from aggregator
-    original_on_user_turn_started = user_aggregator._on_user_turn_started
-
-    async def tracked_on_user_turn_started(*args, **kwargs):
-        user_turn_count[0] += 1
-        _last_activity[call_control_id] = time.time()
-        logger.info(f"User turn #{user_turn_count[0]} [{call_control_id}]")
-        if hasattr(original_on_user_turn_started, '__wrapped__'):
-            return await original_on_user_turn_started(*args, **kwargs)
-
-    # Also track assistant (bot) speaking as activity
-    original_on_bot_started = assistant_aggregator._on_bot_started if hasattr(assistant_aggregator, '_on_bot_started') else None
-
-    silence_task = asyncio.create_task(silence_monitor())
+    monitor_task = asyncio.create_task(call_monitor())
 
     runner = PipelineRunner(handle_sigint=handle_sigint)
     try:
         await runner.run(task_obj)
     finally:
-        silence_task.cancel()
+        monitor_task.cancel()
         try:
-            await silence_task
+            await monitor_task
         except asyncio.CancelledError:
             pass
         _last_activity.pop(call_control_id, None)
