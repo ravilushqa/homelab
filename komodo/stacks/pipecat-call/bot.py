@@ -63,6 +63,8 @@ INSTRUCTIONS:
 - If you cannot complete the task (e.g., no answer, wrong number, closed), call `report_result` explaining what happened.
 - Do NOT mention that you are an AI unless directly asked.
 - Keep responses brief — phone conversations should be efficient.
+- When you first connect, greet the person warmly and introduce yourself briefly.
+- ALWAYS respond to what the person says before calling report_result.
 """
 
     # Result callback — sets the future so /start endpoint gets the result
@@ -105,6 +107,7 @@ INSTRUCTIONS:
             thinking={"thinking_budget": 0},
         ),
         tools=tools,
+        inference_on_context_initialization=False,
     )
 
     llm.register_function("report_result", report_result_handler)
