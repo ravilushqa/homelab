@@ -30,6 +30,7 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketTransport,
 )
 from pipecat.services.llm_service import FunctionCallParams
+from pipecat.adapters.schemas.tools_schema import FunctionSchema, ToolsSchema
 
 load_dotenv(override=True)
 
@@ -80,23 +81,19 @@ INSTRUCTIONS:
         await asyncio.sleep(4)
         await params.llm.push_frame(EndTaskFrame())
 
-    report_result_schema = {
-        "type": "function",
-        "function": {
-            "name": "report_result",
-            "description": "Report the final result of the phone call. Call this ONCE when the task is complete or cannot be completed.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "summary": {
-                        "type": "string",
-                        "description": "Summary of the call outcome: what was accomplished, information gathered, or why the task failed.",
-                    }
-                },
-                "required": ["summary"],
-            },
+    report_result_tool = FunctionSchema(
+        name="report_result",
+        description="Report the final result of the phone call. Call this ONCE when the task is complete or cannot be completed.",
+        properties={
+            "summary": {
+                "type": "string",
+                "description": "Summary of the call outcome: what was accomplished, information gathered, or why the task failed.",
+            }
         },
-    }
+        required=["summary"],
+    )
+
+    tools = ToolsSchema(standard_tools=[report_result_tool])
 
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
@@ -107,7 +104,7 @@ INSTRUCTIONS:
             # Disable thinking for lower latency in phone calls
             thinking={"thinking_budget": 0},
         ),
-        tools=[report_result_schema],
+        tools=tools,
     )
 
     llm.register_function("report_result", report_result_handler)
