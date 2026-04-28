@@ -76,7 +76,7 @@ INSTRUCTIONS:
         if future and not future.done():
             future.set_result(summary)
 
-        # Let the final goodbye play, then end the pipeline
+        # Allow ~4 s for TTS to finish playing the goodbye before hanging up
         await asyncio.sleep(4)
         await params.llm.push_frame(EndTaskFrame())
 
@@ -173,7 +173,7 @@ async def bot(runner_args: RunnerArguments):
     if existing and not existing.done():
         result_future = existing  # use the one server.py is waiting on
     else:
-        result_future = asyncio.get_event_loop().create_future()
+        result_future = asyncio.get_running_loop().create_future()
         register_result_future(call_control_id, result_future)
 
     logger.info(f"Bot started [{call_control_id} / stream={stream_id}]: task={task[:100]}...")
