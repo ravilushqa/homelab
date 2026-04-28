@@ -3,13 +3,18 @@ moved {
   to   = kubernetes_namespace_v1.sealed-secrets
 }
 
+moved {
+  from = kubernetes_secret.sealed-secrets-key
+  to   = kubernetes_secret_v1.sealed-secrets-key
+}
+
 resource "kubernetes_namespace_v1" "sealed-secrets" {
   metadata {
     name = "sealed-secrets"
   }
 }
 
-resource "kubernetes_secret" "sealed-secrets-key" {
+resource "kubernetes_secret_v1" "sealed-secrets-key" {
   depends_on = [kubernetes_namespace_v1.sealed-secrets]
   type       = "kubernetes.io/tls"
 
