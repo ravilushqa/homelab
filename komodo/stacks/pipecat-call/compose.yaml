@@ -13,6 +13,7 @@ services:
       - TELNYX_APPLICATION_SID=[[TELNYX_APPLICATION_SID]]
       - TELNYX_PHONE_NUMBER=[[TELNYX_PHONE_NUMBER]]
       - GOOGLE_API_KEY=[[GOOGLE_API_KEY]]
+      - API_KEY=[[PIPECAT_API_KEY]]
     networks:
       - traefik_default
     labels:

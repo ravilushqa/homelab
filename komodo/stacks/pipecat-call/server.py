@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 import aiohttp
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, Request, WebSocket
+from fastapi import FastAPI, Header, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from loguru import logger
@@ -32,27 +32,21 @@ TELNYX_ACCOUNT_SID = os.getenv("TELNYX_ACCOUNT_SID", "")
 TELNYX_APPLICATION_SID = os.getenv("TELNYX_APPLICATION_SID", "")
 TELNYX_PHONE_NUMBER = os.getenv("TELNYX_PHONE_NUMBER", "")
 
+API_KEY = os.getenv("API_KEY", "")
+
 REQUIRED_ENV = {
     "TELNYX_API_KEY": TELNYX_API_KEY,
     "TELNYX_ACCOUNT_SID": TELNYX_ACCOUNT_SID,
     "TELNYX_APPLICATION_SID": TELNYX_APPLICATION_SID,
     "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY", ""),
+    "API_KEY": API_KEY,
 }
 
 missing = [k for k, v in REQUIRED_ENV.items() if not v]
 if missing:
     raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
 
-
-def get_websocket_url(request_base_url: str = "") -> str:
-    """Construct WebSocket URL based on environment."""
-    env = os.getenv("ENV", "local").lower()
-    if env == "production":
-        # Production: use the public domain
-        return "wss://call.ravil.space/ws"
-    else:
-        # Local: use ngrok or direct
-        return "wss://call.ravil.space/ws"
+WS_URL = "wss://call.ravil.space/ws"
 
 
 # ─── Telnyx API helpers ─────────────────────────────────────────────────────
@@ -117,7 +111,7 @@ async def health():
 # ─── Outbound call initiation ───────────────────────────────────────────────
 
 @app.post("/start")
-async def start_call(request: Request):
+async def start_call(request: Request, x_api_key: str = Header(None)):
     """
     Initiate an outbound call.
 
@@ -131,6 +125,9 @@ async def start_call(request: Request):
     Blocks until the call completes and returns the result.
     Timeout: 5 minutes.
     """
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     body = await request.json()
     phone_number = body.get("phone_number")
     task = body.get("task", "")
@@ -141,14 +138,12 @@ async def start_call(request: Request):
         return JSONResponse({"error": "task is required"}, status_code=400)
 
     # Create a future for the result
-    result_future = asyncio.get_event_loop().create_future()
+    result_future = asyncio.get_running_loop().create_future()
 
     # Build custom data to pass through the call
     custom_data = {"task": task}
     body_b64 = base64.urlsafe_b64encode(json.dumps(custom_data).encode()).decode()
 
-    # TeXML webhook URL with encoded body
-    ws_url = get_websocket_url()
     texml_url = f"https://call.ravil.space/answer?body={body_b64}"
 
     logger.info(f"Initiating call to {phone_number}: {task[:80]}...")
@@ -168,8 +163,8 @@ async def start_call(request: Request):
 
     # Register the future — bot.py will resolve it via report_result()
     # The WebSocket handler will use call_control_id as key
-    from bot import _results
-    _results[call_control_id] = result_future
+    from bot import _results as _bot_results
+    _bot_results[call_control_id] = result_future
 
     # Wait for the result (timeout 5 minutes)
     try:
@@ -185,6 +180,8 @@ async def start_call(request: Request):
             "call_control_id": call_control_id,
             "result": "Call timed out after 5 minutes",
         })
+    finally:
+        _bot_results.pop(call_control_id, None)
 
 
 # ─── TeXML webhook (Telnyx calls this when call is answered) ────────────────
@@ -195,7 +192,7 @@ async def answer(request: Request):
     params = await request.form()
     body_param = params.get("body", "")
 
-    ws_url = get_websocket_url()
+    ws_url = WS_URL
     if body_param:
         ws_url = f"{ws_url}?body={body_param}"
 
@@ -235,7 +232,7 @@ async def status(request: Request):
 @app.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    body: str = Query(None),
+    body_encoded: str = Query(None, alias="body"),
     serviceHost: str = Query(None),
 ):
     """Handle Telnyx media stream WebSocket connection."""
@@ -247,14 +244,16 @@ async def websocket_endpoint(
 
     # Decode body
     body_data = {}
-    if body:
+    if body_encoded:
         try:
-            body_data = json.loads(base64.urlsafe_b64decode(body + "==").decode())
+            # Pad to a multiple of 4 before decoding
+            padded = body_encoded + "=" * (4 - len(body_encoded) % 4)
+            body_data = json.loads(base64.urlsafe_b64decode(padded).decode())
         except Exception:
             try:
-                body_data = json.loads(body)
+                body_data = json.loads(body_encoded)
             except Exception:
-                logger.warning(f"Could not decode body: {body[:100]}")
+                logger.warning(f"Could not decode body: {body_encoded[:100]}")
 
     logger.info(f"WebSocket connected, body: {body_data}")
 
