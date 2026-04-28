@@ -141,13 +141,17 @@ async def start_call(request: Request, x_api_key: str = Header(None)):
     # Create a future for the result
     result_future = asyncio.get_running_loop().create_future()
 
+    # Generate a unique call ID for matching server ↔ bot
+    import uuid
+    call_id = str(uuid.uuid4())
+
     # Build custom data to pass through the call
-    custom_data = {"task": task}
+    custom_data = {"task": task, "call_id": call_id}
     body_b64 = base64.urlsafe_b64encode(json.dumps(custom_data).encode()).decode()
 
     texml_url = f"https://call.ravil.space/answer?body={body_b64}"
 
-    logger.info(f"Initiating call to {phone_number}: {task[:80]}...")
+    logger.info(f"Initiating call to {phone_number}: {task[:80]}... (call_id={call_id})")
 
     try:
         result = await make_telnyx_call(
@@ -159,30 +163,28 @@ async def start_call(request: Request, x_api_key: str = Header(None)):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    call_control_id = result.get("data", {}).get("call_control_id") or result.get("call_control_id", "unknown")
-    logger.info(f"Call initiated: {call_control_id} (response: {json.dumps(result)[:300]})")
+    logger.info(f"Call initiated: {json.dumps(result)[:300]}")
 
-    # Register the future — bot.py will resolve it via report_result()
-    # The WebSocket handler will use call_control_id as key
+    # Register the future using our generated call_id
     from bot import _results as _bot_results
-    _bot_results[call_control_id] = result_future
+    _bot_results[call_id] = result_future
 
     # Wait for the result (timeout 5 minutes)
     try:
         call_result = await asyncio.wait_for(result_future, timeout=300)
         return JSONResponse({
             "status": "completed",
-            "call_control_id": call_control_id,
+            "call_id": call_id,
             "result": call_result,
         })
     except asyncio.TimeoutError:
         return JSONResponse({
             "status": "timeout",
-            "call_control_id": call_control_id,
+            "call_id": call_id,
             "result": "Call timed out after 5 minutes",
         })
     finally:
-        _bot_results.pop(call_control_id, None)
+        _bot_results.pop(call_id, None)
 
 
 # ─── TeXML webhook (Telnyx calls this when call is answered) ────────────────
