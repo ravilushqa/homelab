@@ -10,6 +10,7 @@ dependencies = [
     "aiohttp>=3.11.0",
     "python-dotenv>=1.0.0",
     "loguru>=0.7.0",
+    "python-multipart>=0.0.9",
 ]
 
 [tool.setuptools]
