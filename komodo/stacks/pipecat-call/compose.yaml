@@ -1,0 +1,27 @@
+services:
+  pipecat-call:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pipecat-call
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Berlin
+      - ENV=production
+      - TELNYX_API_KEY=[[TELNYX_API_KEY]]
+      - TELNYX_ACCOUNT_SID=[[TELNYX_ACCOUNT_SID]]
+      - TELNYX_APPLICATION_SID=[[TELNYX_APPLICATION_SID]]
+      - TELNYX_PHONE_NUMBER=[[TELNYX_PHONE_NUMBER]]
+      - GOOGLE_API_KEY=[[GOOGLE_API_KEY]]
+    networks:
+      - traefik_default
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pipecat-call.rule=Host(`call.ravil.space`)
+      - traefik.http.routers.pipecat-call.entrypoints=websecure
+      - traefik.http.routers.pipecat-call.tls.certresolver=cloudflare
+      - traefik.http.services.pipecat-call.loadbalancer.server.port=7860
+
+networks:
+  traefik_default:
+    external: true
