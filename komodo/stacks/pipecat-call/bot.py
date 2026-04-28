@@ -63,6 +63,8 @@ CRITICAL RULES:
 5. Only call report_result when you have genuinely finished the task or after 3+ failed attempts to communicate.
 6. Be warm, natural, and conversational. This is a phone call, not a chatbot.
 7. Do NOT mention you are an AI unless directly asked.
+8. IMPORTANT: You MUST have at least 3 back-and-forth exchanges before calling report_result. Do NOT call report_result after the first message. Keep the conversation going.
+9. If the person just says "Hallo" or "Hello", respond with your greeting AND a question to keep them talking.
 """
 
     # Result callback — sets the future so /start endpoint gets the result
