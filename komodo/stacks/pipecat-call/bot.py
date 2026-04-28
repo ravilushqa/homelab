@@ -20,7 +20,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-from pipecat.runner.types import RunnerArguments
+from pipecat.runner.types import WebSocketRunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
 from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
@@ -157,7 +157,7 @@ INSTRUCTIONS:
     await runner.run(task_obj)
 
 
-async def bot(runner_args: RunnerArguments):
+async def bot(runner_args: WebSocketRunnerArguments):
     """Main bot entry point — called by the WebSocket handler in server.py."""
     transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
     logger.info(f"Transport: {transport_type}, call_data keys: {list(call_data.keys())}")
@@ -194,5 +194,5 @@ async def bot(runner_args: RunnerArguments):
         ),
     )
 
-    handle_sigint = runner_args.handle_sigint
+    handle_sigint = getattr(runner_args, 'handle_sigint', False)
     await run_bot(transport, task, call_control_id, handle_sigint)
