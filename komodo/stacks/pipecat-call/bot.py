@@ -1,8 +1,8 @@
 """
 Pipecat Call Agent — AI phone caller using Gemini Live S2S + Telnyx.
 
-Bot receives a task via custom body data and completes it during the call,
-then reports the result via report_result() function call.
+Bot receives a task via custom body data and has a conversation.
+Result is captured from the conversation transcript after the call ends.
 """
 
 import asyncio
@@ -29,19 +29,20 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
-from pipecat.services.llm_service import FunctionCallParams
-from pipecat.adapters.schemas.tools_schema import FunctionSchema, ToolsSchema
 
 load_dotenv(override=True)
 
 # Shared state for result reporting
-# Keyed by stream_id so multiple concurrent calls are supported
+# Keyed by call_control_id so multiple concurrent calls are supported
 _results: dict[str, asyncio.Future] = {}
 
+# Track conversation transcripts
+_transcripts: dict[str, list[str]] = {}
 
-def register_result_future(stream_id: str, future: asyncio.Future):
-    """Register a future that will be resolved when the bot reports its result."""
-    _results[stream_id] = future
+
+def register_result_future(call_control_id: str, future: asyncio.Future):
+    """Register a future that will be resolved when the call ends."""
+    _results[call_control_id] = future
 
 
 async def run_bot(transport: BaseTransport, task: str, call_control_id: str, handle_sigint: bool):
@@ -50,52 +51,24 @@ async def run_bot(transport: BaseTransport, task: str, call_control_id: str, han
     if not task:
         task = "Have a brief, friendly conversation. Introduce yourself and ask how you can help."
 
-    system_instruction = f"""You are a friendly AI phone assistant calling on behalf of Ravil.
+    # Track conversation for result extraction
+    transcript = []
+    _transcripts[call_control_id] = transcript
+
+    system_instruction = f"""You are a friendly AI phone assistant making an outbound call on behalf of Ravil.
 
 YOUR TASK:
 {task}
 
-CRITICAL RULES:
-1. When the call connects, greet the person warmly in German first. Example: "Hallo! Guten Tag, ich rufe im Namen von Ravil an."
-2. ALWAYS respond to what the person says. Never give up after one exchange.
-3. Speak German unless the person clearly prefers another language. "Алло" is just a phone greeting — respond in German.
-4. Complete the full task before calling report_result. Have a real conversation.
-5. Only call report_result when you have genuinely finished the task or after 3+ failed attempts to communicate.
-6. Be warm, natural, and conversational. This is a phone call, not a chatbot.
-7. Do NOT mention you are an AI unless directly asked.
-8. IMPORTANT: You MUST have at least 3 back-and-forth exchanges before calling report_result. Do NOT call report_result after the first message. Keep the conversation going.
-9. If the person just says "Hallo" or "Hello", respond with your greeting AND a question to keep them talking.
+RULES:
+1. Start by greeting warmly in German: "Hallo! Guten Tag, ich rufe im Namen von Ravil an."
+2. Speak German unless the person prefers another language.
+3. Be warm, natural, and conversational — this is a real phone call.
+4. Have a genuine conversation — ask questions, listen, respond.
+5. When the task is complete, say goodbye warmly and let the call end naturally.
+6. Do NOT mention you are an AI unless directly asked.
+7. Keep responses concise — phone conversations should be efficient.
 """
-
-    # Result callback — sets the future so /start endpoint gets the result
-    async def report_result_handler(params: FunctionCallParams):
-        summary = params.arguments.get("summary", "No summary provided")
-        logger.info(f"Call result [{call_control_id}]: {summary}")
-
-        await params.result_callback({"status": "completed"})
-
-        # Resolve the waiting future
-        future = _results.get(call_control_id)
-        if future and not future.done():
-            future.set_result(summary)
-
-        # Allow ~4 s for TTS to finish playing the goodbye before hanging up
-        await asyncio.sleep(4)
-        await params.llm.push_frame(EndTaskFrame())
-
-    report_result_tool = FunctionSchema(
-        name="report_result",
-        description="Report the final result of the phone call. Call this ONCE when the task is complete or cannot be completed.",
-        properties={
-            "summary": {
-                "type": "string",
-                "description": "Summary of the call outcome: what was accomplished, information gathered, or why the task failed.",
-            }
-        },
-        required=["summary"],
-    )
-
-    tools = ToolsSchema(standard_tools=[report_result_tool])
 
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
@@ -103,14 +76,9 @@ CRITICAL RULES:
             model="gemini-2.5-flash-native-audio-preview-09-2025",
             voice="Charon",
             system_instruction=system_instruction,
-            # Disable thinking for lower latency in phone calls
-            thinking={"thinking_budget": 0},
         ),
-        tools=tools,
-        inference_on_context_initialization=False,
+        inference_on_context_initialization=True,
     )
-
-    llm.register_function("report_result", report_result_handler)
 
     context = LLMContext()
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
@@ -147,14 +115,42 @@ CRITICAL RULES:
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info(f"Call disconnected [{call_control_id}]")
-        # If no result was reported, set a default
+        # Build result from transcript
+        result = "; ".join(transcript) if transcript else "Call ended without conversation"
+        logger.info(f"Call transcript [{call_control_id}]: {result}")
+
         future = _results.get(call_control_id)
         if future and not future.done():
-            future.set_result("Call ended without a result (caller disconnected)")
+            future.set_result(result)
+
+        # Cleanup
+        _transcripts.pop(call_control_id, None)
         await task_obj.cancel()
 
+    # Timeout: after 2 minutes, end the call and report
+    async def call_timeout():
+        await asyncio.sleep(120)
+        result = "; ".join(transcript) if transcript else "Call timed out after 2 minutes"
+        logger.info(f"Call timeout [{call_control_id}]: {result}")
+
+        future = _results.get(call_control_id)
+        if future and not future.done():
+            future.set_result(result)
+
+        _transcripts.pop(call_control_id, None)
+        await task_obj.cancel()
+
+    timeout_task = asyncio.create_task(call_timeout())
+
     runner = PipelineRunner(handle_sigint=handle_sigint)
-    await runner.run(task_obj)
+    try:
+        await runner.run(task_obj)
+    finally:
+        timeout_task.cancel()
+        try:
+            await timeout_task
+        except asyncio.CancelledError:
+            pass
 
 
 async def bot(runner_args: WebSocketRunnerArguments):
@@ -168,10 +164,9 @@ async def bot(runner_args: WebSocketRunnerArguments):
     task = body.get("task", "")
 
     # Register the result future using call_control_id (same key as server.py /start)
-    # The future may already exist if server.py created it in /start
     existing = _results.get(call_control_id)
     if existing and not existing.done():
-        result_future = existing  # use the one server.py is waiting on
+        result_future = existing
     else:
         result_future = asyncio.get_running_loop().create_future()
         register_result_future(call_control_id, result_future)
