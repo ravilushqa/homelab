@@ -17,6 +17,7 @@ data "talos_machine_configuration" "machineconfig_cp" {
   cluster_endpoint = "https://${local.first_cp_ip}:6443"
   machine_type     = "controlplane"
   machine_secrets  = talos_machine_secrets.machine_secrets.machine_secrets
+  talos_version    = var.talos_version
 }
 
 resource "talos_machine_configuration_apply" "cp_config_apply" {
@@ -44,6 +45,7 @@ data "talos_machine_configuration" "machineconfig_worker" {
   cluster_endpoint = "https://${local.first_cp_ip}:6443"
   machine_type     = "worker"
   machine_secrets  = talos_machine_secrets.machine_secrets.machine_secrets
+  talos_version    = var.talos_version
 }
 
 resource "talos_machine_configuration_apply" "worker_config_apply" {
