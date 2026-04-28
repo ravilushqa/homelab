@@ -182,6 +182,8 @@ async def bot(runner_args: WebSocketRunnerArguments):
         stream_id=stream_id,
         call_control_id=call_data.get("call_control_id", ""),
         api_key=os.getenv("TELNYX_API_KEY"),
+        outbound_encoding=call_data.get("outbound_encoding", "PCMU"),
+        inbound_encoding=call_data.get("inbound_encoding", "PCMU"),
     )
 
     transport = FastAPIWebsocketTransport(
