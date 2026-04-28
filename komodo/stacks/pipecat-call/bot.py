@@ -88,7 +88,7 @@ WICHTIGSTE REGELN:
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
         settings=GeminiLiveLLMService.Settings(
-            model="gemini-2.5-flash-native-audio-preview-09-2025",
+            model="gemini-2.0-flash-live-001",
             voice="Charon",
             system_instruction=system_instruction,
         ),
