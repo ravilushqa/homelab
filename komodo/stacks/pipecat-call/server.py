@@ -61,7 +61,7 @@ async def make_telnyx_call(
     url = f"https://api.telnyx.com/v2/texml/Accounts/{TELNYX_ACCOUNT_SID}/Calls"
     headers = {
         "Authorization": f"Bearer {TELNYX_API_KEY}",
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Type": "application/json",
     }
     data = {
         "To": to_number,
@@ -70,7 +70,7 @@ async def make_telnyx_call(
         "ApplicationSid": TELNYX_APPLICATION_SID,
     }
 
-    async with session.post(url, headers=headers, data=data) as resp:
+    async with session.post(url, headers=headers, json=data) as resp:
         result = await resp.json()
         if resp.status >= 400:
             logger.error(f"Telnyx API error: {resp.status} — {result}")
