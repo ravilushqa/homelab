@@ -12,10 +12,11 @@ import os
 import time
 from typing import Callable
 
+import aiohttp
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import BotStoppedSpeakingFrame, EndTaskFrame, LLMRunFrame
+from pipecat.frames.frames import BotStoppedSpeakingFrame, LLMRunFrame, UserStartedSpeakingFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -24,7 +25,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+from pipecat.processors.frame_processor import FrameProcessor
 from pipecat.runner.types import WebSocketRunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
@@ -44,8 +45,37 @@ def register_result_future(call_id: str, future: asyncio.Future):
     _results[call_id] = future
 
 
+async def hangup_telnyx_call(call_control_id: str):
+    """Explicitly terminate the Telnyx call via API."""
+    api_key = os.getenv("TELNYX_API_KEY")
+    if not api_key or call_control_id in ("unknown", ""):
+        return
+    url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/hangup"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers) as resp:
+                logger.info(f"Telnyx hangup [{call_control_id}]: HTTP {resp.status}")
+    except Exception as e:
+        logger.error(f"Telnyx hangup error [{call_control_id}]: {e}")
+
+
+class UserSpeechMonitor(FrameProcessor):
+    """Detects when user starts speaking and calls a callback."""
+
+    def __init__(self, on_user_started: Callable):
+        super().__init__()
+        self._on_user_started = on_user_started
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, UserStartedSpeakingFrame):
+            await self._on_user_started()
+        await self.push_frame(frame, direction)
+
+
 class BotSpeechMonitor(FrameProcessor):
-    """Detects when bot starts/stops speaking and calls callbacks."""
+    """Detects when bot stops speaking and calls a callback."""
 
     def __init__(self, on_bot_stopped: Callable):
         super().__init__()
@@ -58,7 +88,7 @@ class BotSpeechMonitor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-async def run_bot(transport: BaseTransport, task: str, call_id: str, handle_sigint: bool):
+async def run_bot(transport: BaseTransport, task: str, call_id: str, call_control_id: str, handle_sigint: bool):
 
     if not task:
         task = "Have a brief, friendly conversation."
@@ -69,16 +99,16 @@ async def run_bot(transport: BaseTransport, task: str, call_id: str, handle_sigi
     last_user_speech_time = [time.time()]
     silence_after_bot_task = [None]
 
-    system_instruction = f"""Du bist ein freundlicher Assistent von Ravil und rufst jemanden an.
+    system_instruction = f"""Du bist ein KI-Assistent von Ravil und rufst jemanden an.
 
 DEINE AUFGABE:
 {task}
 
 WICHTIGSTE REGELN:
-1. Begrüße die Person WARMHERZIG auf Deutsch: "Hallo! Guten Tag! Ich rufe im Namen von Ravil an. Wie geht es Ihnen?"
+1. Begrüße die Person auf Deutsch und weise SOFORT darauf hin, dass du ein KI-Assistent bist: "Hallo! Ich bin ein KI-Assistent von Ravil. Bitte beachten Sie, dass Sie mit einer KI sprechen. Wie geht es Ihnen?"
 2. Sprich Deutsch.
 3. Führe ein GESPRÄCH — stelle Fragen, höre zu, reagiere auf Antworten.
-4. Erwähne NICHT dass du eine KI bist.
+4. Du MUSST am Anfang erwähnen, dass du eine KI bist — das ist gesetzlich vorgeschrieben.
 5. Halte Antworten kurz (2-3 Sätze).
 6. WICHTIG: Wenn jemand "Hallo" sagt, antworte mit einer Begrüßung UND einer Frage. Beende das Gespräch NICHT nach der ersten Nachricht.
 7. Wenn du die Aufgabe erledigt hast, verabschiede dich kurz — sage z.B. "Tschüss, bis bald!" und dann STOPPE. Das Gespräch wird automatisch enden.
@@ -103,13 +133,18 @@ WICHTIGSTE REGELN:
         ),
     )
 
+    async def on_user_started_speaking():
+        user_turn_count[0] += 1
+        last_user_speech_time[0] = time.time()
+        logger.info(f"User turn #{user_turn_count[0]} [{call_id}]")
+        if silence_after_bot_task[0] and not silence_after_bot_task[0].done():
+            silence_after_bot_task[0].cancel()
+
     async def on_bot_stopped_speaking():
-        """Called when bot finishes speaking. Start silence timer."""
         bot_turn_count[0] += 1
         logger.info(f"Bot stopped speaking [{call_id}] turn #{bot_turn_count[0]}, waiting for user...")
         if conversation_ended[0] or user_turn_count[0] < 1:
             return
-        # Cancel previous silence task
         if silence_after_bot_task[0] and not silence_after_bot_task[0].done():
             silence_after_bot_task[0].cancel()
 
@@ -123,15 +158,18 @@ WICHTIGSTE REGELN:
                     future = _results.get(call_id)
                     if future and not future.done():
                         future.set_result(f"Call ended — goodbye ({user_turn_count[0]} user, {bot_turn_count[0]} bot)")
-                    await asyncio.sleep(2)
+                    await hangup_telnyx_call(call_control_id)
+                    await asyncio.sleep(1)
                     await task_obj.cancel()
 
         silence_after_bot_task[0] = asyncio.create_task(wait_for_user())
 
+    user_speech_monitor = UserSpeechMonitor(on_user_started=on_user_started_speaking)
     speech_monitor = BotSpeechMonitor(on_bot_stopped=on_bot_stopped_speaking)
 
     pipeline = Pipeline([
         transport.input(),
+        user_speech_monitor,
         user_aggregator,
         llm,
         speech_monitor,
@@ -167,18 +205,6 @@ WICHTIGSTE REGELN:
             silence_after_bot_task[0].cancel()
         await task_obj.cancel()
 
-    # Track user speaking
-    original_on_user_turn = user_aggregator._on_user_turn_started
-
-    async def tracked_user_turn(*args, **kwargs):
-        user_turn_count[0] += 1
-        last_user_speech_time[0] = time.time()
-        logger.info(f"User turn #{user_turn_count[0]} [{call_id}]")
-        # Cancel silence detector
-        if silence_after_bot_task[0] and not silence_after_bot_task[0].done():
-            silence_after_bot_task[0].cancel()
-
-    # Max duration safety net
     async def max_duration_monitor():
         await asyncio.sleep(180)
         if not conversation_ended[0]:
@@ -186,6 +212,7 @@ WICHTIGSTE REGELN:
             future = _results.get(call_id)
             if future and not future.done():
                 future.set_result(f"Call ended — max duration ({user_turn_count[0]} user, {bot_turn_count[0]} bot)")
+            await hangup_telnyx_call(call_control_id)
             await task_obj.cancel()
 
     max_task = asyncio.create_task(max_duration_monitor())
@@ -237,4 +264,4 @@ async def bot(runner_args: WebSocketRunnerArguments):
     )
 
     handle_sigint = getattr(runner_args, 'handle_sigint', False)
-    await run_bot(transport, task, call_id, handle_sigint)
+    await run_bot(transport, task, call_id, call_control_id, handle_sigint)
