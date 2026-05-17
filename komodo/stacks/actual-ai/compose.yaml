@@ -1,0 +1,28 @@
+services:
+  actual-ai:
+    image: ghcr.io/sakowicz/actual-ai:latest
+    container_name: actual-ai
+    restart: unless-stopped
+    environment:
+      ACTUAL_SERVER_URL: https://actual.ravil.space
+      ACTUAL_PASSWORD: ${ACTUAL_AI_ACTUAL_PASSWORD}
+      ACTUAL_BUDGET_ID: ${ACTUAL_AI_BUDGET_ID}
+      CLASSIFICATION_SCHEDULE_CRON: "0 */4 * * *"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      FEATURES: '["suggestNewCategories"]'
+      LLM_PROVIDER: openrouter
+      OPENROUTER_API_KEY: ${ACTUAL_AI_OPENROUTER_API_KEY}
+      OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
+    networks:
+      - default
+      - traefik
+    labels:
+      "traefik.enable": "false"
+
+volumes: {}
+
+networks:
+  default:
+  traefik:
+    name: traefik_default
+    external: true
