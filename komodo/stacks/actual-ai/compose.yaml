@@ -11,7 +11,7 @@ services:
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
       FEATURES: '["suggestNewCategories"]'
       LLM_PROVIDER: openrouter
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_API_KEY: ${ACTUAL_AI_OPENROUTER_API_KEY}
       OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
     networks:
       - default
