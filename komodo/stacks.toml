@@ -309,7 +309,7 @@ run_directory = "komodo/stacks/actual-ai"
 environment = """
 ACTUAL_AI_ACTUAL_PASSWORD = [[ACTUAL_AI_ACTUAL_PASSWORD]]
 ACTUAL_AI_BUDGET_ID = [[ACTUAL_AI_BUDGET_ID]]
-OPENROUTER_API_KEY = [[OPENROUTER_API_KEY]]
+ACTUAL_AI_OPENROUTER_API_KEY = [[ACTUAL_AI_OPENROUTER_API_KEY]]
 """
 [[stack]]
 name = "openhands"
