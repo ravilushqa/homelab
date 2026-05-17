@@ -293,6 +293,23 @@ run_directory = "komodo/stacks/actual"
 environment = """
 ACTUAL_OIDC_CLIENT_ID = [[ACTUAL_OIDC_CLIENT_ID]]
 ACTUAL_OIDC_CLIENT_SECRET = [[ACTUAL_OIDC_CLIENT_SECRET]]
+ACTUAL_PASSWORD = [[ACTUAL_PASSWORD]]
+"""
+[[stack]]
+name = "actual-ai"
+description = "AI-powered transaction categorization for Actual Budget"
+tags = ["finance", "ai"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/actual-ai"
+environment = """
+ACTUAL_AI_ACTUAL_PASSWORD = [[ACTUAL_AI_ACTUAL_PASSWORD]]
+ACTUAL_AI_BUDGET_ID = [[ACTUAL_AI_BUDGET_ID]]
+ACTUAL_AI_OPENROUTER_API_KEY = [[ACTUAL_AI_OPENROUTER_API_KEY]]
 """
 [[stack]]
 name = "openhands"

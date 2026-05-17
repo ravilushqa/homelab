@@ -6,6 +6,7 @@ services:
     volumes:
       - actual_data:/data
     environment:
+      ACTUAL_PASSWORD: ${ACTUAL_PASSWORD}
       ACTUAL_OPENID_DISCOVERY_URL: https://pocketid.ravil.space/.well-known/openid-configuration
       ACTUAL_OPENID_CLIENT_ID: ${ACTUAL_OIDC_CLIENT_ID}
       ACTUAL_OPENID_CLIENT_SECRET: ${ACTUAL_OIDC_CLIENT_SECRET}
