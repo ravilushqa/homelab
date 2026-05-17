@@ -18,6 +18,8 @@ services:
         target: /tmp/actual-ai
         tmpfs:
           mode: 0777
+    tmpfs:
+      - /tmp/actual-ai
     networks:
       - default
       - traefik
