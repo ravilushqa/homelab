@@ -1,6 +1,6 @@
 services:
   actual-ai:
-    image: ghcr.io/sakowicz/actual-ai:latest
+    image: docker.io/sakowicz/actual-ai:latest
     container_name: actual-ai
     restart: unless-stopped
     environment:
