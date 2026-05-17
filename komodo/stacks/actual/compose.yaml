@@ -12,6 +12,7 @@ services:
       ACTUAL_OPENID_CLIENT_SECRET: ${ACTUAL_OIDC_CLIENT_SECRET}
       ACTUAL_OPENID_SERVER_HOSTNAME: https://actual.ravil.space
       ACTUAL_ALLOWED_LOGIN_METHODS: password,openid
+      ACTUAL_LOGIN_METHOD: password
     networks:
       - default
       - traefik
