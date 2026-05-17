@@ -1,6 +1,6 @@
 services:
   actual-ai:
-    image: ghcr.io/sakowicz/actual-ai:latest
+    image: docker.io/sakowicz/actual-ai:latest
     container_name: actual-ai
     restart: unless-stopped
     environment:
@@ -9,7 +9,7 @@ services:
       ACTUAL_BUDGET_ID: ${ACTUAL_AI_BUDGET_ID}
       CLASSIFICATION_SCHEDULE_CRON: "0 */4 * * *"
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
-      FEATURES: '["suggestNewCategories"]'
+      FEATURES: '["classifyOnStartup", "syncAccountsBeforeClassify", "suggestNewCategories"]'
       LLM_PROVIDER: openrouter
       OPENROUTER_API_KEY: ${ACTUAL_AI_OPENROUTER_API_KEY}
       OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
