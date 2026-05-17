@@ -293,6 +293,7 @@ run_directory = "komodo/stacks/actual"
 environment = """
 ACTUAL_OIDC_CLIENT_ID = [[ACTUAL_OIDC_CLIENT_ID]]
 ACTUAL_OIDC_CLIENT_SECRET = [[ACTUAL_OIDC_CLIENT_SECRET]]
+ACTUAL_PASSWORD = [[ACTUAL_PASSWORD]]
 """
 [[stack]]
 name = "actual-ai"
