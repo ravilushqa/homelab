@@ -13,6 +13,11 @@ services:
       LLM_PROVIDER: openrouter
       OPENROUTER_API_KEY: ${ACTUAL_AI_OPENROUTER_API_KEY}
       OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
+    volumes:
+      - type: tmpfs
+        target: /tmp/actual-ai
+        tmpfs:
+          mode: 0777
     tmpfs:
       - /tmp/actual-ai
     networks:
