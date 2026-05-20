@@ -132,6 +132,7 @@ async def start_call(request: Request, x_api_key: str = Header(None)):
     body = await request.json()
     phone_number = body.get("phone_number")
     task = body.get("task", "")
+    language = body.get("language", "de")
 
     if not phone_number:
         return JSONResponse({"error": "phone_number is required"}, status_code=400)
@@ -146,7 +147,7 @@ async def start_call(request: Request, x_api_key: str = Header(None)):
     call_id = str(uuid.uuid4())
 
     # Build custom data to pass through the call
-    custom_data = {"task": task, "call_id": call_id}
+    custom_data = {"task": task, "call_id": call_id, "language": language}
     body_b64 = base64.urlsafe_b64encode(json.dumps(custom_data).encode()).decode()
 
     texml_url = f"https://call.ravil.space/answer?body={body_b64}"
@@ -192,8 +193,15 @@ async def start_call(request: Request, x_api_key: str = Header(None)):
 @app.post("/answer")
 async def answer(request: Request):
     """Return TeXML to connect the call to our WebSocket."""
-    params = await request.form()
-    body_param = params.get("body", "")
+    # Telnyx POSTs to this URL; our `body` is in the query string, not the form body.
+    body_param = request.query_params.get("body", "")
+    if not body_param:
+        # Fallback: also check form body just in case
+        try:
+            form = await request.form()
+            body_param = form.get("body", "")
+        except Exception:
+            pass
 
     ws_url = WS_URL
     if body_param:
