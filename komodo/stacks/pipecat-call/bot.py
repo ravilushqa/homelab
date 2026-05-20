@@ -88,7 +88,7 @@ class BotSpeechMonitor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-async def run_bot(transport: BaseTransport, task: str, call_id: str, call_control_id: str, handle_sigint: bool):
+async def run_bot(transport: BaseTransport, task: str, call_id: str, call_control_id: str, language: str, handle_sigint: bool):
 
     if not task:
         task = "Have a brief, friendly conversation."
@@ -99,20 +99,32 @@ async def run_bot(transport: BaseTransport, task: str, call_id: str, call_contro
     last_user_speech_time = [time.time()]
     silence_after_bot_task = [None]
 
-    system_instruction = f"""Du bist ein KI-Assistent von Ravil und rufst jemanden an.
+    LANG_NAMES = {
+        "de": "German (Deutsch)",
+        "en": "English",
+        "ru": "Russian (Русский)",
+        "fr": "French (Français)",
+        "es": "Spanish (Español)",
+        "it": "Italian (Italiano)",
+    }
+    language_name = LANG_NAMES.get(language.lower(), language)
 
-DEINE AUFGABE:
+    system_instruction = f"""You are an AI assistant from Ravil making a phone call.
+
+LANGUAGE: Speak ONLY in {language_name}. Every reply must be in {language_name}, including the greeting and goodbye.
+
+YOUR TASK:
 {task}
 
-WICHTIGSTE REGELN:
-1. Begrüße die Person auf Deutsch und weise SOFORT darauf hin, dass du ein KI-Assistent bist: "Hallo! Ich bin ein KI-Assistent von Ravil. Bitte beachten Sie, dass Sie mit einer KI sprechen. Wie geht es Ihnen?"
-2. Sprich Deutsch.
-3. Führe ein GESPRÄCH — stelle Fragen, höre zu, reagiere auf Antworten.
-4. Du MUSST am Anfang erwähnen, dass du eine KI bist — das ist gesetzlich vorgeschrieben.
-5. Halte Antworten kurz (2-3 Sätze).
-6. WICHTIG: Wenn jemand "Hallo" sagt, antworte mit einer Begrüßung UND einer Frage. Beende das Gespräch NICHT nach der ersten Nachricht.
-7. Wenn du die Aufgabe erledigt hast, verabschiede dich kurz — sage z.B. "Tschüss, bis bald!" und dann STOPPE. Das Gespräch wird automatisch enden.
-8. Versuche mindestens 3-4 Nachrichten auszutauschen bevor du dich verabschiedest.
+CORE RULES:
+1. Greet the person in {language_name} and IMMEDIATELY disclose that you are an AI: say something equivalent to "Hello, I am an AI assistant from Ravil. Please note you are speaking with an AI."
+2. Have a real CONVERSATION — ask questions, listen, react to answers. Do not monologue.
+3. The AI disclosure at the start is mandatory (legal requirement).
+4. Keep replies short (2-3 sentences).
+5. If the person just says hi, reply with a greeting AND a question that advances the task. Do not end after one message.
+6. Pursue the task above persistently but politely. Provide details if asked.
+7. Once the task is resolved (or clearly cannot be), say a brief goodbye in {language_name} (e.g. equivalent of "Goodbye, thank you!") and then STOP. The call will end automatically.
+8. Aim for at least 3-4 exchanges before saying goodbye, unless the person hangs up.
 """
 
     llm = GeminiLiveLLMService(
@@ -234,6 +246,7 @@ async def bot(runner_args: WebSocketRunnerArguments):
     call_control_id = call_data.get("call_control_id", stream_id)
     body = runner_args.body or {}
     task = body.get("task", "")
+    language = body.get("language", "de")
     call_id = body.get("call_id", call_control_id)
 
     existing = _results.get(call_id)
@@ -264,4 +277,4 @@ async def bot(runner_args: WebSocketRunnerArguments):
     )
 
     handle_sigint = getattr(runner_args, 'handle_sigint', False)
-    await run_bot(transport, task, call_id, call_control_id, handle_sigint)
+    await run_bot(transport, task, call_id, call_control_id, language, handle_sigint)
