@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     environment:
       ACTUAL_SERVER_URL: https://actual.ravil.space
+      ACTUAL_LOGIN_METHOD: password
       ACTUAL_PASSWORD: ${ACTUAL_AI_ACTUAL_PASSWORD}
       ACTUAL_BUDGET_ID: ${ACTUAL_AI_BUDGET_ID}
       CLASSIFICATION_SCHEDULE_CRON: "0 */4 * * *"
