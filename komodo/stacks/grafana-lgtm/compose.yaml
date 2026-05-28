@@ -28,6 +28,8 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
+    ports:
+      - "192.168.1.166:8080:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -36,6 +38,22 @@ services:
       - /dev/disk/:/dev/disk:ro
     devices:
       - /dev/kmsg
+
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    privileged: true
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "192.168.1.166:2375:2375"
+    networks:
+      - default
 
 volumes:
   grafana-data:
