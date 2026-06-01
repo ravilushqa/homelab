@@ -262,7 +262,17 @@ repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/ntfy"
 
-
+[[stack]]
+name = "vova-medcenter"
+description = "MedCenters demo app"
+tags = ["demo", "tools"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/vova-medcenter"
 
 [[stack]]
 name = "hr-breaker"
