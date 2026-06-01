@@ -39,6 +39,7 @@ services:
             && pip install -r /app/requirements.txt
 
         COPY backend/ /app/
+        COPY assets/templates/ /assets/templates/
         COPY frontend/public/ /app/frontend/public/
         COPY frontend/public/ /frontend/public/
 
