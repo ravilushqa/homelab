@@ -1,0 +1,97 @@
+services:
+  api:
+    build:
+      context: https://github.com/plastic-labs/honcho.git#9f26fdd2ea2952904fc938f69c414ca95fc59ad2
+      dockerfile: Dockerfile
+    container_name: honcho-api
+    restart: unless-stopped
+    entrypoint: ["sh", "docker/entrypoint.sh"]
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "192.168.1.166:8077:8000"
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://postgres:${HONCHO_DB_PASSWORD:?HONCHO_DB_PASSWORD is required}@database:5432/postgres
+      CACHE_URL: redis://redis:6379/0
+      AUTH_USE_AUTH: "false"
+      LLM_GEMINI_API_KEY: ${GEMINI_API_KEY}
+      DERIVER_MODEL_CONFIG__TRANSPORT: gemini
+      DERIVER_MODEL_CONFIG__MODEL: gemini-2.5-flash
+      SUMMARY_MODEL_CONFIG__TRANSPORT: gemini
+      SUMMARY_MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DREAM_DEDUCTION_MODEL_CONFIG__TRANSPORT: gemini
+      DREAM_DEDUCTION_MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DREAM_INDUCTION_MODEL_CONFIG__TRANSPORT: gemini
+      DREAM_INDUCTION_MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT: gemini
+      DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DIALECTIC_LEVELS__low__MODEL_CONFIG__TRANSPORT: gemini
+      DIALECTIC_LEVELS__low__MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DIALECTIC_LEVELS__medium__MODEL_CONFIG__TRANSPORT: gemini
+      DIALECTIC_LEVELS__medium__MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DIALECTIC_LEVELS__high__MODEL_CONFIG__TRANSPORT: gemini
+      DIALECTIC_LEVELS__high__MODEL_CONFIG__MODEL: gemini-2.5-flash
+      DIALECTIC_LEVELS__max__MODEL_CONFIG__TRANSPORT: gemini
+      DIALECTIC_LEVELS__max__MODEL_CONFIG__MODEL: gemini-2.5-flash
+      EMBEDDING_MODEL_CONFIG__TRANSPORT: gemini
+      EMBEDDING_MODEL_CONFIG__MODEL: gemini-embedding-001
+      EMBEDDING_VECTOR_DIMENSIONS: "1536"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    labels:
+      traefik.enable: "false"
+    networks:
+      - default
+
+  database:
+    image: pgvector/pgvector:pg16
+    container_name: honcho-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${HONCHO_DB_PASSWORD:?HONCHO_DB_PASSWORD is required}
+    volumes:
+      - honcho-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  redis:
+    image: redis:7-alpine
+    container_name: honcho-redis
+    restart: unless-stopped
+    volumes:
+      - honcho-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+volumes:
+  honcho-postgres:
+  honcho-redis:
+
+networks:
+  default:
+    name: honcho
