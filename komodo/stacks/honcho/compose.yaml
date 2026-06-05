@@ -1,7 +1,7 @@
 services:
   api:
     build:
-      context: https://github.com/plastic-labs/honcho.git#main
+      context: https://github.com/plastic-labs/honcho.git#9f26fdd2ea2952904fc938f69c414ca95fc59ad2
       dockerfile: Dockerfile
     container_name: honcho-api
     restart: unless-stopped
@@ -14,7 +14,7 @@ services:
     ports:
       - "192.168.1.166:8077:8000"
     environment:
-      DB_CONNECTION_URI: postgresql+psycopg://postgres:postgres@database:5432/postgres
+      DB_CONNECTION_URI: postgresql+psycopg://postgres:${HONCHO_DB_PASSWORD:?HONCHO_DB_PASSWORD is required}@database:5432/postgres
       CACHE_URL: redis://redis:6379/0
       AUTH_USE_AUTH: "false"
       LLM_GEMINI_API_KEY: ${GEMINI_API_KEY}
@@ -63,7 +63,7 @@ services:
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${HONCHO_DB_PASSWORD:?HONCHO_DB_PASSWORD is required}
     volumes:
       - honcho-postgres:/var/lib/postgresql/data
     healthcheck:

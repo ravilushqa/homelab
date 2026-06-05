@@ -275,6 +275,7 @@ branch = "main"
 run_directory = "komodo/stacks/honcho"
 environment = """
 GEMINI_API_KEY = [[GEMINI_API_KEY]]
+HONCHO_DB_PASSWORD = [[HONCHO_DB_PASSWORD]]
 """
 
 [[stack]]
