@@ -3,7 +3,6 @@ services:
     build:
       context: https://github.com/plastic-labs/honcho.git#9f26fdd2ea2952904fc938f69c414ca95fc59ad2
       dockerfile: Dockerfile
-    container_name: honcho-api
     restart: unless-stopped
     entrypoint: ["sh", "docker/entrypoint.sh"]
     depends_on:
@@ -53,12 +52,9 @@ services:
       start_period: 30s
     labels:
       traefik.enable: "false"
-    networks:
-      - default
 
   database:
     image: pgvector/pgvector:pg16
-    container_name: honcho-database
     restart: unless-stopped
     environment:
       POSTGRES_DB: postgres
@@ -71,12 +67,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - default
 
   redis:
     image: redis:7-alpine
-    container_name: honcho-redis
     restart: unless-stopped
     volumes:
       - honcho-redis:/data
@@ -85,13 +78,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - default
 
 volumes:
   honcho-postgres:
   honcho-redis:
-
-networks:
-  default:
-    name: honcho
