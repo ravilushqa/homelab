@@ -1,0 +1,24 @@
+services:
+  # Dummy container — labels only. Traefik routes to Hermes WebUI on the Hermes host.
+  hermes-webui-router:
+    image: traefik/whoami
+    container_name: hermes-webui-router
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+
+      # Router — Hermes WebUI (with OIDC auth)
+      - "traefik.http.routers.hermes-webui.rule=Host(`hermes-webui.ravil.space`)"
+      - "traefik.http.routers.hermes-webui.entrypoints=websecure"
+      - "traefik.http.routers.hermes-webui.tls.certresolver=cloudflare"
+      - "traefik.http.routers.hermes-webui.middlewares=oidc-auth@docker"
+
+      # Service — local Hermes WebUI on port 8787
+      - "traefik.http.services.hermes-webui-svc.loadbalancer.server.url=http://192.168.1.65:8787"
+      - "traefik.http.services.hermes-webui-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true
