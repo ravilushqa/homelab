@@ -29,6 +29,12 @@ variable "talos_version" {
   default     = "v1.11.5"
 }
 
+variable "kubernetes_version" {
+  type        = string
+  description = "Kubernetes version (must be compatible with talos_version)"
+  default     = "v1.34.0"
+}
+
 variable "system_extensions" {
   type        = list(string)
   description = "List of Talos system extensions to include in the image"

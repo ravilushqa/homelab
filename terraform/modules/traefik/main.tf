@@ -4,7 +4,9 @@ resource "proxmox_virtual_environment_container" "traefik" {
   node_name    = "pve01"
   unprivileged = true
 
-
+  cpu {
+    cores = 1
+  }
 
   memory {
     swap = 512
@@ -36,7 +38,7 @@ resource "proxmox_virtual_environment_container" "traefik" {
   }
 
   operating_system {
-    template_file_id = proxmox_virtual_environment_download_file.latest_ubuntu_20_focal_lxc_img.id
+    template_file_id = proxmox_download_file.latest_ubuntu_20_focal_lxc_img.id
     type             = "ubuntu"
   }
 
@@ -84,11 +86,16 @@ resource "proxmox_virtual_environment_container" "traefik" {
   }
 }
 
-resource "proxmox_virtual_environment_download_file" "latest_ubuntu_20_focal_lxc_img" {
+resource "proxmox_download_file" "latest_ubuntu_20_focal_lxc_img" {
   content_type = "vztmpl"
   datastore_id = "local"
   node_name    = "pve01"
   url          = "http://download.proxmox.com/images/system/ubuntu-20.04-standard_20.04-1_amd64.tar.gz"
+}
+
+moved {
+  from = proxmox_virtual_environment_download_file.latest_ubuntu_20_focal_lxc_img
+  to   = proxmox_download_file.latest_ubuntu_20_focal_lxc_img
 }
 
 resource "random_password" "ubuntu_container_password" {
