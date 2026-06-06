@@ -9,7 +9,7 @@ resource "kubernetes_namespace_v1" "sealed-secrets" {
   }
 }
 
-resource "kubernetes_secret" "sealed-secrets-key" {
+resource "kubernetes_secret_v1" "sealed-secrets-key" {
   depends_on = [kubernetes_namespace_v1.sealed-secrets]
   type       = "kubernetes.io/tls"
 
