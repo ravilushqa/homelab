@@ -2,7 +2,6 @@ services:
   # Dummy container — labels only. Traefik routes to Hermes WebUI on the Hermes host.
   hermes-webui-router:
     image: traefik/whoami
-    container_name: hermes-webui-router
     restart: unless-stopped
     networks:
       - traefik_default
