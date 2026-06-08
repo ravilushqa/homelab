@@ -71,6 +71,9 @@ jobs:
     steps:
       - name: Enable auto-merge for delegated PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Use a PAT instead of GITHUB_TOKEN so the resulting push to main can
+          # trigger downstream workflows, especially the push-based Komodo Deploy
+          # workflow. GitHub suppresses most workflow runs caused by GITHUB_TOKEN.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: gh pr merge "$PR_URL" --squash --delete-branch --auto
