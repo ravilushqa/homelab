@@ -17,7 +17,7 @@ services:
 
   backend:
     build:
-      context: https://github.com/Zent7/vova-medcenter.git#60f160f79ea3a5e9b27b0fae237a72ae7452c6e2
+      context: https://github.com/Zent7/vova-medcenter.git#d9f897034c736a51f43549ec314d073eb9401f1b
       dockerfile_inline: |
         FROM python:3.12-slim
 
@@ -63,7 +63,7 @@ services:
 
   frontend:
     build:
-      context: https://github.com/Zent7/vova-medcenter.git#60f160f79ea3a5e9b27b0fae237a72ae7452c6e2
+      context: https://github.com/Zent7/vova-medcenter.git#d9f897034c736a51f43549ec314d073eb9401f1b
       dockerfile_inline: |
         FROM node:22-alpine AS build
         WORKDIR /app
