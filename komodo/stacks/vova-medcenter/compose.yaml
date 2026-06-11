@@ -16,6 +16,7 @@ services:
       retries: 30
 
   backend:
+    image: vova-medcenter-backend:9903923da518679e094538b407ab0e11040cb91f
     build:
       context: https://github.com/Zent7/vova-medcenter.git#9903923da518679e094538b407ab0e11040cb91f
       dockerfile_inline: |
@@ -62,6 +63,7 @@ services:
       - "traefik.enable=false"
 
   frontend:
+    image: vova-medcenter-frontend:9903923da518679e094538b407ab0e11040cb91f
     build:
       context: https://github.com/Zent7/vova-medcenter.git#9903923da518679e094538b407ab0e11040cb91f
       dockerfile_inline: |
