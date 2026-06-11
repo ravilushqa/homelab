@@ -17,6 +17,7 @@ services:
 
   backend:
     image: vova-medcenter-backend:9903923da518679e094538b407ab0e11040cb91f
+    pull_policy: build
     build:
       context: https://github.com/Zent7/vova-medcenter.git#9903923da518679e094538b407ab0e11040cb91f
       dockerfile_inline: |
@@ -64,6 +65,7 @@ services:
 
   frontend:
     image: vova-medcenter-frontend:9903923da518679e094538b407ab0e11040cb91f
+    pull_policy: build
     build:
       context: https://github.com/Zent7/vova-medcenter.git#9903923da518679e094538b407ab0e11040cb91f
       dockerfile_inline: |
