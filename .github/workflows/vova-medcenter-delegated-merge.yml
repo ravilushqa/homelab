@@ -71,9 +71,38 @@ jobs:
     steps:
       - name: Enable auto-merge for delegated PR
         env:
-          # Use a PAT instead of GITHUB_TOKEN so the resulting push to main can
-          # trigger downstream workflows, especially the push-based Komodo Deploy
-          # workflow. GitHub suppresses most workflow runs caused by GITHUB_TOKEN.
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          # GITHUB_TOKEN is enough to merge this trusted, path-scoped PR, but its
+          # resulting push does not trigger other workflows. Therefore this job
+          # deploys vova-medcenter explicitly after GitHub reports the PR merged.
+          GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: gh pr merge "$PR_URL" --squash --delete-branch --auto
+
+      - name: Wait for merge to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for attempt in {1..60}; do
+            STATE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
+            if [ "$STATE" = "MERGED" ]; then
+              echo "PR #$PR_NUMBER merged."
+              exit 0
+            fi
+            echo "Waiting for PR #$PR_NUMBER to merge; current state: $STATE"
+            sleep 10
+          done
+          echo "Timed out waiting for PR #$PR_NUMBER to merge."
+          exit 1
+
+      - name: Deploy vova-medcenter in Komodo
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+        run: |
+          RESPONSE=$(curl -sf -X POST https://komodo.ravil.space/execute \
+            -H "Content-Type: application/json" \
+            -H "X-Api-Key: $KOMODO_API_KEY" \
+            -H "X-Api-Secret: $KOMODO_API_SECRET" \
+            -d '{"type":"DeployStack","params":{"stack":"vova-medcenter"}}')
+          echo "$RESPONSE" | jq '{success: .success}'
