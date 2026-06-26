@@ -1,0 +1,61 @@
+services:
+  mattermost-db:
+    image: postgres:16-alpine
+    container_name: mattermost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mattermost
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASSWORD}
+      POSTGRES_DB: mattermost
+    volumes:
+      - mattermost-db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    container_name: mattermost
+    restart: unless-stopped
+    depends_on:
+      - mattermost-db
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASSWORD}@mattermost-db/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: https://mattermost.ravil.space
+      MM_OPENIDCONNECTSETTINGS_ENABLE: "true"
+      MM_OPENIDCONNECTSETTINGS_BUTTONTEXT: Login with PocketID
+      MM_OPENIDCONNECTSETTINGS_BUTTONCOLOR: "#4285F4"
+      MM_OPENIDCONNECTSETTINGS_DISCOVERYENDPOINT: https://pocketid.ravil.space/.well-known/openid-configuration
+      MM_OPENIDCONNECTSETTINGS_ID: ${MATTERMOST_OIDC_CLIENT_ID}
+      MM_OPENIDCONNECTSETTINGS_SECRET: ${MATTERMOST_OIDC_CLIENT_SECRET}
+    volumes:
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-config:/mattermost/config
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mattermost.rule=Host(`mattermost.ravil.space`)"
+      - "traefik.http.routers.mattermost.entrypoints=websecure"
+      - "traefik.http.routers.mattermost.tls.certresolver=cloudflare"
+      - "traefik.http.services.mattermost.loadbalancer.server.port=8065"
+      - "traefik.docker.network=traefik_default"
+
+volumes:
+  mattermost-db:
+  mattermost-data:
+  mattermost-logs:
+  mattermost-config:
+  mattermost-plugins:
+  mattermost-client-plugins:
+
+networks:
+  default:
+    name: mattermost_default
+  traefik:
+    name: traefik_default
+    external: true
