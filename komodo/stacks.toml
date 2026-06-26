@@ -350,6 +350,23 @@ repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/hermes"
 
+# ─── Communication ───────────────────────────────────────────────
+
+[[stack]]
+name = "mattermost"
+description = "Self-hosted team messaging (Mattermost Team Edition)"
+tags = ["communication", "productivity"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/mattermost"
+environment = """
+MATTERMOST_DB_PASSWORD = [[MATTERMOST_DB_PASSWORD]]
+"""
+
 [[stack]]
 name = "hermes-webui"
 description = "Hermes WebUI — browser interface for Hermes Agent, exposed via Traefik + Pocket ID OIDC"

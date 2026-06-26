@@ -22,12 +22,13 @@ services:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASSWORD}@mattermost-db/mattermost?sslmode=disable
       MM_SERVICESETTINGS_SITEURL: https://mattermost.ravil.space
-      MM_OPENIDCONNECTSETTINGS_ENABLE: "true"
-      MM_OPENIDCONNECTSETTINGS_BUTTONTEXT: Login with PocketID
-      MM_OPENIDCONNECTSETTINGS_BUTTONCOLOR: "#4285F4"
-      MM_OPENIDCONNECTSETTINGS_DISCOVERYENDPOINT: https://pocketid.ravil.space/.well-known/openid-configuration
-      MM_OPENIDCONNECTSETTINGS_ID: ${MATTERMOST_OIDC_CLIENT_ID}
-      MM_OPENIDCONNECTSETTINGS_SECRET: ${MATTERMOST_OIDC_CLIENT_SECRET}
+      # OIDC: set these + MM_OPENIDCONNECTSETTINGS_ENABLE=true once PocketID client is created
+      # MM_OPENIDCONNECTSETTINGS_ENABLE: "true"
+      # MM_OPENIDCONNECTSETTINGS_BUTTONTEXT: Login with PocketID
+      # MM_OPENIDCONNECTSETTINGS_BUTTONCOLOR: "#4285F4"
+      # MM_OPENIDCONNECTSETTINGS_DISCOVERYENDPOINT: https://pocketid.ravil.space/.well-known/openid-configuration
+      # MM_OPENIDCONNECTSETTINGS_ID: ${MATTERMOST_OIDC_CLIENT_ID}
+      # MM_OPENIDCONNECTSETTINGS_SECRET: ${MATTERMOST_OIDC_CLIENT_SECRET}
     volumes:
       - mattermost-data:/mattermost/data
       - mattermost-logs:/mattermost/logs
