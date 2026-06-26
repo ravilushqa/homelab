@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ravil's Homelab Network Architecture</title>
+  <style>
+    :root {
+      --bg: #020617;
+      --panel: #0f172a;
+      --muted: #94a3b8;
+      --text: #e2e8f0;
+      --cyan: #22d3ee;
+      --emerald: #34d399;
+      --violet: #a78bfa;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --orange: #fb923c;
+      --slate: #64748b;
+    }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(rgba(15, 23, 42, 0.75) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 23, 42, 0.75) 1px, transparent 1px),
+        var(--bg);
+      background-size: 40px 40px;
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 32px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.04em; }
+    p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #1e293b; border-radius: 999px; padding: 8px 12px; color: var(--muted); background: rgba(15, 23, 42, 0.75); }
+    .dot { width: 9px; height: 9px; border-radius: 999px; background: var(--emerald); box-shadow: 0 0 16px var(--emerald); }
+    .canvas { border: 1px solid #1e293b; border-radius: 18px; overflow: hidden; background: rgba(15, 23, 42, 0.65); box-shadow: 0 24px 80px rgba(0,0,0,0.35); }
+    svg { display: block; width: 100%; height: auto; }
+    .label { fill: var(--text); font-size: 13px; font-weight: 700; }
+    .sub { fill: var(--muted); font-size: 10px; }
+    .tiny { fill: #cbd5e1; font-size: 9px; }
+    .box-bg { fill: #0f172a; }
+    .external { fill: rgba(30,41,59,.62); stroke: #94a3b8; }
+    .network { fill: rgba(8,51,68,.42); stroke: #22d3ee; }
+    .compute { fill: rgba(6,78,59,.42); stroke: #34d399; }
+    .k8s { fill: rgba(30,64,175,.32); stroke: #60a5fa; }
+    .docker { fill: rgba(120,53,15,.34); stroke: #fbbf24; }
+    .data { fill: rgba(76,29,149,.42); stroke: #a78bfa; }
+    .security { fill: rgba(136,19,55,.38); stroke: #fb7185; }
+    .support { fill: rgba(251,146,60,.26); stroke: #fb923c; }
+    .boundary { fill: rgba(15,23,42,.18); stroke-width: 1.5; stroke-dasharray: 7 5; }
+    .arrow { stroke: #94a3b8; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+    .arrow-cyan { stroke: #22d3ee; }
+    .arrow-amber { stroke: #fbbf24; }
+    .arrow-rose { stroke: #fb7185; stroke-dasharray: 6 4; }
+    .arrow-violet { stroke: #a78bfa; }
+    .legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 0; }
+    .legend div { border: 1px solid #1e293b; border-radius: 12px; padding: 12px; background: rgba(15,23,42,.7); color: var(--muted); font-size: 12px; }
+    .legend strong { color: var(--text); display: block; margin-bottom: 4px; }
+    @media (max-width: 800px) { main { padding: 18px; } header { display: block; } .badge { margin-top: 16px; } .legend { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Ravil's Homelab Network Architecture</h1>
+        <p>Point-in-time topology: UniFi edge, Proxmox, Talos Kubernetes, Komodo/Docker, ingress, identity, storage, and observability.</p>
+      </div>
+      <div class="badge"><span class="dot"></span> Snapshot: 2026-06-14</div>
+    </header>
+
+    <section class="canvas">
+      <svg viewBox="0 0 1280 860" role="img" aria-label="Homelab network architecture diagram">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8" />
+          </marker>
+          <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+
+        <!-- boundaries -->
+        <rect x="48" y="72" width="1184" height="116" rx="16" class="boundary" stroke="#94a3b8" />
+        <text x="66" y="96" class="tiny">WAN / DNS / ISP</text>
+        <rect x="48" y="224" width="1184" height="586" rx="18" class="boundary" stroke="#22d3ee" />
+        <text x="66" y="248" class="tiny">Home LAN + Proxmox estate</text>
+        <rect x="324" y="304" width="846" height="450" rx="18" class="boundary" stroke="#34d399" />
+        <text x="342" y="328" class="tiny">Proxmox cluster01 / pve01 192.168.1.100</text>
+
+        <!-- WAN row -->
+        <rect x="84" y="112" width="130" height="52" rx="8" class="box-bg" />
+        <rect x="84" y="112" width="130" height="52" rx="8" class="external" />
+        <text x="112" y="135" class="label">Internet</text>
+        <text x="104" y="151" class="sub">users + APIs</text>
+
+        <rect x="270" y="112" width="172" height="52" rx="8" class="box-bg" />
+        <rect x="270" y="112" width="172" height="52" rx="8" class="external" />
+        <text x="294" y="135" class="label">Cloudflare DNS</text>
+        <text x="294" y="151" class="sub">*.ravil.space + DDNS</text>
+
+        <rect x="500" y="112" width="180" height="52" rx="8" class="box-bg" />
+        <rect x="500" y="112" width="180" height="52" rx="8" class="external" />
+        <text x="532" y="135" class="label">Deutsche Telekom</text>
+        <text x="535" y="151" class="sub">WAN observed 79.235.241.107</text>
+
+        <rect x="744" y="104" width="210" height="68" rx="8" class="box-bg" />
+        <rect x="744" y="104" width="210" height="68" rx="8" class="network" />
+        <text x="782" y="128" class="label">UniFi Express UX</text>
+        <text x="778" y="145" class="sub">UniFi-Express · FW 4.0.15</text>
+        <text x="774" y="160" class="sub">LAN 192.168.1.1 / 192.168.2.188</text>
+
+        <rect x="1016" y="112" width="160" height="52" rx="8" class="box-bg" />
+        <rect x="1016" y="112" width="160" height="52" rx="8" class="security" />
+        <text x="1050" y="135" class="label">PocketID</text>
+        <text x="1040" y="151" class="sub">OIDC for apps</text>
+
+        <!-- LAN services -->
+        <rect x="84" y="304" width="170" height="58" rx="8" class="box-bg" />
+        <rect x="84" y="304" width="170" height="58" rx="8" class="network" />
+        <text x="132" y="328" class="label">Pi-hole</text>
+        <text x="116" y="345" class="sub">LXC 110 · LAN DNS</text>
+
+        <rect x="84" y="390" width="170" height="58" rx="8" class="box-bg" />
+        <rect x="84" y="390" width="170" height="58" rx="8" class="support" />
+        <text x="110" y="414" class="label">VLESS gateway</text>
+        <text x="120" y="431" class="sub">LXC 125 · sing-box</text>
+
+        <rect x="84" y="476" width="170" height="58" rx="8" class="box-bg" />
+        <rect x="84" y="476" width="170" height="58" rx="8" class="data" />
+        <text x="124" y="500" class="label">Fileserver</text>
+        <text x="124" y="517" class="sub">LXC 117 · SMB</text>
+
+        <!-- edge -->
+        <rect x="384" y="364" width="210" height="88" rx="8" class="box-bg" />
+        <rect x="384" y="364" width="210" height="88" rx="8" class="network" filter="url(#glow)" />
+        <text x="430" y="390" class="label">Edge Traefik</text>
+        <text x="420" y="408" class="sub">LXC 108 · receives 80/443</text>
+        <text x="414" y="425" class="sub">TCP SNI TLS passthrough</text>
+        <text x="410" y="442" class="sub">Terraform module: traefik</text>
+
+        <!-- k8s -->
+        <rect x="666" y="354" width="220" height="84" rx="8" class="box-bg" />
+        <rect x="666" y="354" width="220" height="84" rx="8" class="k8s" />
+        <text x="724" y="381" class="label">K8s Gateway</text>
+        <text x="716" y="399" class="sub">192.168.1.222:443</text>
+        <text x="700" y="416" class="sub">Cilium + Gateway API</text>
+
+        <rect x="650" y="472" width="114" height="64" rx="8" class="box-bg" />
+        <rect x="650" y="472" width="114" height="64" rx="8" class="k8s" />
+        <text x="681" y="496" class="label">CP</text>
+        <text x="666" y="513" class="sub">talos-cp-01</text>
+        <text x="666" y="528" class="sub">192.168.1.210</text>
+
+        <rect x="792" y="472" width="126" height="64" rx="8" class="box-bg" />
+        <rect x="792" y="472" width="126" height="64" rx="8" class="k8s" />
+        <text x="827" y="496" class="label">Worker</text>
+        <text x="810" y="513" class="sub">talos-worker-01</text>
+        <text x="810" y="528" class="sub">192.168.1.211</text>
+
+        <rect x="640" y="574" width="300" height="124" rx="10" class="box-bg" />
+        <rect x="640" y="574" width="300" height="124" rx="10" class="k8s" />
+        <text x="742" y="600" class="label">Kubernetes apps</text>
+        <text x="662" y="622" class="sub">ArgoCD · Glance · Dozzle.k8s · IT Tools</text>
+        <text x="662" y="639" class="sub">Inbox Zero · HA route · OpenWebUI</text>
+        <text x="662" y="656" class="sub">PocketID · Proxmox route · cert-manager</text>
+        <text x="662" y="673" class="sub">Sealed Secrets · Proxmox CSI · DDNS</text>
+
+        <!-- komodo -->
+        <rect x="966" y="354" width="170" height="84" rx="8" class="box-bg" />
+        <rect x="966" y="354" width="170" height="84" rx="8" class="docker" />
+        <text x="1018" y="381" class="label">Komodo</text>
+        <text x="992" y="399" class="sub">LXC 122 · 192.168.1.166</text>
+        <text x="1000" y="416" class="sub">Docker + Compose</text>
+
+        <rect x="966" y="472" width="170" height="226" rx="10" class="box-bg" />
+        <rect x="966" y="472" width="170" height="226" rx="10" class="docker" />
+        <text x="1002" y="498" class="label">Docker stacks</text>
+        <text x="986" y="522" class="sub">Immich · Paperless · n8n</text>
+        <text x="986" y="539" class="sub">Actual · actual-ai · ntfy</text>
+        <text x="986" y="556" class="sub">Karakeep · Miniflux</text>
+        <text x="986" y="573" class="sub">Your Spotify · Umami</text>
+        <text x="986" y="590" class="sub">Grafana LGTM · cAdvisor</text>
+        <text x="986" y="607" class="sub">Honcho LAN API :8077</text>
+        <text x="986" y="624" class="sub">Hermes router/WebUI</text>
+        <text x="986" y="641" class="sub">Pipecat call API</text>
+        <text x="986" y="658" class="sub">Vova Medcenter</text>
+        <text x="986" y="675" class="sub">Traefik terminates TLS</text>
+
+        <!-- support/storage -->
+        <rect x="384" y="500" width="190" height="74" rx="8" class="box-bg" />
+        <rect x="384" y="500" width="190" height="74" rx="8" class="security" />
+        <text x="432" y="527" class="label">Identity</text>
+        <text x="410" y="545" class="sub">PocketID · oauth2-proxy</text>
+        <text x="404" y="562" class="sub">Traefik OIDC middleware</text>
+
+        <rect x="384" y="610" width="190" height="88" rx="8" class="box-bg" />
+        <rect x="384" y="610" width="190" height="88" rx="8" class="data" />
+        <text x="438" y="637" class="label">Storage</text>
+        <text x="405" y="655" class="sub">raid1 ZFS ~11.85TB</text>
+        <text x="405" y="672" class="sub">nvme-thin ~980GB</text>
+        <text x="405" y="689" class="sub">PBS + SMB backups</text>
+
+        <!-- arrows -->
+        <path class="arrow" d="M214 138 L270 138" />
+        <path class="arrow" d="M442 138 L500 138" />
+        <path class="arrow" d="M680 138 L744 138" />
+        <path class="arrow-cyan arrow" d="M850 172 C850 230 490 250 490 364" />
+        <path class="arrow-cyan arrow" d="M850 172 C850 236 170 240 170 304" />
+        <path class="arrow-cyan arrow" d="M850 172 C850 260 1050 275 1050 354" />
+        <path class="arrow-cyan arrow" d="M594 396 L666 396" />
+        <path class="arrow-amber arrow" d="M594 422 C760 460 910 410 966 404" />
+        <path class="arrow-cyan arrow" d="M776 438 L776 472" />
+        <path class="arrow-cyan arrow" d="M708 536 L728 574" />
+        <path class="arrow-cyan arrow" d="M856 536 L840 574" />
+        <path class="arrow-amber arrow" d="M1050 438 L1050 472" />
+        <path class="arrow-rose arrow" d="M1016 150 C930 235 538 460 506 500" />
+        <path class="arrow-rose arrow" d="M1016 150 C1036 260 1048 312 1050 354" />
+        <path class="arrow-violet arrow" d="M574 654 L640 654" />
+        <path class="arrow-violet arrow" d="M574 654 C730 760 970 720 1035 698" />
+      </svg>
+    </section>
+
+    <section class="legend" aria-label="legend">
+      <div><strong>Edge</strong> UniFi Express WAN/LAN and Proxmox Traefik LXC route traffic into K8s or Komodo by SNI.</div>
+      <div><strong>Kubernetes</strong> Talos nodes run Cilium, Gateway API, ArgoCD, cert-manager, Sealed Secrets, and internal/external app routes.</div>
+      <div><strong>Docker</strong> Komodo manages Compose stacks; Docker Traefik terminates TLS for catch-all hostnames.</div>
+      <div><strong>Data/Auth</strong> PocketID/OIDC protects apps; Proxmox, PBS, SMB, and Docker volumes hold persistent state.</div>
+    </section>
+  </main>
+</body>
+</html>

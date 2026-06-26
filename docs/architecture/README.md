@@ -8,6 +8,7 @@ This directory contains comprehensive architecture documentation for the HomeLab
 docs/
 ├── architecture/          # System architecture documentation
 │   ├── README.md         # This file
+│   ├── 00-homelab-architecture.md  # Current end-to-end architecture snapshot
 │   ├── 01-system-context.md
 │   ├── 02-container-architecture.md
 │   ├── 03-component-architecture.md
@@ -45,6 +46,7 @@ The HomeLab infrastructure is built on modern cloud-native principles with a foc
 
 ## Quick Links
 
+- [Homelab Architecture Snapshot](00-homelab-architecture.md) - Current end-to-end network, Proxmox, Kubernetes, Komodo, routing, storage, and operations view
 - [System Context](01-system-context.md) - High-level system overview
 - [Container Architecture](02-container-architecture.md) - Service architecture and deployment
 - [Component Architecture](03-component-architecture.md) - Internal component structure
