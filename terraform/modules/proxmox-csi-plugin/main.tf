@@ -72,7 +72,7 @@ resource "helm_release" "proxmox_csi_plugin" {
   repository = "oci://ghcr.io/sergelogvinov/charts"
   chart      = "proxmox-csi-plugin"
   namespace  = "csi-proxmox"
-  version    = "0.5.8"
+  version    = "0.5.9"
 
   values = [var.proxmox_csi_plugin_helm_values]
 
