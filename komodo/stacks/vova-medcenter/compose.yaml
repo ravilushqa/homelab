@@ -16,10 +16,10 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:aa9fbc15e6e7152034e609d6a7562d28dc45af2f
+    image: vova-medcenter-backend:87adfad9ec1c9aca1c203bfc959d71b7bffdb1eb
     pull_policy: build
     build:
-      context: https://github.com/Zent7/vova-medcenter.git#aa9fbc15e6e7152034e609d6a7562d28dc45af2f
+      context: https://github.com/Zent7/vova-medcenter.git#87adfad9ec1c9aca1c203bfc959d71b7bffdb1eb
       dockerfile_inline: |
         FROM python:3.12-slim
 
@@ -64,10 +64,10 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:aa9fbc15e6e7152034e609d6a7562d28dc45af2f
+    image: vova-medcenter-frontend:87adfad9ec1c9aca1c203bfc959d71b7bffdb1eb
     pull_policy: build
     build:
-      context: https://github.com/Zent7/vova-medcenter.git#aa9fbc15e6e7152034e609d6a7562d28dc45af2f
+      context: https://github.com/Zent7/vova-medcenter.git#87adfad9ec1c9aca1c203bfc959d71b7bffdb1eb
       dockerfile_inline: |
         FROM node:22-alpine AS build
         WORKDIR /app
