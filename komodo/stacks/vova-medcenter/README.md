@@ -8,6 +8,7 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Frontend image: `e5443edfabe5d0396883fcc7e7f5602e383df105`
 - Backend image: stable `eea7ac83fac3a7b81cc5a53792c824e750496f4f-restore1`
 - Backend deployment: reuse the verified local image without rebuilding it
+- Recovery mode keeps `pull_policy: never` so a registry lookup cannot block startup
 
 ## Architecture
 
