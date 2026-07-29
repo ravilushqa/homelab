@@ -4,7 +4,8 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream commit: `1291fac38f576844e3fd5d6f12b7d6f66588e0f8`
+- Frontend commit: `544efd5956829925ae278df06e6ceefd2151829a`
+- Backend image: stable `eea7ac83fac3a7b81cc5a53792c824e750496f4f`
 
 ## Architecture
 
