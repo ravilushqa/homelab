@@ -16,7 +16,7 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:1291fac38f576844e3fd5d6f12b7d6f66588e0f8
+    image: vova-medcenter-backend:1291fac38f576844e3fd5d6f12b7d6f66588e0f8-retry1
     pull_policy: build
     build:
       context: https://github.com/Zent7/vova-medcenter.git#1291fac38f576844e3fd5d6f12b7d6f66588e0f8
@@ -64,7 +64,7 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:1291fac38f576844e3fd5d6f12b7d6f66588e0f8
+    image: vova-medcenter-frontend:1291fac38f576844e3fd5d6f12b7d6f66588e0f8-retry1
     pull_policy: build
     build:
       context: https://github.com/Zent7/vova-medcenter.git#1291fac38f576844e3fd5d6f12b7d6f66588e0f8
