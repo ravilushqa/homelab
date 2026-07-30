@@ -4,11 +4,10 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream commit: `e5443edfabe5d0396883fcc7e7f5602e383df105`
-- Frontend image: `e5443edfabe5d0396883fcc7e7f5602e383df105`
-- Backend image: stable `eea7ac83fac3a7b81cc5a53792c824e750496f4f-restore1`
-- Backend deployment: reuse the verified local image without rebuilding it
-- Recovery mode keeps `pull_policy: never` so a registry lookup cannot block startup
+- Upstream commit: `e6dcc0ba1a9cea3ab4c7845d3a98652bf837e81d`
+- Frontend image: `e6dcc0ba1a9cea3ab4c7845d3a98652bf837e81d`
+- Backend image: `e6dcc0ba1a9cea3ab4c7845d3a98652bf837e81d`
+- Both application images build directly from the pinned upstream commit
 
 ## Architecture
 
