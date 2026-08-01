@@ -34,7 +34,7 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: nginx:1.27-alpine
+    image: nginx:1.31-alpine
     pull_policy: never
     container_name: vova-medcenter-frontend
     restart: unless-stopped
