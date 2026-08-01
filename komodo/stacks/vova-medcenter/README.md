@@ -8,7 +8,7 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Frontend image: `980868768daa14eb5ee4afa97e3a821de179dcc8`
 - Backend recovery image: `3715c1942ca76f96be25a40763db4c6a41ca613d` (cached; no registry/build required)
 - The frontend builds from the pinned upstream commit; the backend temporarily reuses the last working cached image while registry DNS is unavailable
-- Last redeploy request: 2026-08-01 (recovery after completed tractor/VU rollout)
+- Last redeploy request: 2026-08-01 17:49 MSK (retry cached-backend recovery after resource sync)
 
 ## Architecture
 
