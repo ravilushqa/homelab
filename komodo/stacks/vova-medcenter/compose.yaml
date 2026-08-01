@@ -16,8 +16,19 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:8981524fab8309fde6d3bc2659b35443f98b8caa
-    pull_policy: never
+    image: vova-medcenter-backend:8981524fab8309fde6d3bc2659b35443f98b8caa-cachebase1
+    pull_policy: build
+    build:
+      context: https://github.com/Zent7/vova-medcenter.git#8981524fab8309fde6d3bc2659b35443f98b8caa
+      dockerfile_inline: |
+        FROM vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
+
+        WORKDIR /app
+
+        COPY backend/ /app/
+        COPY assets/templates/ /assets/templates/
+        COPY frontend/public/ /app/frontend/public/
+        COPY frontend/public/ /frontend/public/
     container_name: vova-medcenter-backend
     restart: unless-stopped
     depends_on:
