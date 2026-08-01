@@ -42,6 +42,12 @@
   ],
   "packageRules": [
     {
+      "description": "Cilium updates are critical infra — never automerge",
+      "matchPackageNames": ["cilium"],
+      "automerge": false,
+      "stabilityDays": 7
+    },
+    {
       "description": "Group all Docker major updates into one PR",
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["major"],
