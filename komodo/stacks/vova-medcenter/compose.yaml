@@ -16,8 +16,38 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:eea7ac83fac3a7b81cc5a53792c824e750496f4f-restore1
-    pull_policy: never
+    image: vova-medcenter-backend:8981524fab8309fde6d3bc2659b35443f98b8caa
+    pull_policy: build
+    build:
+      context: https://github.com/Zent7/vova-medcenter.git#8981524fab8309fde6d3bc2659b35443f98b8caa
+      dockerfile_inline: |
+        FROM python:3.12-slim
+
+        ENV PYTHONDONTWRITEBYTECODE=1 \
+            PYTHONUNBUFFERED=1 \
+            PIP_NO_CACHE_DIR=1
+
+        WORKDIR /app
+
+        RUN apt-get update \
+            && apt-get install -y --no-install-recommends \
+                build-essential \
+                curl \
+                unixodbc-dev \
+            && rm -rf /var/lib/apt/lists/*
+
+        COPY backend/requirements.txt /app/requirements.txt
+        RUN pip install --upgrade pip \
+            && pip install -r /app/requirements.txt
+
+        COPY backend/ /app/
+        COPY assets/templates/ /assets/templates/
+        COPY frontend/public/ /app/frontend/public/
+        COPY frontend/public/ /frontend/public/
+
+        EXPOSE 8000
+
+        CMD ["sh", "-c", "python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     container_name: vova-medcenter-backend
     restart: unless-stopped
     depends_on:
@@ -34,10 +64,10 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:e5443edfabe5d0396883fcc7e7f5602e383df105
+    image: vova-medcenter-frontend:8981524fab8309fde6d3bc2659b35443f98b8caa
     pull_policy: build
     build:
-      context: https://github.com/Zent7/vova-medcenter.git#e5443edfabe5d0396883fcc7e7f5602e383df105
+      context: https://github.com/Zent7/vova-medcenter.git#8981524fab8309fde6d3bc2659b35443f98b8caa
       dockerfile_inline: |
         FROM node:22-alpine AS build
         WORKDIR /app
