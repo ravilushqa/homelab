@@ -34,8 +34,14 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:00bb811db07103bec4e2fcbe78363d3491a3599c
-    pull_policy: never
+    image: vova-medcenter-frontend:8981524-overlay
+    pull_policy: build
+    build:
+      context: https://github.com/Zent7/vova-medcenter.git#8981524fab8309fde6d3bc2659b35443f98b8caa
+      dockerfile_inline: |
+        FROM vova-medcenter-frontend:00bb811db07103bec4e2fcbe78363d3491a3599c
+        COPY frontend/public/ /usr/share/nginx/html/
+        EXPOSE 80
     container_name: vova-medcenter-frontend
     restart: unless-stopped
     depends_on:
