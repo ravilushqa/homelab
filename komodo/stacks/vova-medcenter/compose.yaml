@@ -16,8 +16,45 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
-    pull_policy: never
+    image: vova-medcenter-backend:8981524fab8309fde6d3bc2659b35443f98b8caa-fixedip1
+    pull_policy: build
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
+
+        WORKDIR /app
+
+        RUN python - <<'PY'
+        import http.client
+        import shutil
+        import socket
+        import ssl
+
+        sock = socket.create_connection(("140.82.121.9", 443), timeout=30)
+        tls = ssl.create_default_context().wrap_socket(sock, server_hostname="codeload.github.com")
+        tls.sendall(
+            b"GET /Zent7/vova-medcenter/tar.gz/8981524fab8309fde6d3bc2659b35443f98b8caa HTTP/1.1\r\n"
+            b"Host: codeload.github.com\r\nConnection: close\r\n\r\n"
+        )
+        response = http.client.HTTPResponse(tls)
+        response.begin()
+        if response.status != 200:
+            raise RuntimeError(f"codeload returned HTTP {response.status}")
+        with open("/tmp/vova-medcenter.tar.gz", "wb") as output:
+            shutil.copyfileobj(response, output)
+        tls.close()
+        PY
+
+        RUN set -eux; \
+            mkdir -p /tmp/vova-source; \
+            tar -xzf /tmp/vova-medcenter.tar.gz --strip-components=1 -C /tmp/vova-source; \
+            mkdir -p /assets/templates /app/frontend/public /frontend/public; \
+            cp -a /tmp/vova-source/backend/. /app/; \
+            cp -a /tmp/vova-source/assets/templates/. /assets/templates/; \
+            cp -a /tmp/vova-source/frontend/public/. /app/frontend/public/; \
+            cp -a /tmp/vova-source/frontend/public/. /frontend/public/; \
+            rm -r /tmp/vova-source /tmp/vova-medcenter.tar.gz
     container_name: vova-medcenter-backend
     restart: unless-stopped
     depends_on:
