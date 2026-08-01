@@ -16,45 +16,15 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:8981524fab8309fde6d3bc2659b35443f98b8caa-fixedip1
+    image: vova-medcenter-backend:8981524-offline-overlay
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
         FROM vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
-
-        WORKDIR /app
-
-        RUN python - <<'PY'
-        import http.client
-        import shutil
-        import socket
-        import ssl
-
-        sock = socket.create_connection(("140.82.121.9", 443), timeout=30)
-        tls = ssl.create_default_context().wrap_socket(sock, server_hostname="codeload.github.com")
-        tls.sendall(
-            b"GET /Zent7/vova-medcenter/tar.gz/8981524fab8309fde6d3bc2659b35443f98b8caa HTTP/1.1\r\n"
-            b"Host: codeload.github.com\r\nConnection: close\r\n\r\n"
-        )
-        response = http.client.HTTPResponse(tls)
-        response.begin()
-        if response.status != 200:
-            raise RuntimeError(f"codeload returned HTTP {response.status}")
-        with open("/tmp/vova-medcenter.tar.gz", "wb") as output:
-            shutil.copyfileobj(response, output)
-        tls.close()
-        PY
-
-        RUN set -eux; \
-            mkdir -p /tmp/vova-source; \
-            tar -xzf /tmp/vova-medcenter.tar.gz --strip-components=1 -C /tmp/vova-source; \
-            mkdir -p /assets/templates /app/frontend/public /frontend/public; \
-            cp -a /tmp/vova-source/backend/. /app/; \
-            cp -a /tmp/vova-source/assets/templates/. /assets/templates/; \
-            cp -a /tmp/vova-source/frontend/public/. /app/frontend/public/; \
-            cp -a /tmp/vova-source/frontend/public/. /frontend/public/; \
-            rm -r /tmp/vova-source /tmp/vova-medcenter.tar.gz
+        COPY backend-overlay-8981524.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
+        RUN python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/'); p.unlink(); t.unlink()"
+        RUN if [ -f "/assets/templates/Templates/ВСЕ НУЖНЫЕ ШАБЛОНЫ.xls" ]; then cp "/assets/templates/Templates/ВСЕ НУЖНЫЕ ШАБЛОНЫ.xls" "/assets/templates/Templates/ВУ.xls"; else test -f "/assets/templates/Templates/ВУ.xls"; fi
     container_name: vova-medcenter-backend
     restart: unless-stopped
     depends_on:
@@ -71,13 +41,16 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: nginx:1.31-alpine
-    pull_policy: never
+    image: vova-medcenter-frontend:8981524-offline-overlay
+    pull_policy: build
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM vova-medcenter-frontend:980868768daa14eb5ee4afa97e3a821de179dcc8
+        COPY frontend-overlay-8981524.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped
-    configs:
-      - source: vova_medcenter_nginx
-        target: /etc/nginx/conf.d/default.conf
     depends_on:
       - backend
     networks:
@@ -99,41 +72,3 @@ networks:
   traefik:
     external: true
     name: traefik_default
-
-configs:
-  vova_medcenter_nginx:
-    content: |
-      server {
-          listen 80;
-          server_name _;
-          client_max_body_size 50m;
-
-          location = / {
-              return 302 /demo/index.html;
-          }
-
-          location /api/ {
-              proxy_pass http://backend:8000/api/;
-              proxy_http_version 1.1;
-              proxy_set_header Host $$host;
-              proxy_set_header X-Real-IP $$remote_addr;
-              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $$scheme;
-          }
-
-          location ~* \.html$$ {
-              resolver 1.1.1.1 1.0.0.1 valid=300s;
-              proxy_ssl_server_name on;
-              proxy_set_header Host cdn.jsdelivr.net;
-              proxy_pass https://cdn.jsdelivr.net/gh/Zent7/vova-medcenter@8981524fab8309fde6d3bc2659b35443f98b8caa/frontend/public$$request_uri;
-              proxy_hide_header Content-Type;
-              add_header Content-Type "text/html; charset=utf-8";
-          }
-
-          location / {
-              resolver 1.1.1.1 1.0.0.1 valid=300s;
-              proxy_ssl_server_name on;
-              proxy_set_header Host cdn.jsdelivr.net;
-              proxy_pass https://cdn.jsdelivr.net/gh/Zent7/vova-medcenter@8981524fab8309fde6d3bc2659b35443f98b8caa/frontend/public$$request_uri;
-          }
-      }
