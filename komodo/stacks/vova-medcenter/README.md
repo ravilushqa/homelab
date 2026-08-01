@@ -6,9 +6,9 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
 - Upstream commit: `980868768daa14eb5ee4afa97e3a821de179dcc8`
 - Frontend recovery image: `00bb811db07103bec4e2fcbe78363d3491a3599c` (cached; no registry/build required)
-- Backend recovery image: `3715c1942ca76f96be25a40763db4c6a41ca613d` (cached; no registry/build required)
+- Backend recovery image: `8981524fab8309fde6d3bc2659b35443f98b8caa` (cached; locally health-checked; no registry/build required)
 - Both services temporarily reuse their last working cached images while registry DNS is unavailable
-- Last redeploy request: 2026-08-01 17:53 MSK (full cached-image recovery)
+- Last redeploy request: 2026-08-01 18:00 MSK (fallback to health-checked backend cache)
 
 ## Architecture
 

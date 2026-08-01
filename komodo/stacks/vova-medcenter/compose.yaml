@@ -16,7 +16,7 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
+    image: vova-medcenter-backend:8981524fab8309fde6d3bc2659b35443f98b8caa
     pull_policy: never
     container_name: vova-medcenter-backend
     restart: unless-stopped
