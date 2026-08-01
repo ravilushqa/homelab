@@ -8,6 +8,7 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Frontend image: `00bb811db07103bec4e2fcbe78363d3491a3599c`
 - Backend image: `00bb811db07103bec4e2fcbe78363d3491a3599c`
 - Both application images build directly from the pinned upstream commit
+- Last redeploy request: 2026-08-01 (recovery after overlapping stack updates)
 
 ## Architecture
 
