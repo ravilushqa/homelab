@@ -5,10 +5,10 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
 - Upstream commit: `8981524fab8309fde6d3bc2659b35443f98b8caa`
-- Frontend image: `8981524-overlay`, built on cached image `00bb811db07103bec4e2fcbe78363d3491a3599c`
-- Backend image: `8981524fab8309fde6d3bc2659b35443f98b8caa-cachebase1`
-- The frontend and backend overlay the verified application sources onto cached images, avoiding registry, npm, and pip downloads
-- Last redeploy request: 2026-08-01 (LMK templates with cached-backend recovery)
+- Frontend recovery: cached `nginx:1.27-alpine` proxies public assets from upstream commit `8981524fab8309fde6d3bc2659b35443f98b8caa` through jsDelivr
+- Backend recovery image: `3715c1942ca76f96be25a40763db4c6a41ca613d` (last known working cached image; no registry/build required)
+- This recovery path avoids Docker Registry access while preserving the current public frontend
+- Last redeploy request: 2026-08-01 (registry-free CDN recovery)
 
 ## Architecture
 
