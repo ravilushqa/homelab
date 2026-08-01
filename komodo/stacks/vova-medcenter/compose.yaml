@@ -34,13 +34,14 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: nginx:1.31-alpine
+    image: vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
     pull_policy: never
     container_name: vova-medcenter-frontend
     restart: unless-stopped
+    command: ["python", "/recovery_server.py"]
     configs:
-      - source: vova_medcenter_nginx
-        target: /etc/nginx/conf.d/default.conf
+      - source: vova_medcenter_recovery_server
+        target: /recovery_server.py
     depends_on:
       - backend
     networks:
@@ -64,39 +65,5 @@ networks:
     name: traefik_default
 
 configs:
-  vova_medcenter_nginx:
-    content: |
-      server {
-          listen 80;
-          server_name _;
-          client_max_body_size 50m;
-
-          location = / {
-              return 302 /demo/index.html;
-          }
-
-          location /api/ {
-              proxy_pass http://backend:8000/api/;
-              proxy_http_version 1.1;
-              proxy_set_header Host $$host;
-              proxy_set_header X-Real-IP $$remote_addr;
-              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $$scheme;
-          }
-
-          location ~* \.html$$ {
-              resolver 1.1.1.1 1.0.0.1 valid=300s;
-              proxy_ssl_server_name on;
-              proxy_set_header Host cdn.jsdelivr.net;
-              proxy_pass https://cdn.jsdelivr.net/gh/Zent7/vova-medcenter@8981524fab8309fde6d3bc2659b35443f98b8caa/frontend/public$$request_uri;
-              proxy_hide_header Content-Type;
-              add_header Content-Type "text/html; charset=utf-8";
-          }
-
-          location / {
-              resolver 1.1.1.1 1.0.0.1 valid=300s;
-              proxy_ssl_server_name on;
-              proxy_set_header Host cdn.jsdelivr.net;
-              proxy_pass https://cdn.jsdelivr.net/gh/Zent7/vova-medcenter@8981524fab8309fde6d3bc2659b35443f98b8caa/frontend/public$$request_uri;
-          }
-      }
+  vova_medcenter_recovery_server:
+    file: ./recovery_server.py

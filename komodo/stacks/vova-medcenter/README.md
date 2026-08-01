@@ -5,16 +5,16 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
 - Upstream commit: `8981524fab8309fde6d3bc2659b35443f98b8caa`
-- Frontend recovery: cached `nginx:1.27-alpine` proxies public assets from upstream commit `8981524fab8309fde6d3bc2659b35443f98b8caa` through jsDelivr
+- Frontend recovery: the cached backend image runs `recovery_server.py`, serving its bundled static files with the GIMS series-selection patch applied in memory
 - Backend recovery image: `3715c1942ca76f96be25a40763db4c6a41ca613d` (last known working cached image; no registry/build required)
-- This recovery path avoids Docker Registry access while preserving the current public frontend
+- This recovery path avoids Docker Registry, external DNS, npm, and pip access
 - Last redeploy request: 2026-08-01 (registry-free CDN recovery)
 
 ## Architecture
 
 - `db`: PostgreSQL 16 for demo data.
 - `backend`: FastAPI app. Runs Alembic migrations on start, then Uvicorn on `:8000`.
-- `frontend`: nginx serving the Vite build and proxying `/api/` to `backend:8000`.
+- `frontend`: a minimal Python recovery proxy serving the pinned public assets and forwarding `/api/` to `backend:8000`.
 
 The upstream repo currently ships only a local Windows/demo compose for Postgres, so this stack uses `dockerfile_inline` to keep the Komodo deployment self-contained while building directly from the pinned upstream Git commit.
 
