@@ -1,0 +1,79 @@
+name: Vova Medcenter Direct Hotfix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract current frontend overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          overlay="komodo/stacks/vova-medcenter/frontend-overlay-5f681cd.tar.gz.b64"
+          mkdir -p "$RUNNER_TEMP/vova-medcenter-direct-hotfix"
+          base64 -d "$overlay" > "$RUNNER_TEMP/vova-medcenter-direct-hotfix/frontend.tar.gz"
+          tar -xzf "$RUNNER_TEMP/vova-medcenter-direct-hotfix/frontend.tar.gz" \
+            -C "$RUNNER_TEMP/vova-medcenter-direct-hotfix"
+          test -s "$RUNNER_TEMP/vova-medcenter-direct-hotfix/usr/share/nginx/html/demo/app.js"
+          test -s "$RUNNER_TEMP/vova-medcenter-direct-hotfix/usr/share/nginx/html/demo/index.html"
+          grep -q 'BLANK_TYPE_LMK_MEDICAL_CERTIFICATE = "lmk_medical_certificate"' \
+            "$RUNNER_TEMP/vova-medcenter-direct-hotfix/usr/share/nginx/html/demo/app.js"
+
+      - name: Copy fixed frontend directly to the running container
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="$RUNNER_TEMP/vova-medcenter-direct-hotfix/usr/share/nginx/html/demo"
+          container="vova-medcenter-frontend"
+          stamp="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          deploy_local() {
+            docker inspect "$container" >/dev/null
+            docker exec "$container" sh -c \
+              "cp /usr/share/nginx/html/demo/app.js /tmp/app.js.before-${stamp} && cp /usr/share/nginx/html/demo/index.html /tmp/index.html.before-${stamp}"
+            docker cp "$source_dir/app.js" "$container:/usr/share/nginx/html/demo/app.js"
+            docker cp "$source_dir/index.html" "$container:/usr/share/nginx/html/demo/index.html"
+            docker exec "$container" grep -q \
+              'BLANK_TYPE_LMK_MEDICAL_CERTIFICATE = "lmk_medical_certificate"' \
+              /usr/share/nginx/html/demo/app.js
+          }
+
+          deploy_ssh() {
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+              192.168.1.166 "docker inspect '$container' >/dev/null"
+            ssh -o BatchMode=yes 192.168.1.166 \
+              "docker exec '$container' sh -c 'cp /usr/share/nginx/html/demo/app.js /tmp/app.js.before-${stamp} && cp /usr/share/nginx/html/demo/index.html /tmp/index.html.before-${stamp}'"
+            tar -C "$source_dir" -czf - app.js index.html | \
+              ssh -o BatchMode=yes 192.168.1.166 \
+                "docker exec -i '$container' tar -xzf - -C /usr/share/nginx/html/demo"
+            ssh -o BatchMode=yes 192.168.1.166 \
+              "docker exec '$container' grep -q 'BLANK_TYPE_LMK_MEDICAL_CERTIFICATE = \"lmk_medical_certificate\"' /usr/share/nginx/html/demo/app.js"
+          }
+
+          if docker inspect "$container" >/dev/null 2>&1; then
+            deploy_local
+          else
+            deploy_ssh
+          fi
+
+      - name: Verify public site
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache_bust="direct-lmk-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          index="$(curl -fsS --retry 5 --retry-delay 3 \
+            "https://vova-medcenter.ravil.space/demo/index.html?${cache_bust}")"
+          grep -q 'app.js?v=20260802-086-word-open-current-fixes' <<<"$index"
+          app="$(curl -fsS --retry 5 --retry-delay 3 \
+            "https://vova-medcenter.ravil.space/demo/app.js?${cache_bust}")"
+          grep -q 'BLANK_TYPE_LMK_MEDICAL_CERTIFICATE = "lmk_medical_certificate"' <<<"$app"
+          grep -q 'if (normalizedType === "lmk") return BLANK_TYPE_LMK_MEDICAL_CERTIFICATE' <<<"$app"
+          curl -fsS "https://vova-medcenter.ravil.space/api/v1/health" | grep -q 'ok'
