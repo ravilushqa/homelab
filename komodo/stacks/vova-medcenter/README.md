@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream commit: `8981524fab8309fde6d3bc2659b35443f98b8caa`
-- Frontend image: `8981524-offline-overlay`, built on cached image `980868768daa14eb5ee4afa97e3a821de179dcc8`
+- Upstream commit: `d81f5f3067b81a32bb06f748d61e9f3cee8e44ec`
+- Frontend image: `d81f5f3-offline-overlay`, built on cached image `980868768daa14eb5ee4afa97e3a821de179dcc8`
 - Backend image: `8981524-offline-overlay`, built on cached image `3715c1942ca76f96be25a40763db4c6a41ca613d`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-01 (fully offline Docker recovery with VU, tractor, and LMK template fixes)
+- Last redeploy request: 2026-08-02 (shared sequential numbering for ordinary certificates)
 
 ## Architecture
 
