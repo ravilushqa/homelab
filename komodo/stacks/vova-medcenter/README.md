@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream commit: `b4597a3b009a99e1d9b47a3de93a15e087db8d3a`
-- Frontend image: `b4597a3-offline-overlay`, built on cached image `980868768daa14eb5ee4afa97e3a821de179dcc8`
-- Backend image: `b4597a3-offline-overlay`, built on cached image `3715c1942ca76f96be25a40763db4c6a41ca613d`
+- Upstream commit: `12a38bb66133646c45014bae5989ebb9bc8c6b86`
+- Frontend image: `12a38bb-offline-overlay`, built on cached image `980868768daa14eb5ee4afa97e3a821de179dcc8`
+- Backend image: `12a38bb-offline-overlay`, built on cached image `3715c1942ca76f96be25a40763db4c6a41ca613d`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-02 (customer client-import workbook and automatic field mapping)
+- Last redeploy request: 2026-08-02 (086 sex rules and Word 2019 opening, with current client import)
 
 ## Architecture
 
