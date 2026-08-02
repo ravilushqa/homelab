@@ -95,6 +95,18 @@ jobs:
           echo "Timed out waiting for PR #$PR_NUMBER to merge."
           exit 1
 
+      - name: Refresh vova-medcenter stack cache in Komodo
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+        run: |
+          curl -sf -X POST https://komodo.ravil.space/write \
+            -H "Content-Type: application/json" \
+            -H "X-Api-Key: $KOMODO_API_KEY" \
+            -H "X-Api-Secret: $KOMODO_API_SECRET" \
+            -d '{"type":"RefreshStackCache","params":{"stack":"vova-medcenter"}}' \
+            > /dev/null
+
       - name: Deploy vova-medcenter in Komodo
         env:
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
