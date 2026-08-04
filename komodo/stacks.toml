@@ -279,6 +279,27 @@ HONCHO_DB_PASSWORD = [[HONCHO_DB_PASSWORD]]
 """
 
 [[stack]]
+name = "guest-door-access"
+description = "Public guest door access app for HomeExchange guests"
+tags = ["home-assistant", "guest-access"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/guest-door-access"
+environment = """
+HA_TOKEN = [[GUEST_DOOR_HA_TOKEN]]
+ACCESS_TOKEN = [[GUEST_DOOR_ACCESS_TOKEN]]
+PIN = [[GUEST_DOOR_PIN]]
+HA_URL = https://ha.ravil.space
+ACCESS_START = [[GUEST_DOOR_ACCESS_START]]
+ACCESS_END = [[GUEST_DOOR_ACCESS_END]]
+RATE_LIMIT_SECONDS = 10
+"""
+
+[[stack]]
 name = "vova-medcenter"
 description = "MedCenters demo app"
 tags = ["demo", "tools"]
