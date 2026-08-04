@@ -57,3 +57,8 @@ Secrets are stored in Komodo Variables/Secrets — never in this repo.
 
 ### grafana-lgtm
 - `GF_ADMIN_PASSWORD`
+
+### guest-door-access
+- `GUEST_DOOR_HA_TOKEN`
+- `GUEST_DOOR_ACCESS_TOKEN`
+- `GUEST_DOOR_PIN` (required)
