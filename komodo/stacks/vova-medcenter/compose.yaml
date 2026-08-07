@@ -16,15 +16,14 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:12a38bb-offline-overlay
+    image: vova-medcenter-backend:5f694c6-offline-overlay
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-backend:3715c1942ca76f96be25a40763db4c6a41ca613d
-        COPY backend-overlay-12a38bb.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
+        FROM vova-medcenter-backend:12a38bb-offline-overlay
+        COPY backend-overlay-5f694c6.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
         RUN python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/'); p.unlink(); t.unlink()"
-        RUN if [ -f "/assets/templates/Templates/ВСЕ НУЖНЫЕ ШАБЛОНЫ.xls" ]; then cp "/assets/templates/Templates/ВСЕ НУЖНЫЕ ШАБЛОНЫ.xls" "/assets/templates/Templates/ВУ.xls"; else test -f "/assets/templates/Templates/ВУ.xls"; fi
     container_name: vova-medcenter-backend
     restart: unless-stopped
     depends_on:
@@ -41,13 +40,13 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:12a38bb-offline-overlay
+    image: vova-medcenter-frontend:5f694c6-offline-overlay
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-frontend:980868768daa14eb5ee4afa97e3a821de179dcc8
-        COPY frontend-overlay-12a38bb.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        FROM vova-medcenter-frontend:12a38bb-offline-overlay
+        COPY frontend-overlay-5f694c6.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped
