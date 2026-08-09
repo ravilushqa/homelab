@@ -8,7 +8,7 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Frontend image: `8081148-chairman-cards-overlay`, built on cached image `12a38bb-offline-overlay`
 - Backend image: `5f694c6-offline-overlay`, built on cached image `12a38bb-offline-overlay`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-09 (add shared 070/072 sanatorium chairman cards)
+- Last redeploy request: 2026-08-09 (retry shared 070/072 chairman-card deployment after Komodo queue delay)
 
 ## Architecture
 
