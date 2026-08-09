@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream commit: `5f694c64f2e5127aabdee1adc1ca5c678325ef34`
-- Frontend image: `5f694c6-offline-overlay`, built on cached image `12a38bb-offline-overlay`
+- Upstream commit: `80811482ad71b9ac4680e4aed729af9d6bad771e`
+- Frontend image: `8081148-chairman-cards-overlay`, built on cached image `12a38bb-offline-overlay`
 - Backend image: `5f694c6-offline-overlay`, built on cached image `12a38bb-offline-overlay`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-07 (retry LMK/prof ambulatory-card deployment after Komodo queue delay)
+- Last redeploy request: 2026-08-09 (add shared 070/072 sanatorium chairman cards)
 
 ## Architecture
 
