@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream backend fix: `fed881990eb36fa3cea78260b22a6f3c9adad63d`
+- Upstream backend fix: `1807cea5223362c15cf80be887b61eb143ecd0a5`
 - Frontend image: `8081148-lmk-ambulatory-handoff`, built on cached image `5f694c6-offline-overlay`
-- Backend image: `fed8819-ambulatory-header-overlay`, built on cached image `5f694c6-offline-overlay`
+- Backend image: `1807cea-ambulatory-yellow-fields-overlay`, built on cached image `5f694c6-offline-overlay`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-10 (refresh number and date in LMK/prof ambulatory extract header)
+- Last redeploy request: 2026-08-10 (fill every yellow data field in LMK/prof ambulatory extract)
 
 ## Architecture
 
