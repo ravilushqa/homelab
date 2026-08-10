@@ -16,7 +16,7 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:5f694c6-offline-overlay
+    image: vova-medcenter-backend:5f694c6-lmk-ambulatory-handoff
     pull_policy: build
     build:
       context: .
@@ -40,7 +40,7 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:8081148-chairman-cards-overlay
+    image: vova-medcenter-frontend:8081148-lmk-ambulatory-handoff
     pull_policy: build
     build:
       context: .
