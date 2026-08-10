@@ -40,15 +40,13 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:8081148-lmk-ambulatory-handoff
+    image: vova-medcenter-frontend:eb89fc7-070-072-research-fields
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        # 5f694c6 is the offline frontend base currently present on Komodo;
-        # 12a38bb is absent there, which makes rebuilds try Docker Hub and fail.
-        FROM vova-medcenter-frontend:5f694c6-offline-overlay
-        COPY frontend-overlay-8081148.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        FROM vova-medcenter-frontend:8081148-lmk-ambulatory-handoff
+        COPY frontend-overlay-eb89fc7.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped
