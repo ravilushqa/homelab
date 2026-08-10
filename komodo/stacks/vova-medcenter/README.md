@@ -4,12 +4,12 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream backend fix: `59f2d0b897338b2009ccf96f5eda1d11319fb6ec`
-- Upstream frontend fix: `59f2d0b897338b2009ccf96f5eda1d11319fb6ec`
-- Frontend image: `59f2d0b-persist-deleted-doctors`, built on cached image `eb89fc7-070-072-research-fields`
-- Backend image: `59f2d0b-persist-deleted-doctors`, built on cached image `1807cea-ambulatory-yellow-fields-overlay`
+- Upstream backend fix: `1807cea5223362c15cf80be887b61eb143ecd0a5`
+- Upstream frontend fix: `3018974987ce4c9a674b7d5785a56fcbe48cc945`
+- Frontend image: `3018974-lmk-ambulatory-live-v2`, built on cached image `59f2d0b-persist-deleted-doctors`
+- Backend image: `1807cea-ambulatory-yellow-fields-redeploy-v2`, built on cached image `59f2d0b-persist-deleted-doctors`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-10 (keep deleted doctor cards removed after refresh and service updates)
+- Last redeploy request: 2026-08-11 (remove legacy patient data from LMK ambulatory extract and restore LMK print routes)
 
 ## Architecture
 
