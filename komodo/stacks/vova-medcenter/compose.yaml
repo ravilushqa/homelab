@@ -16,13 +16,13 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:5f694c6-lmk-ambulatory-handoff
+    image: vova-medcenter-backend:fed8819-ambulatory-header-overlay
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-backend:12a38bb-offline-overlay
-        COPY backend-overlay-5f694c6.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
+        FROM vova-medcenter-backend:5f694c6-offline-overlay
+        COPY backend-overlay-fed8819.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
         RUN python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/'); p.unlink(); t.unlink()"
     container_name: vova-medcenter-backend
     restart: unless-stopped
