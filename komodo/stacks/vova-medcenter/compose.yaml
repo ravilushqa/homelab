@@ -45,7 +45,9 @@ services:
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-frontend:12a38bb-offline-overlay
+        # 5f694c6 is the offline frontend base currently present on Komodo;
+        # 12a38bb is absent there, which makes rebuilds try Docker Hub and fail.
+        FROM vova-medcenter-frontend:5f694c6-offline-overlay
         COPY frontend-overlay-8081148.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
