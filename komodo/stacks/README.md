@@ -24,6 +24,10 @@ Secrets are stored in Komodo Variables/Secrets — never in this repo.
 - `PAPERLESS_API_TOKEN`
 - `PAPERLESS_GPT_OPENAI_KEY`
 
+The `paperless-gpt-password-watchdog` sidecar scans documents tagged with
+`paperless-gpt-ocr-auto` every 15 minutes. When it detects a password-protected
+PDF, it removes only that auto-OCR tag so Paperless GPT does not block on it.
+
 ### bytestash
 - `BYTESTASH_JWT_SECRET`
 - `BYTESTASH_OIDC_CLIENT_ID`

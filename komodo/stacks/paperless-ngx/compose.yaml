@@ -111,6 +111,25 @@ services:
     depends_on:
       - webserver
 
+  paperless-gpt-password-watchdog:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.12-slim
+        WORKDIR /app
+        ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+        RUN pip install --no-cache-dir --root-user-action=ignore pymupdf requests
+        COPY scripts/paperless_gpt_password_watchdog.py /app/watchdog.py
+        CMD ["python", "/app/watchdog.py"]
+    restart: unless-stopped
+    depends_on:
+      - webserver
+    environment:
+      PAPERLESS_BASE_URL: "http://webserver:8000"
+      PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN}
+      AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
+      WATCHDOG_INTERVAL_SECONDS: "900"
+
 volumes:
   data:
   pgdata:
