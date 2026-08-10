@@ -7,9 +7,9 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Upstream backend fix: `1807cea5223362c15cf80be887b61eb143ecd0a5`
 - Upstream frontend fix: `3018974987ce4c9a674b7d5785a56fcbe48cc945`
 - Frontend image: `3018974-lmk-ambulatory-live-v2`, built on cached image `59f2d0b-persist-deleted-doctors`
-- Backend image: `1807cea-ambulatory-yellow-fields-redeploy-v2`, built on cached image `59f2d0b-persist-deleted-doctors`
+- Backend image: `1807cea-ambulatory-runtimepath-v3`, built on cached image `59f2d0b-persist-deleted-doctors`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-11 (remove legacy patient data from LMK ambulatory extract and restore LMK print routes)
+- Last redeploy request: 2026-08-11 (install the LMK ambulatory generator at the actual `/app/app` runtime path)
 
 ## Architecture
 
