@@ -40,13 +40,13 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:de9fa86-082-integrated
+    image: vova-medcenter-frontend:e292e43-research-fields
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-frontend:b631456-remove-quick-entry
-        COPY frontend-overlay-de9fa86.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        FROM vova-medcenter-frontend:de9fa86-082-integrated
+        COPY frontend-overlay-e292e43.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped

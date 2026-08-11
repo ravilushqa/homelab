@@ -5,11 +5,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
 - Upstream backend fix: `de9fa8664c931305a10cce6ecd2d28d87d62b4b9`
-- Upstream frontend fix: `de9fa8664c931305a10cce6ecd2d28d87d62b4b9`
-- Frontend image: `de9fa86-082-integrated`, built on cached image `b631456-remove-quick-entry`
+- Upstream frontend fix: `e292e433ba3a601dbd22327e0c6f3bab85b2f4a8` on integrated delivery `de9fa8664c931305a10cce6ecd2d28d87d62b4b9`
+- Frontend image: `e292e43-research-fields`, built on cached image `de9fa86-082-integrated`
 - Backend image: `de9fa86-082-integrated`, built on cached image `1020c63-download-no-doctors`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-11 (integrate certificate 082 country and shared numbering after PR 538)
+- Last redeploy request: 2026-08-11 (restore structured research fields in forms 070 and 072)
 
 ## Architecture
 
