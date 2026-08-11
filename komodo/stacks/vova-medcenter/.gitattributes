@@ -1,0 +1,8 @@
+/.gitattributes text eol=lf
+*.delete.sh text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.tar.gz.b64 text eol=lf
+*.yaml text eol=lf
+*.yaml.in text eol=lf

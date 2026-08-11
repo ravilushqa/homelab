@@ -95,14 +95,36 @@ jobs:
           echo "Timed out waiting for PR #$PR_NUMBER to merge."
           exit 1
 
+      - name: Check out merged main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Verify canonical vova-medcenter bases
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_URL: https://komodo.ravil.space
+        run: python3 .github/scripts/verify_vova_medcenter_live.py preflight
+
       - name: Deploy vova-medcenter in Komodo
         env:
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_URL: https://komodo.ravil.space
         run: |
-          RESPONSE=$(curl -sf -X POST https://komodo.ravil.space/execute \
+          RESPONSE=$(curl -fsS -X POST "$KOMODO_URL/execute" \
             -H "Content-Type: application/json" \
             -H "X-Api-Key: $KOMODO_API_KEY" \
             -H "X-Api-Secret: $KOMODO_API_SECRET" \
             -d '{"type":"DeployStack","params":{"stack":"vova-medcenter"}}')
-          echo "$RESPONSE" | jq '{success: .success}'
+          BODY="$RESPONSE" python3 -c 'import json, os, sys; sys.exit(json.loads(os.environ["BODY"]).get("success") is not True)'
+          echo "Komodo DeployStack reported success."
+
+      - name: Verify live vova-medcenter release
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_URL: https://komodo.ravil.space
+        run: python3 .github/scripts/verify_vova_medcenter_live.py postdeploy

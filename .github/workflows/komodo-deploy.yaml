@@ -32,22 +32,38 @@ jobs:
         env:
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_URL: http://192.168.1.166:9120
         run: |
           FAILED=0
           for STACK in ${{ steps.changed.outputs.stacks }}; do
             echo "Deploying stack: $STACK"
-            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://192.168.1.166:9120/execute \
+            if [ "$STACK" = "vova-medcenter" ]; then
+              if ! python3 .github/scripts/verify_vova_medcenter_live.py preflight; then
+                echo "FAIL: vova-medcenter canonical base preflight failed"
+                FAILED=1
+                continue
+              fi
+            fi
+
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "$KOMODO_URL/execute" \
               -H "Content-Type: application/json" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
               -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}")
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-            BODY=$(echo "$RESPONSE" | head -1)
-            if [ "$HTTP_CODE" -ne 200 ]; then
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            if [ "$HTTP_CODE" -ne 200 ] || ! BODY="$BODY" python3 -c 'import json, os, sys; sys.exit(json.loads(os.environ["BODY"]).get("success") is not True)'; then
               echo "FAIL: $STACK (HTTP $HTTP_CODE): $BODY"
               FAILED=1
             else
-              echo "OK: $STACK"
+              echo "Komodo DeployStack succeeded: $STACK"
+              if [ "$STACK" = "vova-medcenter" ] \
+                && ! python3 .github/scripts/verify_vova_medcenter_live.py postdeploy; then
+                echo "FAIL: vova-medcenter live image verification failed"
+                FAILED=1
+              else
+                echo "OK: $STACK"
+              fi
             fi
           done
           exit $FAILED
