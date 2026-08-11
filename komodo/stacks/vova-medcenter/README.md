@@ -5,11 +5,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
 - Upstream backend fix: `1020c63ded6f726d2e6ff01a6f70238ae06150a6`
-- Upstream frontend fix: `e161a3b2f95e4f4ea073e9447d527bd7d619a4ed`
-- Frontend image: `e161a3b-restore-072-layout`, built on cached image `1020c63-download-no-doctors`
+- Upstream frontend fix: `1020c63ded6f726d2e6ff01a6f70238ae06150a6` on layout `e161a3b2f95e4f4ea073e9447d527bd7d619a4ed`
+- Frontend image: `1020c63-download-doctors-cache-v2`, built on cached image `e161a3b-restore-072-layout`
 - Backend image: `1020c63-download-no-doctors`, built on cached image `053389b-082-current`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-11 (restore the previous 072 layout while keeping quick entry in 070)
+- Last redeploy request: 2026-08-11 (force browsers to load document downloads that do not recreate doctors)
 
 ## Architecture
 
