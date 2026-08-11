@@ -4,12 +4,12 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream backend fix: `1807cea5223362c15cf80be887b61eb143ecd0a5`
-- Upstream frontend fix: `3c018f3341ad2e5e142503ace5a6124cb22be85b`
-- Frontend image: `3c018f3-chairman-082`, built on cached image `59f2d0b-persist-deleted-doctors`
-- Backend image: `1807cea-ambulatory-runtimepath-v3`, built on cached image `59f2d0b-persist-deleted-doctors`
+- Upstream backend fix: `740e9a20463e69079c2c992d1f5a55177dc69286`
+- Upstream frontend fix: `740e9a20463e69079c2c992d1f5a55177dc69286`
+- Frontend image: `740e9a2-082-fields-number`, built on cached image `59f2d0b-persist-deleted-doctors`
+- Backend image: `740e9a2-082-fields-number`, built on cached image `59f2d0b-persist-deleted-doctors`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-11 (add the chairman card for certificate 082 with a single-click health-status selector)
+- Last redeploy request: 2026-08-11 (preserve certificate 082 input, print its entered country, and use the shared sequence number)
 
 ## Architecture
 
