@@ -40,14 +40,14 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:1020c63-download-doctors-cache-v2
+    image: vova-medcenter-frontend:b631456-remove-quick-entry
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-frontend:e161a3b-restore-072-layout
-        COPY frontend-overlay-1020c63-cache-v2.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
-        RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz && sed -i 's#app\.js?v=[^"<]*#app.js?v=20260811-document-download-doctors-v2#' /usr/share/nginx/html/demo/index.html
+        FROM vova-medcenter-frontend:1020c63-download-doctors-cache-v2
+        COPY frontend-overlay-b631456.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped
     depends_on:
