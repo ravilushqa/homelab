@@ -4,12 +4,12 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream backend fix: `053389b4a81eb5372a1f347a358593ecc2d772a7`
-- Upstream frontend fix: `053389b4a81eb5372a1f347a358593ecc2d772a7`
-- Frontend image: `053389b-082-current`, built on cached image `17c57ef-dynamic-doctors`
-- Backend image: `053389b-082-current`, built on cached image `73849ed-suppressed-doctors`
+- Upstream backend fix: `1020c63ded6f726d2e6ff01a6f70238ae06150a6`
+- Upstream frontend fix: `1020c63ded6f726d2e6ff01a6f70238ae06150a6`
+- Frontend image: `1020c63-download-no-doctors`, built on cached image `053389b-082-current`
+- Backend image: `1020c63-download-no-doctors`, built on cached image `053389b-082-current`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-11 (restore certificate 082 country and shared numbering on top of current doctor fixes)
+- Last redeploy request: 2026-08-11 (make document downloads read-only for doctor exam state)
 
 ## Architecture
 
