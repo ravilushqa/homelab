@@ -16,16 +16,16 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:de9fa8664c93-cum-ab9507953fa6
+    image: vova-medcenter-backend:6c688128f592-cum-162f344db603
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
         FROM vova-medcenter-backend:5f694c6-offline-overlay
-        LABEL org.opencontainers.image.revision="de9fa8664c931305a10cce6ecd2d28d87d62b4b9"
-        LABEL space.ravil.vova-medcenter.overlay-sha256="ab9507953fa60ecfe6ffb8ebb8206dcd0f5ffafd5edeb4979c1f48687019d4d1"
-        COPY backend-overlay-de9fa8664c93-cum-ab9507953fa6.delete.sh /tmp/apply-overlay-deletions.sh
-        COPY backend-overlay-de9fa8664c93-cum-ab9507953fa6.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
+        LABEL org.opencontainers.image.revision="6c688128f592f06dd36285cf33ed99632f34fdb8"
+        LABEL space.ravil.vova-medcenter.overlay-sha256="162f344db603f1afa6986cf20d3d35b46a6893451fffc1ae7968ea468fa0cca4"
+        COPY backend-overlay-6c688128f592-cum-162f344db603.delete.sh /tmp/apply-overlay-deletions.sh
+        COPY backend-overlay-6c688128f592-cum-162f344db603.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
         RUN sh /tmp/apply-overlay-deletions.sh \
             && python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/', filter='data'); p.unlink(); t.unlink()" \
             && rm -f /tmp/apply-overlay-deletions.sh
@@ -45,16 +45,16 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:de9fa8664c93-cum-9c3f2bbd8c96
+    image: vova-medcenter-frontend:6c688128f592-cum-211bcfa5a911
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
         FROM vova-medcenter-frontend:5f694c6-offline-overlay
-        LABEL org.opencontainers.image.revision="de9fa8664c931305a10cce6ecd2d28d87d62b4b9"
-        LABEL space.ravil.vova-medcenter.overlay-sha256="9c3f2bbd8c9643eaf6c096e218e1abde3e0ef8473cb5f36f224936502ac1e81c"
-        COPY frontend-overlay-de9fa8664c93-cum-9c3f2bbd8c96.delete.sh /tmp/apply-overlay-deletions.sh
-        COPY frontend-overlay-de9fa8664c93-cum-9c3f2bbd8c96.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        LABEL org.opencontainers.image.revision="6c688128f592f06dd36285cf33ed99632f34fdb8"
+        LABEL space.ravil.vova-medcenter.overlay-sha256="211bcfa5a9116e6a1d52c6d617c0b185b07df5694df93c0a846ddc30eaead4ac"
+        COPY frontend-overlay-6c688128f592-cum-211bcfa5a911.delete.sh /tmp/apply-overlay-deletions.sh
+        COPY frontend-overlay-6c688128f592-cum-211bcfa5a911.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN sh /tmp/apply-overlay-deletions.sh \
             && base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz \
             && tar -xzf /tmp/frontend-overlay.tar.gz -C / \

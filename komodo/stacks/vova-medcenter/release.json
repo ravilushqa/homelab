@@ -1,12 +1,12 @@
 {
   "backend": {
-    "archive": "backend-overlay-de9fa8664c93-cum-ab9507953fa6.tar.gz.b64",
-    "archive_sha256": "ef6d1e8e2aa1a853b2937e759174c74500183c9d0a2ead607d71826e507ed2b1",
-    "delete_script": "backend-overlay-de9fa8664c93-cum-ab9507953fa6.delete.sh",
+    "archive": "backend-overlay-6c688128f592-cum-162f344db603.tar.gz.b64",
+    "archive_sha256": "15a66c49fa86a0a36e7839fe671bbc67ef49e69faee40ca192140b2206992b6e",
+    "delete_script": "backend-overlay-6c688128f592-cum-162f344db603.delete.sh",
     "delete_script_sha256": "a727cc08139d452d078ed6de728d218bc91d94fa339b6833d0d3aa84c231d0e7",
-    "image": "vova-medcenter-backend:de9fa8664c93-cum-ab9507953fa6",
-    "overlay_sha256": "ab9507953fa60ecfe6ffb8ebb8206dcd0f5ffafd5edeb4979c1f48687019d4d1",
-    "revision": "de9fa8664c931305a10cce6ecd2d28d87d62b4b9"
+    "image": "vova-medcenter-backend:6c688128f592-cum-162f344db603",
+    "overlay_sha256": "162f344db603f1afa6986cf20d3d35b46a6893451fffc1ae7968ea468fa0cca4",
+    "revision": "6c688128f592f06dd36285cf33ed99632f34fdb8"
   },
   "base": {
     "backend_image": "vova-medcenter-backend:5f694c6-offline-overlay",
@@ -14,13 +14,13 @@
     "revision": "5f694c64f2e5127aabdee1adc1ca5c678325ef34"
   },
   "frontend": {
-    "archive": "frontend-overlay-de9fa8664c93-cum-9c3f2bbd8c96.tar.gz.b64",
-    "archive_sha256": "8dfafd948df02c95a9f346fe42e626226a4c8fffe7a8d1fa283223feafd7ad10",
-    "delete_script": "frontend-overlay-de9fa8664c93-cum-9c3f2bbd8c96.delete.sh",
+    "archive": "frontend-overlay-6c688128f592-cum-211bcfa5a911.tar.gz.b64",
+    "archive_sha256": "3aa7fd5c4e7dbb95b1ce1a33cbc9aca3046150c005028218b7e77d80a8d90bef",
+    "delete_script": "frontend-overlay-6c688128f592-cum-211bcfa5a911.delete.sh",
     "delete_script_sha256": "2ee57ec968598277a71f1d5231a25d7379689fb1f58c6e69aa9c4977fb0ad696",
-    "image": "vova-medcenter-frontend:de9fa8664c93-cum-9c3f2bbd8c96",
-    "overlay_sha256": "9c3f2bbd8c9643eaf6c096e218e1abde3e0ef8473cb5f36f224936502ac1e81c",
-    "revision": "de9fa8664c931305a10cce6ecd2d28d87d62b4b9"
+    "image": "vova-medcenter-frontend:6c688128f592-cum-211bcfa5a911",
+    "overlay_sha256": "211bcfa5a9116e6a1d52c6d617c0b185b07df5694df93c0a846ddc30eaead4ac",
+    "revision": "6c688128f592f06dd36285cf33ed99632f34fdb8"
   },
   "schema_version": 1
 }

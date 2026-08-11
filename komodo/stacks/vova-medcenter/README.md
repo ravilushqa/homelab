@@ -8,8 +8,8 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Canonical backend base: `vova-medcenter-backend:5f694c6-offline-overlay`
 - Canonical frontend base: `vova-medcenter-frontend:5f694c6-offline-overlay`
 - Canonical base source: `5f694c64f2e5127aabdee1adc1ca5c678325ef34`
-- Current backend source: `de9fa8664c931305a10cce6ecd2d28d87d62b4b9`
-- Current frontend source: `de9fa8664c931305a10cce6ecd2d28d87d62b4b9`
+- Current backend source: `6c688128f592f06dd36285cf33ed99632f34fdb8`
+- Current frontend source: `6c688128f592f06dd36285cf33ed99632f34fdb8`
 
 ## Release model
 
