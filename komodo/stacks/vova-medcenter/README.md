@@ -4,12 +4,12 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream backend fix: `17c57efbd67f3f1300315ea5accbe56a32354ca8`
+- Upstream backend fix: `73849eda7fb53daa62bd2a5cffbbb16ceb02273b`
 - Upstream frontend fix: `17c57efbd67f3f1300315ea5accbe56a32354ca8`
 - Frontend image: `17c57ef-dynamic-doctors`, built on cached image `a7a6dfc-client-date`
-- Backend image: `17c57ef-dynamic-doctors`, built on cached image `740e9a2-082-fields-number`
+- Backend image: `73849ed-suppressed-doctors`, built on cached image `17c57ef-dynamic-doctors`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-11 (use doctors from the current encounter when generating ambulatory extracts)
+- Last redeploy request: 2026-08-11 (keep deleted doctors suppressed during ambulatory document autofill)
 
 ## Architecture
 
