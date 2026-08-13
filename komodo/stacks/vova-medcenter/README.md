@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application fix: `e0ed8bc3b725e00c1df9d149effa52b135927f2e`
+- Upstream application fix: `f57b39456b0dd4c7b858bda4b2cd178252037121`
 - Frontend image: `e0ed8bc-doctor-directory`, built on cached image `e292e43-research-fields`
-- Backend image: `e0ed8bc-doctor-directory`, built on cached image `de9fa86-082-integrated`
+- Backend image: `f57b394-migration-hotfix`, built on cached image `e0ed8bc-doctor-directory`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-13 (persist doctor names and apply them to generated documents)
+- Last redeploy request: 2026-08-13 (repair Alembic migration chain and restore backend startup)
 
 ## Architecture
 
