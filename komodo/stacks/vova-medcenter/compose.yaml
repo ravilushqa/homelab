@@ -16,13 +16,13 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:f57b394-migration-hotfix
+    image: vova-medcenter-backend:c92c174-lmk-blank-hotfix
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-backend:e0ed8bc-doctor-directory
-        COPY backend-overlay-f57b394.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
+        FROM vova-medcenter-backend:f57b394-migration-hotfix
+        COPY backend-overlay-c92c174.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
         RUN python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/'); p.unlink(); t.unlink()"
     container_name: vova-medcenter-backend
     restart: unless-stopped
@@ -40,13 +40,13 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:e0ed8bc-doctor-directory
+    image: vova-medcenter-frontend:c92c174-lmk-blank-hotfix
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
-        FROM vova-medcenter-frontend:e292e43-research-fields
-        COPY frontend-overlay-e0ed8bc.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        FROM vova-medcenter-frontend:e0ed8bc-doctor-directory
+        COPY frontend-overlay-c92c174.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped
