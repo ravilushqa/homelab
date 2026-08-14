@@ -40,13 +40,13 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:c92c174-lmk-blank-hotfix
+    image: vova-medcenter-frontend:efb90d7-lmk-book-template
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
         FROM vova-medcenter-frontend:e0ed8bc-doctor-directory
-        COPY frontend-overlay-c92c174.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
+        COPY frontend-overlay-efb90d7.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
         RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
     container_name: vova-medcenter-frontend
     restart: unless-stopped
