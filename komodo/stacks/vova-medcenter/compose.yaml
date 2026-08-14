@@ -16,14 +16,8 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:63527d5-lmk-print-variant
-    pull_policy: build
-    build:
-      context: .
-      dockerfile_inline: |
-        FROM vova-medcenter-backend:c92c174-lmk-blank-hotfix
-        COPY backend-overlay-63527d5.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
-        RUN python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/'); p.unlink(); t.unlink()"
+    image: ghcr.io/zent7/vova-medcenter-backend:393d42f909fb35d759076020c596cb7568efe4b3@sha256:43f6d9143d1f1c5c4f91fbbeb7b1a75acd102ae2fd2e6bcd7dbe5f3603f5acb7
+    pull_policy: always
     container_name: vova-medcenter-backend
     restart: unless-stopped
     depends_on:
@@ -40,18 +34,13 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: vova-medcenter-frontend:efb90d7-lmk-book-template
-    pull_policy: build
-    build:
-      context: .
-      dockerfile_inline: |
-        FROM vova-medcenter-frontend:e0ed8bc-doctor-directory
-        COPY frontend-overlay-efb90d7.tar.gz.b64 /tmp/frontend-overlay.tar.gz.b64
-        RUN base64 -d /tmp/frontend-overlay.tar.gz.b64 > /tmp/frontend-overlay.tar.gz && tar -xzf /tmp/frontend-overlay.tar.gz -C / && rm -f /tmp/frontend-overlay.tar.gz.b64 /tmp/frontend-overlay.tar.gz
+    image: ghcr.io/zent7/vova-medcenter-frontend:393d42f909fb35d759076020c596cb7568efe4b3@sha256:3f053d51767e061fcf63137cafc00e865a45184a0701b40f2126287942ceba96
+    pull_policy: always
     container_name: vova-medcenter-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - default
       - traefik
@@ -62,6 +51,42 @@ services:
       - "traefik.http.routers.vova-medcenter.tls.certresolver=cloudflare"
       - "traefik.http.services.vova-medcenter.loadbalancer.server.port=80"
       - "traefik.docker.network=traefik_default"
+
+  release-verifier:
+    image: alpine:3.20
+    pull_policy: always
+    container_name: vova-medcenter-release-verifier
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    environment:
+      EXPECTED_REVISION: 393d42f909fb35d759076020c596cb7568efe4b3
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        while true; do
+          backend_status="$$(wget -qO- http://backend:8000/api/v1/health || true)"
+          frontend_status="$$(wget -qO- http://frontend/build.json || true)"
+          if echo "$${backend_status}" | grep -Fq "\"build_revision\":\"$${EXPECTED_REVISION}\"" \
+            && echo "$${frontend_status}" | grep -Fq "\"build_revision\":\"$${EXPECTED_REVISION}\""; then
+            touch /tmp/release-verified
+            exec tail -f /dev/null
+          fi
+          echo "Waiting for backend and frontend revision $${EXPECTED_REVISION}" >&2
+          sleep 5
+        done
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/release-verified"]
+      interval: 5s
+      timeout: 2s
+      start_period: 60s
+      retries: 6
+    labels:
+      - "traefik.enable=false"
 
 volumes:
   vova-medcenter-postgres:

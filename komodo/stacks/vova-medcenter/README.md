@@ -4,19 +4,22 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application fix: `63527d5c49a753bd81ba6ed71d5a700c377cc295`
-- Frontend image: `efb90d7-lmk-book-template`, built on cached image `e0ed8bc-doctor-directory`
-- Backend image: `63527d5-lmk-print-variant`, built on cached image `c92c174-lmk-blank-hotfix`
-- Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-14 (support the LMK workbook print variant)
+- Upstream application revision: `393d42f909fb35d759076020c596cb7568efe4b3`
+- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:393d42f909fb35d759076020c596cb7568efe4b3@sha256:3f053d51767e061fcf63137cafc00e865a45184a0701b40f2126287942ceba96`
+- Backend image: `ghcr.io/zent7/vova-medcenter-backend:393d42f909fb35d759076020c596cb7568efe4b3@sha256:43f6d9143d1f1c5c4f91fbbeb7b1a75acd102ae2fd2e6bcd7dbe5f3603f5acb7`
+- Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag pinned to its OCI digest
+- Last redeploy request: 2026-08-14 (replace local overlay chains with GHCR images)
 
 ## Architecture
 
 - `db`: PostgreSQL 16 for demo data.
 - `backend`: FastAPI app. Runs Alembic migrations on start, then Uvicorn on `:8000`.
 - `frontend`: nginx serving the Vite build and proxying `/api/` to `backend:8000`.
+- `release-verifier`: stays healthy only after both running services report the expected embedded Git revision.
 
-The upstream repo currently ships only a local Windows/demo compose for Postgres, so this stack uses `dockerfile_inline` to keep the Komodo deployment self-contained while building directly from the pinned upstream Git commit.
+The stack never builds application images on the server. The application repository publishes both images to GHCR, and this compose file pins them to one full source commit. Overlay archives and dependencies on transient local images are intentionally unsupported.
+
+The two GHCR packages must be public, or the Docker host must have a read-only GHCR login. A missing image or registry authorization error fails before the services are recreated. A stale running service fails the `release-verifier` healthcheck because its embedded revision does not match the compose revision.
 
 ## Traefik
 
@@ -47,8 +50,11 @@ Expected response shape:
 ## Verification
 
 ```bash
+./verify-deployment.sh 393d42f909fb35d759076020c596cb7568efe4b3
 curl -sk -o /dev/null -w '%{http_code}\n' https://vova-medcenter.ravil.space/
 curl -sk https://vova-medcenter.ravil.space/api/v1/health
 curl -sk 'https://vova-medcenter.ravil.space/api/v1/clients?limit=1'
 ssh 192.168.1.166 'docker logs traefik --tail 200 | grep -i vova-medcenter | tail -20'
 ```
+
+`verify-deployment.sh` is the strict host-side post-deploy check. It compares the configured image references from the live containers with the expected GHCR references and then verifies both public build revisions.
