@@ -16,13 +16,13 @@ services:
       retries: 30
 
   backend:
-    image: vova-medcenter-backend:27fc3b8-pool-certificate-number
+    image: vova-medcenter-backend:63527d5-lmk-print-variant
     pull_policy: build
     build:
       context: .
       dockerfile_inline: |
         FROM vova-medcenter-backend:c92c174-lmk-blank-hotfix
-        COPY backend-overlay-27fc3b8.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
+        COPY backend-overlay-63527d5.tar.gz.b64 /tmp/backend-overlay.tar.gz.b64
         RUN python -c "import base64,pathlib,tarfile; p=pathlib.Path('/tmp/backend-overlay.tar.gz.b64'); t=pathlib.Path('/tmp/backend-overlay.tar.gz'); t.write_bytes(base64.b64decode(p.read_bytes())); tarfile.open(t).extractall('/'); p.unlink(); t.unlink()"
     container_name: vova-medcenter-backend
     restart: unless-stopped
