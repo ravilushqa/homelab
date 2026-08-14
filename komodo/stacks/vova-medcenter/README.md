@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application fix: `efb90d7322f85f20ecd8359638c50a43af67b6fa`
+- Upstream application fix: `27fc3b85948d592596c9746ea83e6f011cbab8f3`
 - Frontend image: `efb90d7-lmk-book-template`, built on cached image `e0ed8bc-doctor-directory`
-- Backend image: `c92c174-lmk-blank-hotfix`, built on cached image `f57b394-migration-hotfix`
+- Backend image: `27fc3b8-pool-certificate-number`, built on cached image `c92c174-lmk-blank-hotfix`
 - Source and template overlays are bundled in this stack directory; the build performs no GitHub, registry, npm, or pip download
-- Last redeploy request: 2026-08-14 (select the LMK book template instead of the LMK certificate)
+- Last redeploy request: 2026-08-14 (use the selected blank number in pool certificates)
 
 ## Architecture
 
