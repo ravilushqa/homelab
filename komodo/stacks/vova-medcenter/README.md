@@ -4,11 +4,11 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application revision: `393d42f909fb35d759076020c596cb7568efe4b3`
-- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:393d42f909fb35d759076020c596cb7568efe4b3@sha256:3f053d51767e061fcf63137cafc00e865a45184a0701b40f2126287942ceba96`
-- Backend image: `ghcr.io/zent7/vova-medcenter-backend:393d42f909fb35d759076020c596cb7568efe4b3@sha256:43f6d9143d1f1c5c4f91fbbeb7b1a75acd102ae2fd2e6bcd7dbe5f3603f5acb7`
+- Upstream application revision: `3c306ba392a715fcd77c77ee95762af62a9854fd`
+- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:3c306ba392a715fcd77c77ee95762af62a9854fd@sha256:f13de12628da600bf0423f5213ba74754c94da86cd7302f28bf5049f14e8614a`
+- Backend image: `ghcr.io/zent7/vova-medcenter-backend:3c306ba392a715fcd77c77ee95762af62a9854fd@sha256:58d481f47f168b3c30eb946cc404bd23816dec594de8d38bf3ab41f9501f6634`
 - Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag pinned to its OCI digest
-- Last redeploy request: 2026-08-14 (replace local overlay chains with GHCR images)
+- Last redeploy request: 2026-08-15 (add issued blank history grouped by service)
 
 ## Architecture
 
@@ -50,7 +50,7 @@ Expected response shape:
 ## Verification
 
 ```bash
-./verify-deployment.sh 393d42f909fb35d759076020c596cb7568efe4b3
+./verify-deployment.sh 3c306ba392a715fcd77c77ee95762af62a9854fd
 curl -sk -o /dev/null -w '%{http_code}\n' https://vova-medcenter.ravil.space/
 curl -sk https://vova-medcenter.ravil.space/api/v1/health
 curl -sk 'https://vova-medcenter.ravil.space/api/v1/clients?limit=1'
