@@ -5,8 +5,8 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
 - Upstream application revision: `aa0f22fd7f8ac821abdb998515fc86d3e36f1623`
-- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:e8e6957334d806a2eaf0821b2f0d7db096976ad5`
-- Backend image: `ghcr.io/zent7/vova-medcenter-backend:e8e6957334d806a2eaf0821b2f0d7db096976ad5`
+- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:aa0f22fd7f8ac821abdb998515fc86d3e36f1623@sha256:e2ca5dc2b7893dcb7391129763c4a516f4a1dda40677aad21556ee4d3f3cd66f`
+- Backend image: `ghcr.io/zent7/vova-medcenter-backend:aa0f22fd7f8ac821abdb998515fc86d3e36f1623@sha256:0616b1a85373e746e2c2059f08ce811f398cc9836504e05ec52d9e594adc5803`
 - Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag pinned to its OCI digest
 - Last redeploy request: 2026-08-19 (keep only the approved certificate list)
 
