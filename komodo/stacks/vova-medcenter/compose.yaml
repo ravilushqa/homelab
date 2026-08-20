@@ -16,7 +16,7 @@ services:
       retries: 30
 
   backend:
-    image: ghcr.io/zent7/vova-medcenter-backend:aa0f22fd7f8ac821abdb998515fc86d3e36f1623@sha256:0616b1a85373e746e2c2059f08ce811f398cc9836504e05ec52d9e594adc5803
+    image: ghcr.io/zent7/vova-medcenter-backend:c71d55c630f5ab344b072bbe34df83896d89eafe
     pull_policy: always
     container_name: vova-medcenter-backend
     restart: unless-stopped
@@ -28,13 +28,15 @@ services:
       FRONTEND_ORIGIN: https://vova-medcenter.ravil.space
       PUBLIC_FRONTEND_ORIGIN: https://vova-medcenter.ravil.space
       GENERATED_DOCUMENTS_DIR: /app/storage/generated
+      DOCUMENT_TEMPLATE_OVERRIDES_DIR: /app/storage/template-overrides
     volumes:
       - vova-medcenter-generated:/app/storage/generated
+      - vova-medcenter-template-overrides:/app/storage/template-overrides
     labels:
       - "traefik.enable=false"
 
   frontend:
-    image: ghcr.io/zent7/vova-medcenter-frontend:aa0f22fd7f8ac821abdb998515fc86d3e36f1623@sha256:e2ca5dc2b7893dcb7391129763c4a516f4a1dda40677aad21556ee4d3f3cd66f
+    image: ghcr.io/zent7/vova-medcenter-frontend:c71d55c630f5ab344b072bbe34df83896d89eafe
     pull_policy: always
     container_name: vova-medcenter-frontend
     restart: unless-stopped
@@ -63,7 +65,7 @@ services:
       frontend:
         condition: service_healthy
     environment:
-      EXPECTED_REVISION: aa0f22fd7f8ac821abdb998515fc86d3e36f1623
+      EXPECTED_REVISION: c71d55c630f5ab344b072bbe34df83896d89eafe
     command:
       - /bin/sh
       - -ec
@@ -91,6 +93,7 @@ services:
 volumes:
   vova-medcenter-postgres:
   vova-medcenter-generated:
+  vova-medcenter-template-overrides:
 
 networks:
   traefik:
