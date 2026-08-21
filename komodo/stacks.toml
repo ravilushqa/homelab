@@ -40,6 +40,18 @@ environment = """
 ACCESS_TOKEN = [[GITHUB_PAT]]
 """
 
+[[stack]]
+name = "pocketid"
+description = "OIDC provider — router-only proxy to LXC 104"
+tags = ["infra", "auth"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/pocketid"
+
 # ─── Monitoring ──────────────────────────────────────────────────
 
 [[stack]]
