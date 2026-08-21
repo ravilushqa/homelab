@@ -1,0 +1,18 @@
+services:
+  pocketid:
+    image: traefik/whoami
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pocketid.rule=Host(`pocketid.ravil.space`)"
+      - "traefik.http.routers.pocketid.entrypoints=websecure"
+      - "traefik.http.routers.pocketid.tls.certresolver=cloudflare"
+      # No OIDC — PocketID is the OIDC provider itself
+      - "traefik.http.services.pocketid-svc.loadbalancer.server.url=http://192.168.1.112:1411"
+      - "traefik.http.services.pocketid-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true
