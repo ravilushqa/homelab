@@ -53,26 +53,28 @@ branch = "main"
 run_directory = "komodo/stacks/pocketid"
 
 [[stack]]
-<<<<<<< HEAD
 name = "proxmox"
 description = "Proxmox VE web UI — router-only proxy to 192.168.1.100:8006"
 tags = ["infra"]
-=======
-name = "ha"
-description = "Home Assistant — router-only proxy to 192.168.1.153:8123"
-tags = ["infra", "home-automation"]
->>>>>>> 7544618 (feat: migrate home-assistant ingress from K8s to Komodo/Traefik)
 deploy = true
 auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
-<<<<<<< HEAD
 run_directory = "komodo/stacks/proxmox"
-=======
+
+[[stack]]
+name = "ha"
+description = "Home Assistant — router-only proxy to 192.168.1.153:8123"
+tags = ["infra", "home-automation"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
 run_directory = "komodo/stacks/ha"
->>>>>>> 7544618 (feat: migrate home-assistant ingress from K8s to Komodo/Traefik)
 
 # ─── Monitoring ──────────────────────────────────────────────────
 
