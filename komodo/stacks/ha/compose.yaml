@@ -1,0 +1,18 @@
+services:
+  ha:
+    image: traefik/whoami
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ha.rule=Host(`ha.ravil.space`)"
+      - "traefik.http.routers.ha.entrypoints=websecure"
+      - "traefik.http.routers.ha.tls.certresolver=cloudflare"
+      # No OIDC — Home Assistant has its own auth
+      - "traefik.http.services.ha-svc.loadbalancer.server.url=http://192.168.1.153:8123"
+      - "traefik.http.services.ha-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true
