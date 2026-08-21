@@ -1,0 +1,41 @@
+services:
+  guest-door-access:
+    build:
+      context: .
+    container_name: guest-door-access
+    restart: unless-stopped
+    environment:
+      HA_URL: ${HA_URL}
+      HA_TOKEN: ${HA_TOKEN}
+      ACCESS_TOKEN: ${ACCESS_TOKEN}
+      PIN: ${PIN}
+      ACCESS_START: ${ACCESS_START}
+      ACCESS_END: ${ACCESS_END}
+      RATE_LIMIT_SECONDS: ${RATE_LIMIT_SECONDS:-10}
+      BUILDING_ENTITY: ${BUILDING_ENTITY:-button.comelit_default_open_door}
+      BUILDING_DOMAIN: ${BUILDING_DOMAIN:-button}
+      BUILDING_SERVICE: ${BUILDING_SERVICE:-press}
+      APARTMENT_ENTITY: ${APARTMENT_ENTITY:-button.home_door_unlatch}
+      APARTMENT_DOMAIN: ${APARTMENT_DOMAIN:-button}
+      APARTMENT_SERVICE: ${APARTMENT_SERVICE:-press}
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.guest-door-access.rule=Host(`guest-access.ravil.space`)"
+      - "traefik.http.routers.guest-door-access.entrypoints=websecure"
+      - "traefik.http.routers.guest-door-access.tls.certresolver=cloudflare"
+      - "traefik.http.routers.guest-door-access.middlewares=guest-door-access-ratelimit@docker,guest-door-access-security@docker"
+      - "traefik.http.middlewares.guest-door-access-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.guest-door-access-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.guest-door-access-security.headers.contenttypenosniff=true"
+      - "traefik.http.middlewares.guest-door-access-security.headers.framedeny=true"
+      - "traefik.http.middlewares.guest-door-access-security.headers.stsseconds=31536000"
+      - "traefik.http.middlewares.guest-door-access-security.headers.stsincludesubdomains=true"
+      - "traefik.http.services.guest-door-access.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
+
+networks:
+  traefik:
+    name: traefik_default
+    external: true

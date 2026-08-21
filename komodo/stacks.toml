@@ -40,6 +40,40 @@ environment = """
 ACCESS_TOKEN = [[GITHUB_PAT]]
 """
 
+[[stack]]
+name = "pocketid"
+description = "OIDC provider — router-only proxy to LXC 104"
+tags = ["infra", "auth"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/pocketid"
+
+[[stack]]
+<<<<<<< HEAD
+name = "proxmox"
+description = "Proxmox VE web UI — router-only proxy to 192.168.1.100:8006"
+tags = ["infra"]
+=======
+name = "ha"
+description = "Home Assistant — router-only proxy to 192.168.1.153:8123"
+tags = ["infra", "home-automation"]
+>>>>>>> 7544618 (feat: migrate home-assistant ingress from K8s to Komodo/Traefik)
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+<<<<<<< HEAD
+run_directory = "komodo/stacks/proxmox"
+=======
+run_directory = "komodo/stacks/ha"
+>>>>>>> 7544618 (feat: migrate home-assistant ingress from K8s to Komodo/Traefik)
+
 # ─── Monitoring ──────────────────────────────────────────────────
 
 [[stack]]
@@ -147,7 +181,7 @@ DB_DATABASE_NAME = [[DB_DATABASE_NAME]]
 DB_USERNAME = [[DB_USERNAME]]
 DB_PASSWORD = [[DB_PASSWORD]]
 UPLOAD_LOCATION = [[UPLOAD_LOCATION]]
-IMMICH_VERSION = v2.7.5
+IMMICH_VERSION = v3.1.0
 """
 
 [[stack]]
@@ -239,18 +273,6 @@ BYTESTASH_OIDC_CLIENT_SECRET = [[BYTESTASH_OIDC_CLIENT_SECRET]]
 """
 
 [[stack]]
-name = "s-pdf"
-description = "Self-hosted PDF tools"
-tags = ["tools"]
-deploy = true
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/s-pdf"
-
-[[stack]]
 name = "ntfy"
 description = "Push notification service"
 tags = ["tools"]
@@ -276,6 +298,27 @@ run_directory = "komodo/stacks/honcho"
 environment = """
 GEMINI_API_KEY = [[GEMINI_API_KEY]]
 HONCHO_DB_PASSWORD = [[HONCHO_DB_PASSWORD]]
+"""
+
+[[stack]]
+name = "guest-door-access"
+description = "Public guest door access app for HomeExchange guests"
+tags = ["home-assistant", "guest-access"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/guest-door-access"
+environment = """
+HA_TOKEN = [[GUEST_DOOR_HA_TOKEN]]
+ACCESS_TOKEN = [[GUEST_DOOR_ACCESS_TOKEN]]
+PIN = [[GUEST_DOOR_PIN]]
+HA_URL = https://ha.ravil.space
+ACCESS_START = [[GUEST_DOOR_ACCESS_START]]
+ACCESS_END = [[GUEST_DOOR_ACCESS_END]]
+RATE_LIMIT_SECONDS = 10
 """
 
 [[stack]]
@@ -349,6 +392,23 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/hermes"
+
+# ─── Communication ───────────────────────────────────────────────
+
+[[stack]]
+name = "mattermost"
+description = "Self-hosted team messaging (Mattermost Team Edition)"
+tags = ["communication", "productivity"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/mattermost"
+environment = """
+MATTERMOST_DB_PASSWORD = [[MATTERMOST_DB_PASSWORD]]
+"""
 
 [[stack]]
 name = "hermes-webui"

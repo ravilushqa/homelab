@@ -14,10 +14,7 @@ tcp:
         || HostSNI(`it-tools.ravil.space`)
         || HostSNI(`inbox-zero.ravil.space`)
         || HostSNI(`changedetection.ravil.space`)
-        || HostSNI(`ha.ravil.space`)
         || HostSNI(`openwebui.ravil.space`)
-        || HostSNI(`pocketid.ravil.space`)
-        || HostSNI(`proxmox.ravil.space`)
       service: k8s-tcp-service
       priority: 100
       tls:

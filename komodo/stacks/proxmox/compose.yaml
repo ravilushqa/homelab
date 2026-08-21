@@ -1,0 +1,19 @@
+services:
+  proxmox:
+    image: traefik/whoami
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.proxmox.rule=Host(`proxmox.ravil.space`)"
+      - "traefik.http.routers.proxmox.entrypoints=websecure"
+      - "traefik.http.routers.proxmox.tls.certresolver=cloudflare"
+      # No OIDC — Proxmox has its own PAM/PVE auth
+      - "traefik.http.services.proxmox-svc.loadbalancer.server.url=https://192.168.1.100:8006"
+      - "traefik.http.services.proxmox-svc.loadbalancer.serverstransport=proxmox@file"
+      - "traefik.http.services.proxmox-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true

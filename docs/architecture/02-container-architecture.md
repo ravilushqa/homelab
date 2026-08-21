@@ -250,7 +250,6 @@ Services deployed as Docker compose stacks managed by Komodo. Traffic is routed 
 - **Your Spotify** — Spotify stats (`komodo/stacks/your_spotify/`)
 - **RSSHub** — RSS feed generator (`komodo/stacks/rsshub/`)
 - **Nextflux** — RSS reader frontend (`komodo/stacks/nextflux/`)
-- **S-PDF** — PDF tools (`komodo/stacks/s-pdf/`)
 - **Dozzle** — Container log viewer (`komodo/stacks/dozzle/`)
 
 ## Service Communication Patterns

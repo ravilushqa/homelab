@@ -1,0 +1,43 @@
+name: Stale PRs
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # daily at 4am UTC (6am Berlin)
+  workflow_dispatch:      # manual trigger for testing
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v11
+        with:
+          # PR config
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+          stale-pr-label: stale
+          close-pr-label: wontfix
+          exempt-pr-labels: pinned,security,do-not-stale
+
+          # Messages
+          stale-pr-message: >
+            👋 This PR has been marked as **stale** due to 30 days of inactivity.
+            If no activity occurs within 7 days, it will be automatically closed.
+            Feel free to keep it open by pushing a new commit or leaving a comment.
+
+          close-pr-message: >
+            🔒 Closing as stale. This PR has had no activity for 37+ days.
+            If this is still relevant, feel free to reopen or open a new PR.
+
+          # Don't mark issues (only PRs)
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+
+          # Batch size
+          operations-per-run: 30
+
+          # Enable debug (shows which PRs would be affected on dry-run)
+          debug-only: false

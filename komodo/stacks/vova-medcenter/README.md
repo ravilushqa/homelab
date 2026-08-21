@@ -4,15 +4,22 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream commit: `c511d2668305745ce47656762fe3b56ad916eb81`
+- Upstream application revision: `00938aa0a80beeaabd8991671c6b9bc77eedd760`
+- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:00938aa0a80beeaabd8991671c6b9bc77eedd760`
+- Backend image: `ghcr.io/zent7/vova-medcenter-backend:00938aa0a80beeaabd8991671c6b9bc77eedd760`
+- Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag.
+- Last redeploy request: 2026-08-20 (fix LMK blank series scope)
 
 ## Architecture
 
 - `db`: PostgreSQL 16 for demo data.
 - `backend`: FastAPI app. Runs Alembic migrations on start, then Uvicorn on `:8000`.
 - `frontend`: nginx serving the Vite build and proxying `/api/` to `backend:8000`.
+- `release-verifier`: stays healthy only after both running services report the expected embedded Git revision.
 
-The upstream repo currently ships only a local Windows/demo compose for Postgres, so this stack uses `dockerfile_inline` to keep the Komodo deployment self-contained while building directly from the pinned upstream Git commit.
+The stack never builds application images on the server. The application repository publishes both images to GHCR, and this compose file pins them to one full source commit. Overlay archives and dependencies on transient local images are intentionally unsupported.
+
+The two GHCR packages must be public, or the Docker host must have a read-only GHCR login. A missing image or registry authorization error fails before the services are recreated. A stale running service fails the `release-verifier` healthcheck because its embedded revision does not match the compose revision.
 
 ## Traefik
 
@@ -43,8 +50,11 @@ Expected response shape:
 ## Verification
 
 ```bash
+./verify-deployment.sh 76b4b262323416e79856eb6e468c3589e6260982
 curl -sk -o /dev/null -w '%{http_code}\n' https://vova-medcenter.ravil.space/
 curl -sk https://vova-medcenter.ravil.space/api/v1/health
 curl -sk 'https://vova-medcenter.ravil.space/api/v1/clients?limit=1'
 ssh 192.168.1.166 'docker logs traefik --tail 200 | grep -i vova-medcenter | tail -20'
 ```
+
+`verify-deployment.sh` is the strict host-side post-deploy check. It compares the configured image references from the live containers with the expected GHCR references and then verifies both public build revisions.

@@ -1,11 +1,21 @@
 # CLAUDE.md - Guidelines for HomeLab Repository
 
+## Architecture Overview
+- **Proxmox** hosts a Talos-managed K8s cluster and a separate Komodo Docker host
+- **ArgoCD** (deployed at bootstrap) handles all subsequent K8s app deployments via GitOps
+- **Komodo** auto-syncs Docker stacks from `komodo/stacks.toml` in this repo (see `komodo/sync.toml`)
+- New K8s apps: add to `k8s/apps/external/` or `k8s/apps/internal/` + register in `k8s/infra/argocd/applications`
+
 ## Commands
 - **Terraform**: `terraform -chdir=./terraform init/plan/apply`
 - **Kubernetes**: `kubectl apply -k ./k8s/[path]`, `kubectl kustomize --enable-helm ./k8s/[path] | kubectl apply -f -`
 - **Restart Services**: `make glance-restart`, `make isponsorblocktv-restart`
 - **Full Deployment**: `make bootstrap`
 - **Update DDNS**: `make cloudflare-ddns-gen`
+- **Scaffold K8s external service**: `make create-external-service SERVICE=name PORT=port IP=ip`
+- **Scaffold K8s TLS service**: `make create-tls-service SERVICE=name PORT=port IP=ip`
+- **Fetch kubeconfig from Terraform**: `make kubeconfig`
+- **Restart ArgoCD**: `make argocd-restart`
 - **ArgoCD**:
   - Get admin password: `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d`
   - Access UI: https://argocd.ravil.space
@@ -49,6 +59,14 @@ Traffic enters via a Traefik instance that does TLS passthrough to two backends:
 K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero`,
 `changedetection`, `grafana`, `ha`, `openwebui`, `pocketid`, `proxmox` (all `.ravil.space`)
 
+## Adding a New K8s Service
+
+1. Use `make create-external-service SERVICE=name PORT=port IP=ip` (or `create-tls-service` for TLS passthrough)
+   — generates `k8s/apps/external/{name}/` with kustomization
+2. Add the hostname to `k8s-tcp-router` in `terraform/modules/traefik/configs/tcp_routers.yaml`
+3. Apply: `kubectl apply -k ./k8s/apps/external/{name}`
+4. Register under `k8s/infra/argocd/applications` for ArgoCD to manage it going forward
+
 ## Adding a New Service (Docker/Komodo)
 
 1. Create `komodo/stacks/{name}/compose.yaml` with Traefik labels
@@ -57,8 +75,3 @@ K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `
 3. Create Komodo stack pointing to this git repo
 4. Configure OIDC (Traefik middleware or native) — **mandatory for public services**
 
-## Best Practices
-- Document major components in README.md
-- Keep infrastructure as code (Terraform, Kubernetes manifests)
-- Use descriptive comments for complex configurations
-- Follow GitOps principles (git as source of truth)
