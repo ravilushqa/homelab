@@ -4,9 +4,9 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application revision: `c1b62ef1bf52afbf6ed83b0a9f32cd9e8eb32cd5`
-- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:c1b62ef1bf52afbf6ed83b0a9f32cd9e8eb32cd5`
-- Backend image: `ghcr.io/zent7/vova-medcenter-backend:c1b62ef1bf52afbf6ed83b0a9f32cd9e8eb32cd5`
+- Upstream application revision: `aa0f22fd7f8ac821abdb998515fc86d3e36f1623`
+- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:aa0f22fd7f8ac821abdb998515fc86d3e36f1623`
+- Backend image: `ghcr.io/zent7/vova-medcenter-backend:aa0f22fd7f8ac821abdb998515fc86d3e36f1623`
 - Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag.
 - Last redeploy request: 2026-08-20 (fix LMK blank series scope)
 
