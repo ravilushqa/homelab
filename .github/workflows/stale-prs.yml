@@ -13,7 +13,8 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v9
+
+      - uses: actions/stale@v11
         with:
           # PR config
           days-before-pr-stale: 30
