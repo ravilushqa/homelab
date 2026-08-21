@@ -4,10 +4,10 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application revision: `76b4b262323416e79856eb6e468c3589e6260982`
-- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:76b4b262323416e79856eb6e468c3589e6260982@sha256:0ecaa5d3ba65b4ed09381a36a0cdb87a0c7fb1ce4a39de21fd3586993edc798f`
-- Backend image: `ghcr.io/zent7/vova-medcenter-backend:76b4b262323416e79856eb6e468c3589e6260982@sha256:ff30fe41251e0512685c84ce05f2cfe7c758ba01b472f65e6270f1ba69fb827e`
-- Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag pinned to its OCI digest
+- Upstream application revision: `c1b62ef1bf52afbf6ed83b0a9f32cd9e8eb32cd5`
+- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:c1b62ef1bf52afbf6ed83b0a9f32cd9e8eb32cd5`
+- Backend image: `ghcr.io/zent7/vova-medcenter-backend:c1b62ef1bf52afbf6ed83b0a9f32cd9e8eb32cd5`
+- Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag.
 - Last redeploy request: 2026-08-20 (fix LMK blank series scope)
 
 ## Architecture
