@@ -239,18 +239,6 @@ BYTESTASH_OIDC_CLIENT_SECRET = [[BYTESTASH_OIDC_CLIENT_SECRET]]
 """
 
 [[stack]]
-name = "s-pdf"
-description = "Self-hosted PDF tools"
-tags = ["tools"]
-deploy = true
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/s-pdf"
-
-[[stack]]
 name = "ntfy"
 description = "Push notification service"
 tags = ["tools"]
