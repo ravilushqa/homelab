@@ -25,7 +25,7 @@ services:
       - "traefik.http.routers.guest-door-access.rule=Host(`guest-access.ravil.space`)"
       - "traefik.http.routers.guest-door-access.entrypoints=websecure"
       - "traefik.http.routers.guest-door-access.tls.certresolver=cloudflare"
-      - "traefik.http.routers.guest-door-access.middlewares=guest-door-access-ratelimit@docker,guest-door-access-security@docker"
+      - "traefik.http.routers.guest-door-access.middlewares=oidc-auth@docker,guest-door-access-ratelimit@docker,guest-door-access-security@docker"
       - "traefik.http.middlewares.guest-door-access-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.guest-door-access-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.guest-door-access-security.headers.contenttypenosniff=true"
