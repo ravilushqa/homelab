@@ -35,6 +35,9 @@ services:
       - --log.level=INFO
       - --accesslog=true
 
+      # Dynamic file provider (serversTransports for self-signed backends)
+      - --providers.file.filename=/etc/traefik/dynamic/servers-transports.yml
+
       # Global settings
       - --global.checknewversion=false
       - --global.sendanonymoususage=false
@@ -58,6 +61,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
+      - ./dynamic:/etc/traefik/dynamic:ro
 
     labels:
       - "traefik.enable=true"
