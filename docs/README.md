@@ -5,11 +5,13 @@ Welcome to the HomeLab infrastructure documentation. This comprehensive guide co
 ## Quick Navigation
 
 ### 🏗️ Architecture
+- [Homelab Architecture Snapshot](architecture/00-homelab-architecture.md) - Current end-to-end network, Proxmox, Kubernetes, Komodo, routing, storage, and operations view
 - [System Context](architecture/01-system-context.md) - High-level system overview and boundaries
 - [Container Architecture](architecture/02-container-architecture.md) - Service and deployment architecture
 - [Deployment Architecture](architecture/04-deployment-architecture.md) - Infrastructure topology and deployment patterns
 - [Security Architecture](architecture/05-security-architecture.md) - Security controls and boundaries
 - [Data Architecture](architecture/06-data-architecture.md) - Data flows and storage strategies
+- [Network Diagram](diagrams/network/homelab-network.html) - Standalone rendered network topology diagram
 
 ### 📋 Operational Runbooks
 - [Bootstrap](runbooks/bootstrap.md) - Complete cluster bootstrap procedure
