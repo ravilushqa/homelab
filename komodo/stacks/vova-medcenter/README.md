@@ -4,11 +4,8 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Upstream application revision: `670d84e7897eebba6740b3f01855c5534d183773`
-- Frontend image: `ghcr.io/zent7/vova-medcenter-frontend:670d84e7897eebba6740b3f01855c5534d183773`
-- Backend image: `ghcr.io/zent7/vova-medcenter-backend:670d84e7897eebba6740b3f01855c5534d183773`
-- Both images are immutable GitHub Actions artifacts; Komodo pulls the exact full-SHA tag.
-- Last redeploy request: 2026-08-22 (paginate blank number list)
+- Live frontend/backend image refs and `EXPECTED_REVISION` are managed in `compose.yaml` by the automated release PR flow from [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medcenter).
+- Images are immutable GHCR artifacts; Komodo pulls digest-pinned image refs.
 
 ## Architecture
 
@@ -50,7 +47,7 @@ Expected response shape:
 ## Verification
 
 ```bash
-./verify-deployment.sh 76b4b262323416e79856eb6e468c3589e6260982
+./verify-deployment.sh <expected-revision-from-compose.yaml>
 curl -sk -o /dev/null -w '%{http_code}\n' https://vova-medcenter.ravil.space/
 curl -sk https://vova-medcenter.ravil.space/api/v1/health
 curl -sk 'https://vova-medcenter.ravil.space/api/v1/clients?limit=1'
