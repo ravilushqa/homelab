@@ -22,6 +22,9 @@ jobs:
           script: |
             const trustedLogin = 'Zent7';
             const allowedPrefix = 'komodo/stacks/vova-medcenter/';
+            const generatedLogin = 'github-actions[bot]';
+            const generatedBranchPattern = /^automation\/vova-medcenter-([0-9a-f]{7,40})$/;
+            const composePath = 'komodo/stacks/vova-medcenter/compose.yaml';
             const pr = context.payload.pull_request;
 
             if (!pr) {
@@ -30,12 +33,6 @@ jobs:
             }
 
             const author = pr.user.login;
-            if (author !== trustedLogin) {
-              core.info(`PR author is ${author}, not ${trustedLogin}; delegated auto-merge disabled.`);
-              core.setOutput('automerge', 'false');
-              return;
-            }
-
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -51,16 +48,134 @@ jobs:
               return;
             }
 
-            const outsideScope = changed.filter((filename) => !filename.startsWith(allowedPrefix));
-            if (outsideScope.length > 0) {
+            if (author === trustedLogin) {
+              const outsideScope = changed.filter((filename) => !filename.startsWith(allowedPrefix));
+              if (outsideScope.length > 0) {
+                core.setFailed(
+                  `Zent7 is delegated only for ${allowedPrefix}*. Outside-scope files:\n` +
+                  outsideScope.map((filename) => `- ${filename}`).join('\n')
+                );
+                return;
+              }
+
+              core.notice(`Delegated scope check passed for ${trustedLogin}; auto-merge is allowed.`);
+              core.setOutput('automerge', 'true');
+              return;
+            }
+
+            const branchMatch = pr.head.ref.match(generatedBranchPattern);
+            if (author !== generatedLogin || !branchMatch) {
+              core.info(
+                `PR author/head is ${author}/${pr.head.ref}; delegated auto-merge disabled.`
+              );
+              core.setOutput('automerge', 'false');
+              return;
+            }
+
+            if (pr.base.ref !== 'main') {
               core.setFailed(
-                `Zent7 is delegated only for ${allowedPrefix}*. Outside-scope files:\n` +
-                outsideScope.map((filename) => `- ${filename}`).join('\n')
+                `Generated vova-medcenter release PRs must target main; found ${pr.base.ref}.`
               );
               return;
             }
 
-            core.notice(`Delegated scope check passed for ${trustedLogin}; auto-merge is allowed.`);
+            if (changed.length !== 1 || changed[0] !== composePath) {
+              core.setFailed(
+                `Generated vova-medcenter release PRs may change only ${composePath}. Changed files:\n` +
+                changed.map((filename) => `- ${filename}`).join('\n')
+              );
+              return;
+            }
+
+            async function readFileAtRef(path, ref) {
+              const response = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path,
+                ref,
+              });
+              if (Array.isArray(response.data) || response.data.type !== 'file') {
+                throw new Error(`${path} at ${ref} is not a file.`);
+              }
+              return Buffer.from(response.data.content, response.data.encoding).toString('utf8');
+            }
+
+            const baseContent = await readFileAtRef(composePath, pr.base.sha);
+            const headContent = await readFileAtRef(composePath, pr.head.sha);
+            const baseLines = baseContent.split('\n');
+            const headLines = headContent.split('\n');
+
+            if (baseLines.length !== headLines.length) {
+              core.setFailed('Generated compose.yaml change may update only existing image and EXPECTED_REVISION lines.');
+              return;
+            }
+
+            const changedLines = [];
+            for (let index = 0; index < baseLines.length; index += 1) {
+              if (baseLines[index] !== headLines[index]) {
+                changedLines.push({ number: index + 1, before: baseLines[index], after: headLines[index] });
+              }
+            }
+
+            const releasePrefix = branchMatch[1];
+            const imagePattern = (service) => new RegExp(
+              `^    image: ghcr\\.io/zent7/vova-medcenter-${service}:([0-9a-f]{40})@sha256:([0-9a-f]{64})$`
+            );
+            const expectedRevisionPattern = /^      EXPECTED_REVISION: ([0-9a-f]{40})$/;
+            const oldImagePattern = (service) => new RegExp(
+              `^    image: ghcr\\.io/zent7/vova-medcenter-${service}:[0-9a-f]{40}(?:@sha256:[0-9a-f]{64})?$`
+            );
+            const oldExpectedRevisionPattern = /^      EXPECTED_REVISION: [0-9a-f]{40}$/;
+
+            const found = {
+              backend: null,
+              frontend: null,
+              expectedRevision: null,
+            };
+
+            for (const line of changedLines) {
+              const backendMatch = line.after.match(imagePattern('backend'));
+              const frontendMatch = line.after.match(imagePattern('frontend'));
+              const expectedRevisionMatch = line.after.match(expectedRevisionPattern);
+
+              if (backendMatch && oldImagePattern('backend').test(line.before)) {
+                found.backend = backendMatch[1];
+              } else if (frontendMatch && oldImagePattern('frontend').test(line.before)) {
+                found.frontend = frontendMatch[1];
+              } else if (expectedRevisionMatch && oldExpectedRevisionPattern.test(line.before)) {
+                found.expectedRevision = expectedRevisionMatch[1];
+              } else {
+                core.setFailed(
+                  `Suspicious generated compose.yaml change at line ${line.number}; only backend image, frontend image, and EXPECTED_REVISION may change.`
+                );
+                return;
+              }
+            }
+
+            if (changedLines.length !== 3 || !found.backend || !found.frontend || !found.expectedRevision) {
+              core.setFailed(
+                'Generated compose.yaml change must update exactly the backend image, frontend image, and EXPECTED_REVISION lines.'
+              );
+              return;
+            }
+
+            const revisions = new Set([found.backend, found.frontend, found.expectedRevision]);
+            if (revisions.size !== 1) {
+              core.setFailed(
+                `Generated compose.yaml revisions must match; found backend=${found.backend}, frontend=${found.frontend}, EXPECTED_REVISION=${found.expectedRevision}.`
+              );
+              return;
+            }
+
+            const revision = found.expectedRevision;
+            if (!revision.startsWith(releasePrefix)) {
+              core.setFailed(
+                `Generated compose.yaml revision ${revision} does not match branch revision ${releasePrefix}.`
+              );
+              return;
+            }
+
+            core.notice(`Generated vova-medcenter release check passed for ${revision}; auto-merge is allowed.`);
             core.setOutput('automerge', 'true');
 
   automerge:
