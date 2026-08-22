@@ -6,6 +6,7 @@ on:
       - automation/vova-medcenter-*
 
 permissions:
+  actions: write
   contents: read
   pull-requests: write
 
@@ -27,14 +28,30 @@ jobs:
             exit 0
           fi
 
-          existing_pr_url="$(gh pr list --head "$BRANCH" --base main --state open --json url --jq '.[0].url // ""')"
-          if [ -n "$existing_pr_url" ]; then
-            printf '%s\n' "$existing_pr_url"
-            exit 0
+          pr_number="$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // ""')"
+
+          if [ -z "$pr_number" ]; then
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Update vova-medcenter images to $short_sha" \
+              --body "Generated after Zent7/vova-medcenter published backend/frontend images. Updates komodo/stacks/vova-medcenter/compose.yaml."
           fi
 
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "Update vova-medcenter images to $short_sha" \
-            --body "Generated after Zent7/vova-medcenter published backend/frontend images. Updates komodo/stacks/vova-medcenter/compose.yaml."
+          for attempt in {1..10}; do
+            pr_number="$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // ""')"
+            if [ -n "$pr_number" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$pr_number" ]; then
+            echo "::error::Could not find open PR for $BRANCH after creation."
+            exit 1
+          fi
+
+          pr_url="$(gh pr view "$pr_number" --json url --jq .url)"
+          printf 'Pull request: %s\n' "$pr_url"
+          printf 'Dispatching vova-medcenter-delegated-merge.yml for PR #%s\n' "$pr_number"
+          gh workflow run vova-medcenter-delegated-merge.yml --ref main -f pr_number="$pr_number"

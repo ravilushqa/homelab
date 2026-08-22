@@ -3,6 +3,11 @@ name: vova-medcenter delegated merge
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to validate and merge
+        required: true
 
 permissions:
   contents: write
@@ -14,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       automerge: ${{ steps.scope.outputs.automerge }}
+      pr_url: ${{ steps.scope.outputs.pr_url }}
+      pr_number: ${{ steps.scope.outputs.pr_number }}
     steps:
       - name: Check delegated PR scope
         id: scope
@@ -25,12 +32,31 @@ jobs:
             const generatedLogin = 'github-actions[bot]';
             const generatedBranchPattern = /^automation\/vova-medcenter-([0-9a-f]{7,40})$/;
             const composePath = 'komodo/stacks/vova-medcenter/compose.yaml';
-            const pr = context.payload.pull_request;
+            let pr = context.payload.pull_request;
+
+            if (!pr && context.eventName === 'workflow_dispatch') {
+              const prNumberInput = context.payload.inputs?.pr_number ?? core.getInput('pr_number');
+              const prNumber = Number(prNumberInput);
+              if (!Number.isInteger(prNumber) || prNumber <= 0) {
+                core.setFailed(`Invalid pr_number input: ${prNumberInput}`);
+                return;
+              }
+
+              const response = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              pr = response.data;
+            }
 
             if (!pr) {
-              core.setFailed('This workflow must run on pull_request_target.');
+              core.setFailed('This workflow must run on pull_request_target or workflow_dispatch.');
               return;
             }
+
+            core.setOutput('pr_url', pr.html_url);
+            core.setOutput('pr_number', String(pr.number));
 
             const author = pr.user.login;
             const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -190,13 +216,13 @@ jobs:
           # resulting push does not trigger other workflows. Therefore this job
           # deploys vova-medcenter explicitly after GitHub reports the PR merged.
           GH_TOKEN: ${{ github.token }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_URL: ${{ needs.scope.outputs.pr_url }}
         run: gh pr merge "$PR_URL" --squash --delete-branch --auto
 
       - name: Wait for merge to complete
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ needs.scope.outputs.pr_number }}
         run: |
           for attempt in {1..60}; do
             STATE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
