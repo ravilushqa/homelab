@@ -1,0 +1,39 @@
+name: Vova Medcenter Auto PR
+
+on:
+  push:
+    branches:
+      - automation/vova-medcenter-*
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    if: github.repository == 'ravilushqa/homelab'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Open or reuse pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          existing_pr_url="$(gh pr list --head "$BRANCH" --base main --state open --json url --jq '.[0].url // ""')"
+          if [ -n "$existing_pr_url" ]; then
+            printf '%s\n' "$existing_pr_url"
+            exit 0
+          fi
+
+          short_sha="${BRANCH#automation/vova-medcenter-}"
+          if ! printf '%s\n' "$short_sha" | grep -Eq '^[0-9a-f]{7,40}$'; then
+            short_sha="$(git rev-parse --short HEAD)"
+          fi
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update vova-medcenter images to $short_sha" \
+            --body "Generated after Zent7/vova-medcenter published backend/frontend images. Updates komodo/stacks/vova-medcenter/compose.yaml."
