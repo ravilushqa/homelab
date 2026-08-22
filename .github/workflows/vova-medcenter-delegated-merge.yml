@@ -35,9 +35,10 @@ jobs:
             let pr = context.payload.pull_request;
 
             if (!pr && context.eventName === 'workflow_dispatch') {
-              const prNumber = Number(core.getInput('pr_number', { required: true }));
+              const prNumberInput = context.payload.inputs?.pr_number ?? core.getInput('pr_number');
+              const prNumber = Number(prNumberInput);
               if (!Number.isInteger(prNumber) || prNumber <= 0) {
-                core.setFailed(`Invalid pr_number input: ${core.getInput('pr_number')}`);
+                core.setFailed(`Invalid pr_number input: ${prNumberInput}`);
                 return;
               }
 
