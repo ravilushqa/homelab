@@ -21,6 +21,12 @@ jobs:
       automerge: ${{ steps.scope.outputs.automerge }}
       pr_url: ${{ steps.scope.outputs.pr_url }}
       pr_number: ${{ steps.scope.outputs.pr_number }}
+      generated: ${{ steps.scope.outputs.generated }}
+      head_ref: ${{ steps.scope.outputs.head_ref }}
+      revision: ${{ steps.scope.outputs.revision }}
+      backend_image: ${{ steps.scope.outputs.backend_image }}
+      frontend_image: ${{ steps.scope.outputs.frontend_image }}
+      expected_revision: ${{ steps.scope.outputs.expected_revision }}
     steps:
       - name: Check delegated PR scope
         id: scope
@@ -57,6 +63,8 @@ jobs:
 
             core.setOutput('pr_url', pr.html_url);
             core.setOutput('pr_number', String(pr.number));
+            core.setOutput('generated', 'false');
+            core.setOutput('head_ref', pr.head.ref);
 
             const author = pr.user.login;
             const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -154,8 +162,10 @@ jobs:
             const oldExpectedRevisionPattern = /^      EXPECTED_REVISION: [0-9a-f]{40}$/;
 
             const found = {
-              backend: null,
-              frontend: null,
+              backendRevision: null,
+              backendImage: null,
+              frontendRevision: null,
+              frontendImage: null,
               expectedRevision: null,
             };
 
@@ -165,9 +175,11 @@ jobs:
               const expectedRevisionMatch = line.after.match(expectedRevisionPattern);
 
               if (backendMatch && oldImagePattern('backend').test(line.before)) {
-                found.backend = backendMatch[1];
+                found.backendRevision = backendMatch[1];
+                found.backendImage = line.after.trim().replace(/^image:\s+/, '');
               } else if (frontendMatch && oldImagePattern('frontend').test(line.before)) {
-                found.frontend = frontendMatch[1];
+                found.frontendRevision = frontendMatch[1];
+                found.frontendImage = line.after.trim().replace(/^image:\s+/, '');
               } else if (expectedRevisionMatch && oldExpectedRevisionPattern.test(line.before)) {
                 found.expectedRevision = expectedRevisionMatch[1];
               } else {
@@ -178,17 +190,17 @@ jobs:
               }
             }
 
-            if (changedLines.length !== 3 || !found.backend || !found.frontend || !found.expectedRevision) {
+            if (changedLines.length !== 3 || !found.backendRevision || !found.backendImage || !found.frontendRevision || !found.frontendImage || !found.expectedRevision) {
               core.setFailed(
                 'Generated compose.yaml change must update exactly the backend image, frontend image, and EXPECTED_REVISION lines.'
               );
               return;
             }
 
-            const revisions = new Set([found.backend, found.frontend, found.expectedRevision]);
+            const revisions = new Set([found.backendRevision, found.frontendRevision, found.expectedRevision]);
             if (revisions.size !== 1) {
               core.setFailed(
-                `Generated compose.yaml revisions must match; found backend=${found.backend}, frontend=${found.frontend}, EXPECTED_REVISION=${found.expectedRevision}.`
+                `Generated compose.yaml revisions must match; found backend=${found.backendRevision}, frontend=${found.frontendRevision}, EXPECTED_REVISION=${found.expectedRevision}.`
               );
               return;
             }
@@ -202,6 +214,11 @@ jobs:
             }
 
             core.notice(`Generated vova-medcenter release check passed for ${revision}; auto-merge is allowed.`);
+            core.setOutput('generated', 'true');
+            core.setOutput('revision', revision);
+            core.setOutput('backend_image', found.backendImage);
+            core.setOutput('frontend_image', found.frontendImage);
+            core.setOutput('expected_revision', found.expectedRevision);
             core.setOutput('automerge', 'true');
 
   automerge:
@@ -210,6 +227,81 @@ jobs:
     if: needs.scope.outputs.automerge == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout main for generated PR refresh
+        if: needs.scope.outputs.generated == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: ravilushqa/homelab
+          ref: main
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Refresh generated PR branch if needed
+        if: needs.scope.outputs.generated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.scope.outputs.pr_number }}
+          HEAD_REF: ${{ needs.scope.outputs.head_ref }}
+          REVISION: ${{ needs.scope.outputs.revision }}
+          BACKEND_IMAGE: ${{ needs.scope.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ needs.scope.outputs.frontend_image }}
+          EXPECTED_REVISION: ${{ needs.scope.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+
+          COMPOSE_PATH="komodo/stacks/vova-medcenter/compose.yaml"
+          MERGE_STATE="UNKNOWN"
+          for attempt in {1..10}; do
+            MERGE_STATE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json mergeStateStatus --jq .mergeStateStatus)
+            echo "Generated PR #$PR_NUMBER mergeStateStatus: $MERGE_STATE"
+            if [ "$MERGE_STATE" != "UNKNOWN" ]; then
+              break
+            fi
+            sleep 3
+          done
+
+          case "$MERGE_STATE" in
+            CLEAN|HAS_HOOKS|UNSTABLE|BLOCKED|UNKNOWN)
+              echo "Branch refresh not needed for mergeStateStatus=$MERGE_STATE."
+              exit 0
+              ;;
+            BEHIND|DIRTY)
+              echo "Refreshing generated branch for mergeStateStatus=$MERGE_STATE."
+              ;;
+            *)
+              echo "Refreshing generated branch for unexpected mergeStateStatus=$MERGE_STATE."
+              ;;
+          esac
+
+          git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+          git fetch origin "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
+          LEASE_SHA=$(git rev-parse "origin/${HEAD_REF}")
+          git switch -C "$HEAD_REF" origin/main
+
+          perl -0pi -e '
+            our $replacement_count;
+            $replacement_count += s{^    image: ghcr\.io/zent7/vova-medcenter-backend:[0-9a-f]{40}(?:\@sha256:[0-9a-f]{64})?$}{"    image: $ENV{BACKEND_IMAGE}"}gme;
+            $replacement_count += s{^    image: ghcr\.io/zent7/vova-medcenter-frontend:[0-9a-f]{40}(?:\@sha256:[0-9a-f]{64})?$}{"    image: $ENV{FRONTEND_IMAGE}"}gme;
+            $replacement_count += s{^      EXPECTED_REVISION: [0-9a-f]{40}$}{"      EXPECTED_REVISION: $ENV{EXPECTED_REVISION}"}gme;
+            END {
+              die "Expected to update exactly 3 vova-medcenter compose lines; updated $replacement_count.\n"
+                if $replacement_count != 3;
+            }
+          ' "$COMPOSE_PATH"
+
+          if git diff --quiet -- "$COMPOSE_PATH"; then
+            echo "Branch already matches generated vova-medcenter values; no commit needed."
+            exit 0
+          fi
+
+          git diff -- "$COMPOSE_PATH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$COMPOSE_PATH"
+          git commit -m "Update vova-medcenter images to ${REVISION:0:7}"
+          git push origin "HEAD:${HEAD_REF}" --force-with-lease="refs/heads/${HEAD_REF}:${LEASE_SHA}"
+          echo "Refreshed ${HEAD_REF} from origin/main with generated vova-medcenter image lines."
+
       - name: Enable auto-merge for delegated PR
         env:
           # GITHUB_TOKEN is enough to merge this trusted, path-scoped PR, but its
