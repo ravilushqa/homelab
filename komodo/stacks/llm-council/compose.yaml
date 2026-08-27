@@ -12,7 +12,10 @@ services:
         FROM node:24-alpine AS frontend-builder
         COPY --from=source /src/frontend /frontend
         WORKDIR /frontend
-        RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi \
+        RUN sed -i 's|http://localhost:8001||g' src/api.js \
+          && grep -q '/api/conversations' src/api.js \
+          && ! grep -q 'http://localhost:8001' src/api.js \
+          && if [ -f package-lock.json ]; then npm ci; else npm install; fi \
           && npm run build
 
         FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS backend-builder
