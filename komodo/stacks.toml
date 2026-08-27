@@ -351,6 +351,21 @@ OPENROUTER_API_KEY = [[HR_BREAKER_OPENROUTER_API_KEY]]
 """
 
 [[stack]]
+name = "llm-council"
+description = "LLM Council multi-model OpenRouter web app"
+tags = ["ai", "tools"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/llm-council"
+environment = """
+OPENROUTER_API_KEY = [[LLM_COUNCIL_OPENROUTER_API_KEY]]
+"""
+
+[[stack]]
 name = "actual"
 description = "Actual Budget - local-first personal finance"
 tags = ["finance"]
