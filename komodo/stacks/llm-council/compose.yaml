@@ -1,0 +1,198 @@
+services:
+  llm-council:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM alpine/git:2.49.1 AS source
+        RUN git clone https://github.com/karpathy/llm-council.git /src \
+          && cd /src \
+          && git checkout 92e1fccb1bdcf1bab7221aa9ed90f9dc72529131 \
+          && rm -rf .git
+
+        FROM node:24-alpine AS frontend-builder
+        COPY --from=source /src/frontend /frontend
+        WORKDIR /frontend
+        RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi \
+          && npm run build
+
+        FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS backend-builder
+        ENV UV_PYTHON_DOWNLOADS=0
+        COPY --from=source /src /src
+        WORKDIR /src
+        RUN uv sync --frozen --no-dev --python /usr/local/bin/python3.12 \
+          && python - <<'PY'
+        from pathlib import Path
+
+        config = Path("backend/config.py")
+        text = config.read_text()
+        text = text.replace(
+            '''# Council members - list of OpenRouter model identifiers
+        COUNCIL_MODELS = [
+            "openai/gpt-5.1",
+            "google/gemini-3-pro-preview",
+            "anthropic/claude-sonnet-4.5",
+            "x-ai/grok-4",
+        ]
+
+        # Chairman model - synthesizes final response
+        CHAIRMAN_MODEL = "google/gemini-3-pro-preview"''',
+            '''# Council members - list of OpenRouter model identifiers
+        COUNCIL_MODELS = [
+            model.strip()
+            for model in os.getenv("COUNCIL_MODELS", "").split(",")
+            if model.strip()
+        ] or [
+            "openai/gpt-5.1",
+            "google/gemini-3-pro-preview",
+            "anthropic/claude-sonnet-4.5",
+            "x-ai/grok-4",
+        ]
+
+        # Chairman model - synthesizes final response
+        CHAIRMAN_MODEL = os.getenv("CHAIRMAN_MODEL", "google/gemini-3-pro-preview")'''
+        )
+        text = text.replace('DATA_DIR = "data/conversations"', 'DATA_DIR = os.getenv("DATA_DIR", "data/conversations")')
+        config.write_text(text)
+        PY
+
+        FROM python:3.12-slim AS runtime
+        ENV PATH="/app/.venv/bin:$$PATH" \
+          PYTHONUNBUFFERED=1 \
+          DATA_DIR=/data/conversations
+
+        RUN apt-get update \
+          && apt-get install -y --no-install-recommends nginx-light supervisor ca-certificates \
+          && rm -rf /var/lib/apt/lists/* \
+          && addgroup --system app \
+          && adduser --system --ingroup app --home /app app \
+          && mkdir -p /app /data/conversations /run/nginx /var/lib/nginx/body /var/log/supervisor \
+          && chown -R app:app /app /data /run/nginx /var/lib/nginx /var/log/nginx /var/log/supervisor
+
+        COPY --from=backend-builder --chown=app:app /src/.venv /app/.venv
+        COPY --from=backend-builder --chown=app:app /src/backend /app/backend
+        COPY --from=frontend-builder --chown=app:app /frontend/dist /usr/share/nginx/html
+
+        RUN cat > /etc/nginx/nginx.conf <<'EOF'
+        pid /tmp/nginx.pid;
+        worker_processes auto;
+
+        events {
+          worker_connections 1024;
+        }
+
+        http {
+          include /etc/nginx/mime.types;
+          default_type application/octet-stream;
+          access_log /dev/stdout;
+          error_log /dev/stderr warn;
+          sendfile on;
+
+          server {
+            listen 8080;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
+
+            location = /health {
+              access_log off;
+              return 200 "ok\n";
+            }
+
+            location = /api {
+              proxy_pass http://127.0.0.1:8001/api;
+              proxy_http_version 1.1;
+              proxy_set_header Host $$host;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $$scheme;
+              proxy_buffering off;
+              proxy_cache off;
+              proxy_read_timeout 3600s;
+            }
+
+            location /api/ {
+              proxy_pass http://127.0.0.1:8001/api/;
+              proxy_http_version 1.1;
+              proxy_set_header Host $$host;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $$scheme;
+              proxy_buffering off;
+              proxy_cache off;
+              proxy_read_timeout 3600s;
+            }
+
+            location / {
+              try_files $$uri $$uri/ /index.html;
+            }
+          }
+        }
+        EOF
+
+        RUN cat > /etc/supervisor/conf.d/llm-council.conf <<'EOF'
+        [supervisord]
+        nodaemon=true
+        logfile=/dev/null
+        logfile_maxbytes=0
+        pidfile=/tmp/supervisord.pid
+
+        [program:api]
+        command=/app/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001
+        directory=/app
+        autostart=true
+        autorestart=true
+        startsecs=3
+        stopsignal=TERM
+        stdout_logfile=/dev/stdout
+        stdout_logfile_maxbytes=0
+        stderr_logfile=/dev/stderr
+        stderr_logfile_maxbytes=0
+
+        [program:nginx]
+        command=/usr/sbin/nginx -g "daemon off;"
+        autostart=true
+        autorestart=true
+        startsecs=3
+        stopsignal=QUIT
+        stdout_logfile=/dev/stdout
+        stdout_logfile_maxbytes=0
+        stderr_logfile=/dev/stderr
+        stderr_logfile_maxbytes=0
+        EOF
+
+        USER app
+        WORKDIR /app
+        EXPOSE 8080
+        CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/llm-council.conf"]
+    container_name: llm-council
+    restart: unless-stopped
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      COUNCIL_MODELS: anthropic/claude-opus-5,openai/gpt-5.6-terra,deepseek/deepseek-v4-pro-0813,google/gemini-3.7-flash
+      CHAIRMAN_MODEL: anthropic/claude-fable-5
+      DATA_DIR: /data/conversations
+    volumes:
+      - llm_council_data:/data/conversations
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.llm-council.rule=Host(`llm-council.ravil.space`)"
+      - "traefik.http.routers.llm-council.entrypoints=websecure"
+      - "traefik.http.routers.llm-council.tls.certresolver=cloudflare"
+      - "traefik.http.routers.llm-council.middlewares=oidc-auth@docker"
+      - "traefik.http.services.llm-council.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  llm_council_data:
+
+networks:
+  traefik:
+    name: traefik_default
+    external: true
