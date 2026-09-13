@@ -23,19 +23,6 @@ pages:
         title: Core Pulse
         style: compact
         sites:
-          - title: Glance
-            url: https://glance.ravil.space
-            check-url: https://glance.ravil.space
-            same-tab: true
-            icon: sh:glance
-          - title: Grafana
-            url: https://grafana.ravil.space
-            check-url: https://grafana.ravil.space
-            icon: si:grafana
-            alt-status-codes:
-              - 302
-              - 401
-              - 403
           - title: Home Assistant
             url: https://ha.ravil.space
             check-url: https://ha.ravil.space
@@ -136,14 +123,6 @@ pages:
                   - 302
                   - 401
                   - 403
-              - title: OpenWebUI
-                url: https://openwebui.ravil.space
-                check-url: https://openwebui.ravil.space
-                icon: di:open-webui-light
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
 
           - type: videos
             title: Homelab Video Queue
@@ -160,29 +139,6 @@ pages:
           - type: bookmarks
             title: Fast Actions
             groups:
-              - title: Operations
-                color: 188 88 58
-                links:
-                  - title: Grafana
-                    url: https://grafana.ravil.space
-                    same-tab: true
-                    description: dashboards and alerts
-                    icon: si:grafana
-                  - title: Traefik
-                    url: https://traefik.ravil.space
-                    same-tab: true
-                    description: edge router dashboard
-                    icon: si:traefikproxy
-                  - title: Proxmox
-                    url: https://proxmox.ravil.space
-                    same-tab: true
-                    description: virtualization console
-                    icon: si:proxmox
-                  - title: K8s Logs
-                    url: https://dozzle.k8s.ravil.space
-                    same-tab: true
-                    description: Kubernetes logs
-                    icon: sh:dozzle
               - title: Home
                 color: 145 54 52
                 links:
@@ -201,6 +157,19 @@ pages:
                     same-tab: true
                     description: document inbox
                     icon: si:paperlessngx
+              - title: Reading
+                color: 188 88 58
+                links:
+                  - title: Miniflux
+                    url: https://miniflux.ravil.space
+                    same-tab: true
+                    description: RSS reader
+                    icon: si:rss
+                  - title: NextFlux
+                    url: https://nextflux.ravil.space
+                    same-tab: true
+                    description: daily reading
+                    icon: mdi:newspaper-variant-outline
 
   - name: Homelab
     width: wide
@@ -274,11 +243,6 @@ pages:
                   - 302
                   - 401
                   - 403
-              - title: Glance
-                url: https://glance.ravil.space
-                check-url: https://glance.ravil.space
-                same-tab: true
-                icon: sh:glance
 
           - type: bookmarks
             title: Observability
@@ -311,85 +275,37 @@ pages:
         widgets:
           - type: monitor
             cache: 1m
-            title: Services
+            title: K8s Apps
             style: compact
             sites:
-              - title: Home Assistant
-                url: https://ha.ravil.space
-                check-url: https://ha.ravil.space
-                icon: si:homeassistant
+              - title: ArgoCD
+                url: https://argocd.ravil.space
+                check-url: https://argocd.ravil.space
+                icon: si:argo
                 alt-status-codes:
                   - 302
                   - 401
                   - 403
-              - title: Immich
-                url: https://immich.ravil.space
-                check-url: https://immich.ravil.space
-                icon: si:immich
+              - title: PocketID
+                url: https://pocketid.ravil.space
+                check-url: https://pocketid.ravil.space
+                icon: mdi:shield-account-outline
                 alt-status-codes:
                   - 302
                   - 401
                   - 403
-              - title: Actual
-                url: https://actual.ravil.space
-                check-url: https://actual.ravil.space
-                icon: si:actualbudget
+              - title: IT Tools
+                url: https://it-tools.ravil.space
+                check-url: https://it-tools.ravil.space
+                icon: mdi:tools
                 alt-status-codes:
                   - 302
                   - 401
                   - 403
-              - title: Paperless
-                url: https://paperless.ravil.space
-                check-url: https://paperless.ravil.space
-                icon: si:paperlessngx
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: Karakeep
-                url: https://karakeep.ravil.space
-                check-url: https://karakeep.ravil.space
-                icon: sh:karakeep
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: Miniflux
-                url: https://miniflux.ravil.space
-                check-url: https://miniflux.ravil.space
-                icon: si:rss
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: ntfy
-                url: https://ntfy.ravil.space
-                check-url: https://ntfy.ravil.space
-                icon: sh:ntfy
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: Mattermost
-                url: https://mattermost.ravil.space
-                check-url: https://mattermost.ravil.space
-                icon: si:mattermost
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: Hermes
-                url: https://hermes.ravil.space
-                check-url: https://hermes.ravil.space
-                icon: mdi:robot-outline
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: OpenWebUI
-                url: https://openwebui.ravil.space
-                check-url: https://openwebui.ravil.space
-                icon: di:open-webui-light
+              - title: Changedetection
+                url: https://changedetection.ravil.space
+                check-url: https://changedetection.ravil.space
+                icon: mdi:bell-alert-outline
                 alt-status-codes:
                   - 302
                   - 401
@@ -424,11 +340,6 @@ pages:
                     same-tab: true
                     description: Docker edge router
                     icon: si:traefikproxy
-                  - title: Hermes
-                    url: https://hermes.ravil.space
-                    same-tab: true
-                    description: agent dashboard
-                    icon: mdi:robot-outline
                   - title: Komodo Inventory
                     url: https://github.com/ravilushqa/homelab/blob/main/komodo/stacks.toml
                     same-tab: true
@@ -438,40 +349,21 @@ pages:
       - size: small
         widgets:
           - type: bookmarks
-            title: Home Automation
+            title: Management
             groups:
-              - title: Safe Navigation
-                color: 145 54 52
+              - title: Platform
+                color: 214 74 62
                 links:
-                  - title: Home Assistant
-                    url: https://ha.ravil.space
+                  - title: ArgoCD
+                    url: https://argocd.ravil.space
                     same-tab: true
-                    description: observe status, no Glance control integration
-                    icon: si:homeassistant
-                  - title: Zigbee2MQTT
-                    url: https://ha.ravil.space
+                    description: K8s deployment controller
+                    icon: si:argo
+                  - title: Proxmox
+                    url: https://proxmox.ravil.space
                     same-tab: true
-                    description: access through Home Assistant only
-                    icon: si:zigbee
-
-          - type: monitor
-            cache: 1m
-            title: Tools
-            style: compact
-            sites:
-              - title: Dozzle K8s
-                url: https://dozzle.k8s.ravil.space
-                check-url: https://dozzle.k8s.ravil.space
-                icon: sh:dozzle
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
-              - title: Glance
-                url: https://glance.ravil.space
-                check-url: https://glance.ravil.space
-                same-tab: true
-                icon: sh:glance
+                    description: virtualization console
+                    icon: si:proxmox
 
   - name: Development
     width: wide
