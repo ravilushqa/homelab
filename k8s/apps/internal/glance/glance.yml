@@ -1,102 +1,152 @@
+branding:
+  app-name: Ravil Homelab
+  logo-text: HL
+  hide-footer: true
+  app-background-color: "#080b10"
+
+theme:
+  background-color: 220 26 7
+  primary-color: 188 88 58
+  positive-color: 145 54 52
+  negative-color: 356 74 61
+  contrast-multiplier: 1.18
+  text-saturation-multiplier: 0.82
+  disable-picker: true
+
 pages:
-  - name: Infrastructure
+  - name: Home
+    width: wide
+    show-mobile-header: true
+    head-widgets:
+      - type: monitor
+        cache: 1m
+        title: Core Pulse
+        style: compact
+        sites:
+          - title: Glance
+            url: https://glance.ravil.space
+            check-url: https://glance.ravil.space
+            same-tab: true
+            icon: sh:glance
+          - title: Grafana
+            url: https://grafana.ravil.space
+            check-url: https://grafana.ravil.space
+            icon: si:grafana
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
+          - title: Home Assistant
+            url: https://ha.ravil.space
+            check-url: https://ha.ravil.space
+            icon: si:homeassistant
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
+          - title: Immich
+            url: https://immich.ravil.space
+            check-url: https://immich.ravil.space
+            icon: si:immich
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
+          - title: ntfy
+            url: https://ntfy.ravil.space
+            check-url: https://ntfy.ravil.space
+            icon: sh:ntfy
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
     columns:
       - size: small
         widgets:
-          - type: monitor
-            cache: 1m
-            title: Core Infrastructure
-            sites:
-              - title: Proxmox
-                url: https://proxmox.ravil.space
-                allow-insecure: true
-                icon: si:proxmox
-                check-url: http://192.168.1.100:8006
-              - title: Unifi
-                url: https://unifi.ui.com
-                check-url: http://192.168.1.1
-                allow-insecure: true
-                icon: si:ubiquiti
-              - title: Pi-hole
-                url: https://pi.hole/admin
-                check-url: http://192.168.1.3/admin/login
-                icon: si:pihole
-              - title: Grafana
-                url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
-                check-url: https://grafana.ravil.space
-                icon: si:grafana
+          - type: weather
+            title: Berlin Weather
+            location: Berlin, Germany
+            units: metric
+            hour-format: 24h
 
+          - type: clock
+            title: Time
+            hour-format: 24h
+            timezones:
+              - timezone: Europe/Berlin
+                label: Berlin
+              - timezone: Europe/Moscow
+                label: Moscow
+
+          - type: calendar
+            first-day-of-week: monday
+
+      - size: full
+        widgets:
           - type: monitor
             cache: 1m
-            title: Applications
+            title: Daily Services
+            style: compact
             sites:
-              - title: Home Assistant
-                url: https://ha.ravil.space
-                check-url: http://home-assistant.haos.svc.cluster.local:8123
-                icon: si:homeassistant
-              - title: Immich
-                url: https://immich.ravil.space
-                check-url: https://immich.ravil.space
-                icon: si:immich
-              - title: Karakeep
-                url: https://karakeep.ravil.space
-                check-url: https://karakeep.ravil.space
-                icon: si:keras
-              - title: ChangeDetection
-                url: https://changedetection.ravil.space
-                check-url: https://changedetection.ravil.space
-                icon: di:changedetection
-              - title: Spotify
-                url: https://spotify.ravil.space
-                check-url: https://spotify.ravil.space
-                icon: si:spotify
-              - title: Bytestash
-                url: https://bytestash.ravil.space
-                check-url: https://bytestash.ravil.space
-                icon: si:databricks
+              - title: Actual
+                url: https://actual.ravil.space
+                check-url: https://actual.ravil.space
+                icon: si:actualbudget
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
               - title: Paperless
                 url: https://paperless.ravil.space
                 check-url: https://paperless.ravil.space
                 icon: si:paperlessngx
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Karakeep
+                url: https://karakeep.ravil.space
+                check-url: https://karakeep.ravil.space
+                icon: sh:karakeep
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
               - title: Miniflux
                 url: https://miniflux.ravil.space
                 check-url: https://miniflux.ravil.space
                 icon: si:rss
-              - title: NextFlux
-                url: https://nextflux.ravil.space
-                check-url: https://nextflux.ravil.space
-                icon: si:rss
-              - title: RSSHub
-                url: https://rsshub.ravil.space
-                check-url: https://rsshub.ravil.space
-                icon: si:rss
-          - type: monitor
-            cache: 1m
-            title: Productivity & AI
-            sites:
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Mattermost
+                url: https://mattermost.ravil.space
+                check-url: https://mattermost.ravil.space
+                icon: si:mattermost
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Hermes
+                url: https://hermes.ravil.space
+                check-url: https://hermes.ravil.space
+                icon: mdi:robot-outline
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
               - title: OpenWebUI
                 url: https://openwebui.ravil.space
                 check-url: https://openwebui.ravil.space
                 icon: di:open-webui-light
-              - title: Dify
-                url: https://dify.ravil.space
-                check-url: https://dify.ravil.space
-                icon: si:openai
-              - title: PDF Tools
-                url: https://pdf.ravil.space
-                check-url: https://pdf.ravil.space
-                icon: si:adobeacrobatreader
-              - title: IT Tools
-                url: https://it-tools.ravil.space
-                check-url: https://it-tools.ravil.space
-                icon: di:it-tools-light
-              - title: Glance
-                url: https://glance.ravil.space
-                same-tab: true
-                icon: si:goodreads
-      - size: full
-        widgets:
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+
           - type: videos
+            title: Homelab Video Queue
             style: grid-cards
             collapse-after-rows: 1
             channels:
@@ -104,32 +154,339 @@ pages:
               - UCZNhwA1B5YqiY1nLzmM0ZRg # Christian Lempa
               - UCUUTdohVElFLSP4NBnlPEwA # Jim's Garage
               - UCgdTVe88YVSrOZ9qKumhULQ # Hardware Haven
-          - type: reddit
-            subreddit: selfhosted
-  - name: Development
+
+      - size: small
+        widgets:
+          - type: bookmarks
+            title: Fast Actions
+            groups:
+              - title: Operations
+                color: 188 88 58
+                links:
+                  - title: Grafana
+                    url: https://grafana.ravil.space
+                    same-tab: true
+                    description: dashboards and alerts
+                    icon: si:grafana
+                  - title: Traefik
+                    url: https://traefik.ravil.space
+                    same-tab: true
+                    description: edge router dashboard
+                    icon: si:traefikproxy
+                  - title: Proxmox
+                    url: https://proxmox.ravil.space
+                    same-tab: true
+                    description: virtualization console
+                    icon: si:proxmox
+                  - title: K8s Logs
+                    url: https://dozzle.k8s.ravil.space
+                    same-tab: true
+                    description: Kubernetes logs
+                    icon: sh:dozzle
+              - title: Home
+                color: 145 54 52
+                links:
+                  - title: Home Assistant
+                    url: https://ha.ravil.space
+                    same-tab: true
+                    description: safe status and navigation only
+                    icon: si:homeassistant
+                  - title: Immich
+                    url: https://immich.ravil.space
+                    same-tab: true
+                    description: photo library
+                    icon: si:immich
+                  - title: Paperless
+                    url: https://paperless.ravil.space
+                    same-tab: true
+                    description: document inbox
+                    icon: si:paperlessngx
+
+  - name: Homelab
+    width: wide
+    show-mobile-header: true
+    head-widgets:
+      - type: monitor
+        cache: 1m
+        title: Platform Edge
+        style: compact
+        sites:
+          - title: Proxmox
+            url: https://proxmox.ravil.space
+            check-url: https://proxmox.ravil.space
+            allow-insecure: true
+            icon: si:proxmox
+          - title: Grafana
+            url: https://grafana.ravil.space
+            check-url: https://grafana.ravil.space
+            icon: si:grafana
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
+          - title: Traefik
+            url: https://traefik.ravil.space
+            check-url: https://traefik.ravil.space
+            icon: si:traefikproxy
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
+          - title: Dozzle K8s
+            url: https://dozzle.k8s.ravil.space
+            check-url: https://dozzle.k8s.ravil.space
+            icon: sh:dozzle
+            alt-status-codes:
+              - 302
+              - 401
+              - 403
+          - title: Glance
+            url: https://glance.ravil.space
+            check-url: https://glance.ravil.space
+            same-tab: true
+            icon: sh:glance
     columns:
       - size: small
         widgets:
-          - type: calendar
-          - type: clock
-            hour-format: 24h
-            timezones:
-              - timezone: Europe/Berlin
-                label: Berlin
-              - timezone: Europe/Moscow
-                label: Moscow
-          - type: weather
-            location: "Berlin, Germany"
-          - type: markets
-            markets:
-              - symbol: SPY
-                name: S&P 500
-              - symbol: BRYN.BE
-                name: Berkshire Hathaway
-              - symbol: BTC-USD
-                name: Bitcoin
-              - symbol: DHER.DE
-                name: Delivery Hero
+          - type: monitor
+            cache: 1m
+            title: Infra Status
+            style: compact
+            sites:
+              - title: Proxmox
+                url: https://proxmox.ravil.space
+                check-url: https://proxmox.ravil.space
+                allow-insecure: true
+                icon: si:proxmox
+              - title: Grafana LGTM
+                url: https://grafana.ravil.space
+                check-url: https://grafana.ravil.space
+                icon: si:grafana
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Traefik
+                url: https://traefik.ravil.space
+                check-url: https://traefik.ravil.space
+                icon: si:traefikproxy
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Glance
+                url: https://glance.ravil.space
+                check-url: https://glance.ravil.space
+                same-tab: true
+                icon: sh:glance
+
+          - type: bookmarks
+            title: Observability
+            groups:
+              - title: Dashboards
+                color: 188 88 58
+                links:
+                  - title: Proxmox Cluster
+                    url: https://grafana.ravil.space/d/IfgdXjtnk/proxmox-cluster-flux
+                    same-tab: true
+                    description: live metrics in Grafana
+                    icon: si:proxmox
+                  - title: ZFS Storage
+                    url: https://grafana.ravil.space
+                    same-tab: true
+                    description: storage views in Grafana
+                    icon: si:openzfs
+                  - title: Cilium Gateway
+                    url: https://grafana.ravil.space
+                    same-tab: true
+                    description: network views in Grafana
+                    icon: si:cilium
+                  - title: Talos Kubernetes
+                    url: https://grafana.ravil.space
+                    same-tab: true
+                    description: cluster views in Grafana
+                    icon: si:kubernetes
+
+      - size: full
+        widgets:
+          - type: monitor
+            cache: 1m
+            title: Services
+            style: compact
+            sites:
+              - title: Home Assistant
+                url: https://ha.ravil.space
+                check-url: https://ha.ravil.space
+                icon: si:homeassistant
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Immich
+                url: https://immich.ravil.space
+                check-url: https://immich.ravil.space
+                icon: si:immich
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Actual
+                url: https://actual.ravil.space
+                check-url: https://actual.ravil.space
+                icon: si:actualbudget
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Paperless
+                url: https://paperless.ravil.space
+                check-url: https://paperless.ravil.space
+                icon: si:paperlessngx
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Karakeep
+                url: https://karakeep.ravil.space
+                check-url: https://karakeep.ravil.space
+                icon: sh:karakeep
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Miniflux
+                url: https://miniflux.ravil.space
+                check-url: https://miniflux.ravil.space
+                icon: si:rss
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: ntfy
+                url: https://ntfy.ravil.space
+                check-url: https://ntfy.ravil.space
+                icon: sh:ntfy
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Mattermost
+                url: https://mattermost.ravil.space
+                check-url: https://mattermost.ravil.space
+                icon: si:mattermost
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Hermes
+                url: https://hermes.ravil.space
+                check-url: https://hermes.ravil.space
+                icon: mdi:robot-outline
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: OpenWebUI
+                url: https://openwebui.ravil.space
+                check-url: https://openwebui.ravil.space
+                icon: di:open-webui-light
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+
+          - type: bookmarks
+            title: Control Surfaces
+            groups:
+              - title: Cluster
+                color: 214 74 62
+                links:
+                  - title: Glance
+                    url: https://glance.ravil.space
+                    same-tab: true
+                    description: this dashboard
+                    icon: sh:glance
+                  - title: Dozzle K8s
+                    url: https://dozzle.k8s.ravil.space
+                    same-tab: true
+                    description: Kubernetes log viewer
+                    icon: sh:dozzle
+                  - title: Grafana
+                    url: https://grafana.ravil.space
+                    same-tab: true
+                    description: observability hub
+                    icon: si:grafana
+              - title: Docker Host
+                color: 44 84 58
+                links:
+                  - title: Traefik
+                    url: https://traefik.ravil.space
+                    same-tab: true
+                    description: Docker edge router
+                    icon: si:traefikproxy
+                  - title: Hermes
+                    url: https://hermes.ravil.space
+                    same-tab: true
+                    description: agent dashboard
+                    icon: mdi:robot-outline
+                  - title: Komodo Inventory
+                    url: https://github.com/ravilushqa/homelab/blob/main/komodo/stacks.toml
+                    same-tab: true
+                    description: declared Docker stacks
+                    icon: mdi:cube-scan
+
+      - size: small
+        widgets:
+          - type: bookmarks
+            title: Home Automation
+            groups:
+              - title: Safe Navigation
+                color: 145 54 52
+                links:
+                  - title: Home Assistant
+                    url: https://ha.ravil.space
+                    same-tab: true
+                    description: observe status, no Glance control integration
+                    icon: si:homeassistant
+                  - title: Zigbee2MQTT
+                    url: https://ha.ravil.space
+                    same-tab: true
+                    description: access through Home Assistant only
+                    icon: si:zigbee
+
+          - type: monitor
+            cache: 1m
+            title: Tools
+            style: compact
+            sites:
+              - title: Dozzle K8s
+                url: https://dozzle.k8s.ravil.space
+                check-url: https://dozzle.k8s.ravil.space
+                icon: sh:dozzle
+                alt-status-codes:
+                  - 302
+                  - 401
+                  - 403
+              - title: Glance
+                url: https://glance.ravil.space
+                check-url: https://glance.ravil.space
+                same-tab: true
+                icon: sh:glance
+
+  - name: Development
+    width: wide
+    show-mobile-header: true
+    columns:
+      - size: small
+        widgets:
+          - type: rss
+            title: GitHub Trending
+            thumbnail-height: 100
+            collapse-after: 5
+            feeds:
+              - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/all.xml
+                title: GitHub Trending All
+
       - size: full
         widgets:
           - type: rss
@@ -146,8 +503,9 @@ pages:
                 title: Uber Engineering
                 headers:
                   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+
           - type: rss
-            title: Personal
+            title: Personal Engineering
             collapse-after: 5
             feeds:
               - url: http://feeds.feedburner.com/HighScalability
@@ -156,17 +514,15 @@ pages:
                 title: Vegard S. Hagen
               - url: https://smcleod.net/posts/index.xml
                 title: Sam McLeod
-          - type: hacker-news
+
       - size: small
         widgets:
-          - type: rss
-            title: GitHub Trending
-            thumbnail-height: 100
-            collapse-after: 5
-            feeds:
-              - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/all.xml
-                title: GitHub Trending All
+          - type: hacker-news
+            collapse-after: 8
+
   - name: Golang
+    width: wide
+    show-mobile-header: true
     columns:
       - size: full
         widgets:
@@ -188,8 +544,10 @@ pages:
                 title: Dave Cheney
               - url: https://threedots.tech/index.xml
                 title: Three Dots
+
           - type: reddit
             subreddit: golang
+
       - size: full
         widgets:
           - type: lobsters
@@ -198,6 +556,7 @@ pages:
               - go
             limit: 15
             collapse-after: 5
+
           - type: rss
             title: GitHub Trending Go
             thumbnail-height: 100
@@ -206,4 +565,40 @@ pages:
               - url: https://mshibanami.github.io/GitHubTrendingRSS/weekly/go.xml
                 title: GitHub Trending Go
               - url: https://mshibanami.github.io/GitHubTrendingRSS/daily/go.xml
-                title: GitHub Trending Go (Daily)
+                title: GitHub Trending Go Daily
+
+  - name: Research
+    width: wide
+    show-mobile-header: true
+    columns:
+      - size: small
+        widgets:
+          - type: reddit
+            subreddit: selfhosted
+            collapse-after: 8
+
+      - size: full
+        widgets:
+          - type: hacker-news
+            collapse-after: 10
+
+          - type: videos
+            title: Systems Research Queue
+            style: grid-cards
+            collapse-after-rows: 1
+            channels:
+              - UCOk-gHyjcWZNj3Br4oxwh0A
+              - UCZNhwA1B5YqiY1nLzmM0ZRg
+              - UCUUTdohVElFLSP4NBnlPEwA
+              - UCgdTVe88YVSrOZ9qKumhULQ
+
+      - size: small
+        widgets:
+          - type: lobsters
+            sort-by: hot
+            tags:
+              - linux
+              - networking
+              - distributed
+            limit: 15
+            collapse-after: 8
