@@ -1,0 +1,42 @@
+services:
+  free-games-claimer:
+    image: ghcr.io/p-adamiec/free-games-claimer-remaster:v1.9
+    container_name: fgc-remaster
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    volumes:
+      - fgc_data:/fgc/data
+    environment:
+      SHOW: "1"
+      NOVNC_PORT: "7080"
+      VNC_URL: https://fgc.ravil.space
+      VNC_LOGIN_TIMEOUT: "900"
+      SCHEDULER_HOURS: "0"
+      SCHEDULER_TIMEZONE: Europe/Berlin
+      SCHEDULER_FIXED_TIMES: "10:15,20:15"
+      RUN_ON_STARTUP: "true"
+      STORES: epic,prime,gog,steam,fab
+      FAB_ACCEPT_EULA: "false"
+      UNITY_ACCEPT_TOS: "false"
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.free-games-claimer.rule=Host(`fgc.ravil.space`)"
+      - "traefik.http.routers.free-games-claimer.entrypoints=websecure"
+      - "traefik.http.routers.free-games-claimer.tls.certresolver=cloudflare"
+      - "traefik.http.services.free-games-claimer.loadbalancer.server.port=7080"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.free-games-claimer.middlewares=oidc-auth@docker"
+
+volumes:
+  fgc_data:
+
+networks:
+  default:
+    name: free-games-claimer_default
+  traefik:
+    name: traefik_default
+    external: true

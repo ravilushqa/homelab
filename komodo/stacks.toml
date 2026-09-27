@@ -287,6 +287,18 @@ branch = "main"
 run_directory = "komodo/stacks/ntfy"
 
 [[stack]]
+name = "free-games-claimer"
+description = "Free Games Claimer Remaster — noVNC UI protected by Pocket ID"
+tags = ["tools"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/free-games-claimer"
+
+[[stack]]
 name = "honcho"
 description = "AI-native memory backend for Hermes"
 tags = ["ai", "tools", "memory"]
