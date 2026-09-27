@@ -7,7 +7,15 @@ services:
     stdin_open: true
     volumes:
       - fgc_data:/fgc/data
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep python3 && curl --fail --silent --output /dev/null http://localhost:7080 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     environment:
+      # Second factor behind PocketID: other containers on traefik_default can reach noVNC directly.
+      VNC_PASSWORD: ${FGC_VNC_PASSWORD:?FGC_VNC_PASSWORD must be set}
       SHOW: "1"
       NOVNC_PORT: "7080"
       VNC_URL: https://fgc.ravil.space
@@ -20,7 +28,6 @@ services:
       FAB_ACCEPT_EULA: "false"
       UNITY_ACCEPT_TOS: "false"
     networks:
-      - default
       - traefik
     labels:
       - "traefik.enable=true"
@@ -35,8 +42,6 @@ volumes:
   fgc_data:
 
 networks:
-  default:
-    name: free-games-claimer_default
   traefik:
     name: traefik_default
     external: true
