@@ -14,8 +14,6 @@ services:
       retries: 3
       start_period: 30s
     environment:
-      # Second factor behind PocketID: other containers on traefik_default can reach noVNC directly.
-      VNC_PASSWORD: ${FGC_VNC_PASSWORD:?FGC_VNC_PASSWORD must be set}
       SHOW: "1"
       NOVNC_PORT: "7080"
       VNC_URL: https://fgc.ravil.space

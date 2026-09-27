@@ -297,9 +297,6 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/free-games-claimer"
-environment = """
-FGC_VNC_PASSWORD = [[FGC_VNC_PASSWORD]]
-"""
 
 [[stack]]
 name = "honcho"
