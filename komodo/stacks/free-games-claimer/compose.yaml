@@ -11,7 +11,7 @@ services:
       SHOW: "1"
       NOVNC_PORT: "7080"
       VNC_URL: https://fgc.ravil.space
-      VNC_LOGIN_TIMEOUT: "900"
+      VNC_LOGIN_TIMEOUT: "3600"
       SCHEDULER_HOURS: "0"
       SCHEDULER_TIMEZONE: Europe/Berlin
       SCHEDULER_FIXED_TIMES: "10:15,20:15"

@@ -12,6 +12,10 @@ Komodo-managed deployment of `P-Adamiec/Free-Games-Claimer-Remaster` at
 4. Complete captchas, 2FA, e-mail codes, and account challenges locally in the
    noVNC session.
 
+noVNC shows the browser only while an active claim or login run is in progress.
+After a completed run, it may show the empty X desktop. Restart or deploy the
+stack to immediately begin a new run.
+
 No store credentials, passwords, TOTP material, recovery codes, or webhook URLs
 belong in Git. Browser sessions and claim state remain only in the `fgc_data`
 Docker volume mounted at `/fgc/data`.
