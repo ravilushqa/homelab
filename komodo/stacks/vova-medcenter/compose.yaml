@@ -16,7 +16,7 @@ services:
       retries: 30
 
   backend:
-    image: ghcr.io/zent7/vova-medcenter-backend:506adf738a5c3a7810a2bc7b4c20b5556755b8f5@sha256:467ab7d1aa8b8d109b69056f0335723b7b1874b86a8511e6f5e213e21674676d
+    image: ghcr.io/zent7/vova-medcenter-backend:417727422ec99f1f248dc575595ae009c3ea019f@sha256:a22439650d21057c66618b708382701b4f7c19a22510d1b954917fe0a7085635
     pull_policy: always
     container_name: vova-medcenter-backend
     restart: unless-stopped
@@ -36,7 +36,7 @@ services:
       - "traefik.enable=false"
 
   frontend:
-    image: ghcr.io/zent7/vova-medcenter-frontend:506adf738a5c3a7810a2bc7b4c20b5556755b8f5@sha256:c410496039eac39b1bc2abf830c3e850e08a1465e756784be8faf3600bcb9662
+    image: ghcr.io/zent7/vova-medcenter-frontend:417727422ec99f1f248dc575595ae009c3ea019f@sha256:9c35e1dbd845e2d94a9027e7c1a46e17bb0ff48a8200472bc648947d4df8e7ca
     pull_policy: always
     container_name: vova-medcenter-frontend
     restart: unless-stopped
@@ -65,7 +65,7 @@ services:
       frontend:
         condition: service_healthy
     environment:
-      EXPECTED_REVISION: 506adf738a5c3a7810a2bc7b4c20b5556755b8f5
+      EXPECTED_REVISION: 417727422ec99f1f248dc575595ae009c3ea019f
     command:
       - /bin/sh
       - -ec
