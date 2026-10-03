@@ -9,16 +9,10 @@ services:
           git clone --depth 1 --branch main "https://x-access-token:$(cat /run/secrets/github_pat)@github.com/ravilushqa/ha-wall-panel.git" /src \
           && rm -rf /src/.git
 
-        FROM node:22-alpine AS builder
-        WORKDIR /app
-        COPY --from=source /src/ ./
-        RUN npm install
-        RUN npm run build
-
         FROM nginx:1.27-alpine
-        COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
-        COPY --from=builder /app/40-env.sh /docker-entrypoint.d/40-env.sh
-        COPY --from=builder /app/dist/ /usr/share/nginx/html/
+        COPY --from=source /src/docker/nginx.conf /etc/nginx/conf.d/default.conf
+        COPY --from=source /src/docker/40-env.sh /docker-entrypoint.d/40-env.sh
+        COPY --from=source /src/app/ /usr/share/nginx/html/.
         RUN chmod +x /docker-entrypoint.d/40-env.sh \
           && rm -rf /usr/share/nginx/html/demo-states
         ENV HASS_URL=
