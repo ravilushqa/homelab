@@ -1,0 +1,125 @@
+# Applied to Home Assistant storage-mode scripts via REST API; repo source of truth.
+
+dashboard_leave:
+  alias: "Дашборд: Ухожу"
+  icon: mdi:exit-run
+  mode: single
+  sequence:
+    # Snapshot for «Вернуть как было» (dashboard_leave_undo).
+    - action: scene.create
+      data:
+        scene_id: dashboard_before_leave
+        snapshot_entities:
+          - light.0x90ab96fffe8cec22
+          - light.0x0cae5ffffe6fce96
+          - light.kajplats_e27_ws_globe_470lm
+          - light.bedroom_light
+          - light.kitchen_light
+          - light.0x60b647fffea18a20
+          - light.0xe8e07efffe5bf41e
+          - light.storage_light
+          - remote.televizor_v_gostinoi
+          - cover.wifi_curtain_motor_curtain
+    - action: light.turn_off
+      target:
+        entity_id:
+          - light.0x90ab96fffe8cec22
+          - light.0x0cae5ffffe6fce96
+          - light.kajplats_e27_ws_globe_470lm
+          - light.bedroom_light
+          - light.kitchen_light
+          - light.0x60b647fffea18a20
+          - light.0xe8e07efffe5bf41e
+          - light.storage_light
+    - action: remote.turn_off
+      target: { entity_id: remote.televizor_v_gostinoi }
+      continue_on_error: true
+    - action: cover.close_cover
+      target: { entity_id: cover.wifi_curtain_motor_curtain }
+      continue_on_error: true
+    # Lock only after the door has been opened and shut again; give up after 3 minutes.
+    # The contact sensor is inverted on this door: "off" = open, "on" = closed (see app/config.js).
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: lock.home_door
+          state: locked
+    - wait_for_trigger:
+        - trigger: state
+          entity_id: binary_sensor.0x583bc2fffe010b08_contact
+          from: "off"
+          to: "on"
+      timeout: "00:03:00"
+      continue_on_timeout: false
+    - delay: "00:00:02"
+    - action: lock.lock
+      target: { entity_id: lock.home_door }
+
+dashboard_leave_undo:
+  alias: "Дашборд: Ухожу, отмена"
+  icon: mdi:undo
+  mode: single
+  sequence:
+    - action: script.turn_off
+      target: { entity_id: script.dashboard_leave }
+    - action: scene.turn_on
+      target: { entity_id: scene.dashboard_before_leave }
+
+dashboard_home:
+  alias: "Дашборд: Дома"
+  icon: mdi:home
+  mode: single
+  sequence:
+    - action: light.turn_on
+      target:
+        entity_id:
+          - light.0x60b647fffea18a20   # прихожая
+          - light.0x0cae5ffffe6fce96   # стол
+
+dashboard_cinema:
+  alias: "Дашборд: Кино"
+  icon: mdi:movie-open
+  mode: single
+  sequence:
+    - action: light.turn_off
+      target:
+        entity_id:
+          - light.0x90ab96fffe8cec22
+          - light.0x0cae5ffffe6fce96
+          - light.kitchen_light
+          - light.0x60b647fffea18a20
+    - action: light.turn_on
+      target: { entity_id: light.kajplats_e27_ws_globe_470lm }
+      data: { brightness_pct: 20, color_temp_kelvin: 2202 }
+    - action: remote.turn_on
+      target: { entity_id: remote.televizor_v_gostinoi }
+      continue_on_error: true
+
+dashboard_night:
+  alias: "Дашборд: Ночь"
+  icon: mdi:weather-night
+  mode: single
+  sequence:
+    - action: light.turn_off
+      target:
+        entity_id:
+          - light.0x90ab96fffe8cec22
+          - light.0x0cae5ffffe6fce96
+          - light.kajplats_e27_ws_globe_470lm
+          - light.bedroom_light
+          - light.kitchen_light
+          - light.0x60b647fffea18a20
+          - light.0xe8e07efffe5bf41e
+          - light.storage_light
+    - action: remote.turn_off
+      target: { entity_id: remote.televizor_v_gostinoi }
+      continue_on_error: true
+    - action: cover.close_cover
+      target: { entity_id: cover.wifi_curtain_motor_curtain }
+      continue_on_error: true
+    # Never lock an open door (inverted sensor: "on" = closed).
+    - condition: state
+      entity_id: binary_sensor.0x583bc2fffe010b08_contact
+      state: "on"
+    - action: lock.lock
+      target: { entity_id: lock.home_door }
