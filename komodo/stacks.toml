@@ -87,6 +87,9 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/ha-wall-panel"
+environment = """
+GITHUB_PAT = [[GITHUB_PAT]]
+"""
 
 # ─── Monitoring ──────────────────────────────────────────────────
 
