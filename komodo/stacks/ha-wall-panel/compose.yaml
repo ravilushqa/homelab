@@ -2,6 +2,9 @@ services:
   ha-wall-panel:
     build:
       context: https://github.com/ravilushqa/ha-wall-panel.git#2cb8291f84361b85a3f4eaaff68fd4b48c8f1024
+      secrets:
+        - source: github_pat
+          target: GIT_AUTH_TOKEN
     container_name: ha-wall-panel
     restart: unless-stopped
     environment:
@@ -24,3 +27,7 @@ networks:
   traefik:
     name: traefik_default
     external: true
+
+secrets:
+  github_pat:
+    environment: GITHUB_PAT
