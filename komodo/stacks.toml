@@ -76,6 +76,18 @@ repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/ha"
 
+[[stack]]
+name = "ha-wall-panel"
+description = "Home Assistant wall panel dashboard"
+tags = ["infra", "home-automation"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/ha-wall-panel"
+
 # ─── Monitoring ──────────────────────────────────────────────────
 
 [[stack]]

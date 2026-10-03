@@ -1,0 +1,26 @@
+services:
+  ha-wall-panel:
+    build:
+      context: https://github.com/ravilushqa/ha-wall-panel.git#2cb8291f84361b85a3f4eaaff68fd4b48c8f1024
+    container_name: ha-wall-panel
+    restart: unless-stopped
+    environment:
+      HASS_URL: https://ha.ravil.space
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ha-wall-panel.rule=Host(`ha-dashboard.ravil.space`)"
+      - "traefik.http.routers.ha-wall-panel.entrypoints=websecure"
+      - "traefik.http.routers.ha-wall-panel.tls.certresolver=cloudflare"
+      - "traefik.http.routers.ha-wall-panel.middlewares=oidc-auth@docker"
+      - "traefik.http.services.ha-wall-panel.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik_default"
+
+networks:
+  default:
+    name: ha-wall-panel_default
+  traefik:
+    name: traefik_default
+    external: true
