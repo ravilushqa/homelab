@@ -2,6 +2,7 @@ services:
   ha-wall-panel:
     build:
       context: .
+      no_cache: true
       dockerfile_inline: |
         # syntax=docker/dockerfile:1.7
         FROM alpine/git:2.49.1 AS source
