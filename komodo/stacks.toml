@@ -465,3 +465,15 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/hermes-webui"
+
+[[stack]]
+name = "health-connect-bridge"
+description = "Health Connect webhook ingest — router-only proxy to Hermes host 192.168.1.65:9121"
+tags = ["health", "infra"]
+deploy = true
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/health-connect-bridge"

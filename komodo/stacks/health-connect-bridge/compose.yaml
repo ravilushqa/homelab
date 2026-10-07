@@ -1,0 +1,41 @@
+services:
+  # Dummy container — labels only. Traefik routes to the health-connect-bridge
+  # receiver running on the Hermes host at 192.168.1.65:9121.
+  #
+  # Security:
+  #   - No OIDC middleware: the receiver uses a strong pre-shared token
+  #     (X-Health-Token) via constant-time comparison. Adding OIDC on top
+  #     would break the Android Health Connect app which cannot do OAuth flows.
+  #   - Only POST /ingest/health-connect is routed. No read path is exposed.
+  #   - No whoami fallback: the rule is exact (Host+Path+Method), so
+  #     non-matching requests hit the default 404 from Traefik.
+  #
+  # Privacy / Umami analytics:
+  #   Traefik applies the global "umami@docker" middleware to ALL websecure
+  #   entrypoints. The umami-feeder ignoreURLs exclusion for /ingest/health-connect
+  #   is configured in komodo/stacks/traefik/compose.yaml (same PR).
+  #   This exclusion is NOT active until that traefik stack is redeployed via
+  #   GitOps after PR merge. Do not deploy this router stack before the traefik
+  #   stack is redeployed with the exclusion active.
+  health-connect-bridge-router:
+    image: traefik/whoami
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+
+      # Router — ingest endpoint only (no OIDC, exact path+method match)
+      - "traefik.http.routers.health-connect-bridge.rule=Host(`health-connect.ravil.space`) && Path(`/ingest/health-connect`) && Method(`POST`)"
+      - "traefik.http.routers.health-connect-bridge.entrypoints=websecure"
+      - "traefik.http.routers.health-connect-bridge.tls.certresolver=cloudflare"
+      - "traefik.http.routers.health-connect-bridge.priority=200"
+      - "traefik.http.routers.health-connect-bridge.service=health-connect-bridge-svc"
+
+      # Service — receiver on Hermes host port 9121
+      - "traefik.http.services.health-connect-bridge-svc.loadbalancer.server.url=http://192.168.1.65:9121"
+      - "traefik.http.services.health-connect-bridge-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true
