@@ -34,6 +34,11 @@ services:
       # Logging
       - --log.level=INFO
       - --accesslog=true
+      # Drop query parameters and headers from access logs (privacy).
+      # Prevents health-connect sync timing markers from leaking into log shippers
+      # (e.g. Alloy → Loki). Supported by Traefik v3.1+; pinned to v3.7.13.
+      - --accesslog.fields.queryparameters.defaultmode=drop
+      - --accesslog.fields.headers.defaultmode=drop
 
       # Dynamic file provider (serversTransports for self-signed backends)
       - --providers.file.filename=/etc/traefik/dynamic/servers-transports.yml

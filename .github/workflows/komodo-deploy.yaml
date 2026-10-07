@@ -32,22 +32,112 @@ jobs:
         env:
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_URL: "http://192.168.1.166:9120"
         run: |
-          FAILED=0
-          for STACK in ${{ steps.changed.outputs.stacks }}; do
-            echo "Deploying stack: $STACK"
-            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://192.168.1.166:9120/execute \
+          # Komodo DeployStack is asynchronous.
+          # Execute response shape (MongoDB Extended JSON):
+          #   { "_id": { "$oid": "<hex>" }, "status": "Queued"|"InProgress"|"Complete",
+          #     "success": false, ... }
+          # Poll via: POST /read {"type":"GetUpdate","params":{"id":"<hex>"}}
+          # Complete when: status == "Complete" AND success == true
+          # Source: verified against live StopStack response on this Komodo instance.
+
+          # Submit a DeployStack and return the plain update-ID hex string.
+          deploy_stack() {
+            local stack="$1"
+            echo "Deploying stack: $stack" >&2
+            local raw http_code body update_id
+            raw=$(curl -sS --connect-timeout 10 --max-time 30 -w '\n%{http_code}' -X POST "$KOMODO_URL/execute" \
               -H "Content-Type: application/json" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
-              -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}")
-            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-            BODY=$(echo "$RESPONSE" | head -1)
-            if [ "$HTTP_CODE" -ne 200 ]; then
-              echo "FAIL: $STACK (HTTP $HTTP_CODE): $BODY"
-              FAILED=1
-            else
-              echo "OK: $STACK"
+              -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$stack\"}}") || return 1
+            http_code=$(printf '%s' "$raw" | tail -n1)
+            body=$(printf '%s' "$raw" | head -n -1)
+            if [ "$http_code" -ne 200 ]; then
+              echo "FAIL: $stack — HTTP $http_code" >&2
+              return 1
             fi
+            # Extract hex ID from MongoDB $oid wrapper: {"_id":{"$oid":"<hex>"},...}
+            update_id=$(printf '%s' "$body" | jq -er '._id["$oid"]') || { echo "FAIL: $stack — could not extract update ID" >&2; return 1; }
+            if ! printf '%s' "$update_id" | grep -qE '^[0-9a-f]{24}$'; then
+              echo "FAIL: $stack — update ID is not a valid hex24: $update_id" >&2
+              return 1
+            fi
+            printf '%s' "$update_id"
+          }
+
+          # Poll GetUpdate until Complete; returns 0 on success, 1 on failure/timeout.
+          wait_for_update() {
+            local update_id="$1" stack="$2"
+            local max_wait=300 elapsed=0
+            echo "Waiting for $stack (update $update_id)..."
+            while [ "$elapsed" -lt "$max_wait" ]; do
+              local raw http_code body status success
+              raw=$(curl -sS --connect-timeout 10 --max-time 30 -w '\n%{http_code}' -X POST "$KOMODO_URL/read" \
+                -H "Content-Type: application/json" \
+                -H "X-Api-Key: $KOMODO_API_KEY" \
+                -H "X-Api-Secret: $KOMODO_API_SECRET" \
+                -d "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}") || { echo "FAIL: $stack — GetUpdate curl error" >&2; return 1; }
+              http_code=$(printf '%s' "$raw" | tail -n1)
+              body=$(printf '%s' "$raw" | head -n -1)
+              if [ "$http_code" -ne 200 ]; then
+                echo "FAIL: $stack — GetUpdate HTTP $http_code" >&2
+                return 1
+              fi
+              status=$(printf '%s' "$body" | jq -r '.status')
+              case "$status" in
+                Complete)
+                  success=$(printf '%s' "$body" | jq -r '.success')
+                  if [ "$success" = "true" ]; then
+                    echo "OK: $stack"
+                    return 0
+                  else
+                    echo "FAIL: $stack — Komodo reported success=false" >&2
+                    return 1
+                  fi
+                  ;;
+                Queued|InProgress)
+                  sleep 5
+                  elapsed=$((elapsed + 5))
+                  ;;
+                *)
+                  echo "FAIL: $stack — unexpected status: $status" >&2
+                  return 1
+                  ;;
+              esac
+            done
+            echo "FAIL: $stack — timed out after ${max_wait}s" >&2
+            return 1
+          }
+
+          deploy_and_wait() {
+            local stack="$1"
+            local update_id
+            update_id=$(deploy_stack "$stack") || return 1
+            wait_for_update "$update_id" "$stack"
+          }
+
+          CHANGED="${{ steps.changed.outputs.stacks }}"
+          FAILED=0
+
+          # traefik must deploy and confirm complete before health-connect-bridge.
+          # traefik carries the umami-feeder ignoreURLs privacy exclusion for
+          # /ingest/health-connect; health-connect-bridge MUST NOT be live until
+          # that exclusion is active and confirmed.
+          # Runbook: if traefik fails here, fix traefik first — do not force-deploy
+          # health-connect-bridge independently.
+          if echo " $CHANGED " | grep -qw traefik; then
+            if ! deploy_and_wait "traefik"; then
+              echo "ABORT: traefik deploy failed — skipping all remaining stacks to preserve privacy-exclusion ordering" >&2
+              exit 1
+            fi
+          fi
+
+          # Deploy all other changed stacks (traefik already handled above).
+          for STACK in $CHANGED; do
+            [ "$STACK" = "traefik" ] && continue
+            deploy_and_wait "$STACK" || FAILED=1
           done
+
           exit $FAILED
