@@ -83,6 +83,10 @@ services:
       - "traefik.http.middlewares.umami.plugin.umami-feeder.umamiUsername=${UMAMI_USERNAME}"
       - "traefik.http.middlewares.umami.plugin.umami-feeder.umamiPassword=${UMAMI_PASSWORD}"
       - "traefik.http.middlewares.umami.plugin.umami-feeder.createNewWebsites=true"
+      # Exclude health-connect ingest path from analytics (privacy: sync timing must not leak).
+      # Regex matched against req.URL.String() (path+query, no host).
+      # $$ escapes to literal $ after Docker Compose variable substitution.
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[0]=^/ingest/health-connect(\\?.*)?$$"
 
   whoami:
     image: traefik/whoami
