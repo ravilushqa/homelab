@@ -24,6 +24,18 @@ Security properties:
 - Connection: close on every response.
 - handle_error: no stack traces or client info logged.
 - NO health data, tokens, headers, or path contents in any log output.
+
+Nutrition write-back (optional — only active when nutrition_token_path and
+nutrition_db_path are configured):
+- GET  /nutrition/queue  — X-Nutrition-Token auth; returns confirmed unacked records.
+- POST /nutrition/ack    — X-Nutrition-Token auth; acks a delivered record.
+- Scoped auth: X-Health-Token cannot access nutrition routes;
+  X-Nutrition-Token cannot access ingest route.
+- Nutrition token and ingest token must not share bytes (rejected at startup).
+- Nutrition DB and health DB must not alias each other (symlink/hardlink checked).
+- Cache-Control: no-store on all nutrition responses.
+- Ack body capped at MAX_ACK_BODY; GET queue body has no body (reject if present).
+- Reject Transfer-Encoding and query strings on nutrition routes.
 """
 
 import hmac
@@ -54,6 +66,13 @@ REQUEST_BACKLOG = 32
 
 INGEST_PATH = "/ingest/health-connect"
 HEALTHZ_PATH = "/healthz"
+NUTRITION_QUEUE_PATH = "/nutrition/queue"
+NUTRITION_ACK_PATH = "/nutrition/ack"
+
+# Nutrition-specific limits
+_MAX_ACK_BODY = 1024   # bytes — ack payload is tiny
+_NUTRITION_GET_RATE_LIMIT = 10   # per IP per 60 s
+_NUTRITION_GLOBAL_RATE_LIMIT = 30  # global per 60 s
 
 
 # ── Token loading ─────────────────────────────────────────────────────────────
@@ -119,11 +138,46 @@ def _check_no_nan_inf(obj) -> None:
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 
+def _make_bridge_handler_class(
+    token: bytes,
+    store: "HealthStore",
+    rate_limiter: "RateLimitManager",
+    nutrition_token: bytes = b"",
+    nutrition_store=None,
+    nutrition_rl=None,
+) -> type:
+    """
+    Create an isolated handler class per server instance.
+
+    Each BridgeServer creates its own subclass so that class-level state
+    (auth tokens, stores) never leaks between concurrent server instances
+    in the same process.
+    """
+    return type(
+        "_BridgeHandlerInstance",
+        (_BridgeHandler,),
+        {
+            "_token": token,
+            "_store": store,
+            "_rate_limiter": rate_limiter,
+            "_nutrition_token": nutrition_token,
+            "_nutrition_store": nutrition_store,
+            "_nutrition_rl": nutrition_rl,
+        },
+    )
+
+
 class _BridgeHandler(BaseHTTPRequestHandler):
-    # Class-level shared state (set by BridgeServer before serving)
+    # Class-level state defaults.  Production use goes via _make_bridge_handler_class.
+    # Test helpers may set these directly on the class for isolated test servers.
     _token: bytes = b""
     _store: Optional[HealthStore] = None
     _rate_limiter: Optional[RateLimitManager] = None
+
+    # Nutrition write-back state (only active when not None/empty)
+    _nutrition_token: bytes = b""
+    _nutrition_store = None
+    _nutrition_rl: Optional[RateLimitManager] = None
 
     server_version = "health-connect-bridge/1.0"
     sys_version = ""  # suppress Python version from Server header
@@ -150,15 +204,37 @@ class _BridgeHandler(BaseHTTPRequestHandler):
     def _reject(self, code: int, msg: str) -> None:
         self._send_json(code, {"error": msg})
 
+    def _send_json_no_cache(self, code: int, body: dict) -> None:
+        """Like _send_json but adds Cache-Control: no-store (for nutrition endpoints)."""
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Connection", "close")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _reject_no_cache(self, code: int, msg: str) -> None:
+        self._send_json_no_cache(code, {"error": msg})
+
     def do_GET(self) -> None:
         if self.path == HEALTHZ_PATH:
             self._send_json(200, {"status": "ok"})
+            return
+        if self.path == NUTRITION_QUEUE_PATH:
+            self._handle_nutrition_queue(self._peer_ip())
             return
         self._reject(404, "not found")
 
     def do_POST(self) -> None:
         # Concurrency is already gated at process_request level.
-        self._handle_post(self._peer_ip())
+        ip = self._peer_ip()
+        if self.path == NUTRITION_ACK_PATH:
+            self._handle_nutrition_ack(ip)
+            return
+        self._handle_post(ip)
 
     def _handle_post(self, ip: str) -> None:
         rl = self.__class__._rate_limiter
@@ -226,11 +302,17 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             self._reject(400, "body length mismatch")
             return
 
-        # Parse JSON — reject duplicate keys and non-finite floats
+        # Parse JSON — reject duplicate keys, non-finite floats, deep recursion
         try:
             payload = json.loads(raw, object_pairs_hook=_no_dup_keys)
         except (json.JSONDecodeError, ValueError):
             self._reject(400, "invalid json")
+            return
+        except RecursionError:
+            self._reject(400, "json too deeply nested")
+            return
+        except OverflowError:
+            self._reject(400, "json value out of range")
             return
 
         if not isinstance(payload, dict):
@@ -239,7 +321,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
 
         try:
             _check_no_nan_inf(payload)
-        except ValueError:
+        except (ValueError, RecursionError):
             self._reject(400, "non-finite float in payload")
             return
 
@@ -266,6 +348,199 @@ class _BridgeHandler(BaseHTTPRequestHandler):
 
         logger.info("Ingest ok record_types=%d", len(summary))
         self._send_json(200, {"ok": True, "ingested": summary})
+
+    # ── Nutrition handlers ────────────────────────────────────────────────────
+
+    def _check_nutrition_auth(self) -> Optional[bytes]:
+        """
+        Validate X-Nutrition-Token for nutrition endpoints.
+
+        Returns the nutrition token bytes if auth passes, None if request
+        should be rejected (caller must have already sent the error response).
+
+        Security: rejects query strings, duplicate headers, Transfer-Encoding.
+        Scoped: X-Health-Token cannot access nutrition routes (different header).
+        """
+        # Reject query string on nutrition paths
+        if "?" in self.path:
+            self._reject_no_cache(404, "not found")
+            return None
+
+        # Reject Transfer-Encoding
+        te_vals = self.headers.get_all("Transfer-Encoding") or []
+        if te_vals:
+            self._reject_no_cache(400, "transfer-encoding not accepted")
+            return None
+
+        # Scoped auth: ingest token (X-Health-Token) must NOT be present
+        health_vals = self.headers.get_all("X-Health-Token") or []
+        if health_vals:
+            self._reject_no_cache(400, "wrong token header for nutrition endpoint")
+            return None
+
+        # Exactly one X-Nutrition-Token
+        nt_vals = self.headers.get_all("X-Nutrition-Token") or []
+        if len(nt_vals) > 1:
+            self._reject_no_cache(400, "duplicate auth header")
+            return None
+        supplied = (nt_vals[0] if nt_vals else "").encode()
+        expected = self.__class__._nutrition_token
+
+        rl = self.__class__._nutrition_rl
+        if not hmac.compare_digest(supplied, expected):
+            if rl is not None:
+                rl.record_auth_failure(self._peer_ip())
+            self._reject_no_cache(401, "unauthorized")
+            return None
+        return expected
+
+    def _handle_nutrition_queue(self, ip: str) -> None:
+        """GET /nutrition/queue — return confirmed unacked records."""
+        ns = self.__class__._nutrition_store
+        if ns is None:
+            # Nutrition not configured: fail closed
+            self._reject(404, "not found")
+            return
+
+        rl = self.__class__._nutrition_rl
+        if rl is not None and not rl.check_request(ip):
+            self._reject_no_cache(429, "rate limit exceeded")
+            return
+
+        if self._check_nutrition_auth() is None:
+            return
+
+        # GET must not have a body; reject duplicate Content-Length headers too
+        cl_vals = self.headers.get_all("Content-Length") or []
+        if len(cl_vals) > 1:
+            self._reject_no_cache(400, "duplicate content-length header")
+            return
+        if cl_vals:
+            cl_str = cl_vals[0].strip()
+            if cl_str and cl_str != "0":
+                self._reject_no_cache(400, "body not accepted on GET")
+                return
+
+        try:
+            records = ns.get_confirmed_queue()
+        except Exception:
+            logger.error("Nutrition queue fetch error (details suppressed)")
+            self._reject_no_cache(500, "internal error")
+            return
+
+        self._send_json_no_cache(200, {"schema_version": 1, "records": records})
+
+    def _handle_nutrition_ack(self, ip: str) -> None:
+        """POST /nutrition/ack — acknowledge a delivered record."""
+        from .nutrition_queue import (
+            NotFound, VersionConflict, InvalidState,
+        )
+        ns = self.__class__._nutrition_store
+        if ns is None:
+            self._reject(404, "not found")
+            return
+
+        rl = self.__class__._nutrition_rl
+        if rl is not None and not rl.check_request(ip):
+            self._reject_no_cache(429, "rate limit exceeded")
+            return
+
+        if self._check_nutrition_auth() is None:
+            return
+
+        # Reject Transfer-Encoding (already checked in _check_nutrition_auth via path,
+        # but double-check here since _check_nutrition_auth is path-agnostic)
+        te_vals = self.headers.get_all("Transfer-Encoding") or []
+        if te_vals:
+            self._reject_no_cache(400, "transfer-encoding not accepted")
+            return
+
+        # Exactly one Content-Length required; cap at MAX_ACK_BODY
+        cl_vals = self.headers.get_all("Content-Length") or []
+        if len(cl_vals) != 1:
+            self._reject_no_cache(411, "content-length required (exactly one)")
+            return
+        cl_str = cl_vals[0].strip()
+        if not cl_str or not all(c in "0123456789" for c in cl_str):
+            self._reject_no_cache(400, "invalid content-length")
+            return
+        content_length = int(cl_str)
+        if content_length > _MAX_ACK_BODY:
+            self._reject_no_cache(413, "ack body too large")
+            return
+
+        ct = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        if ct != "application/json":
+            self._reject_no_cache(415, "content-type must be application/json")
+            return
+
+        try:
+            raw = self.rfile.read(content_length)
+        except (OSError, socket.timeout):
+            self._reject_no_cache(400, "failed to read body")
+            return
+        if len(raw) != content_length:
+            self._reject_no_cache(400, "body length mismatch")
+            return
+
+        try:
+            payload = json.loads(raw, object_pairs_hook=_no_dup_keys)
+        except (json.JSONDecodeError, ValueError):
+            self._reject_no_cache(400, "invalid json")
+            return
+        except (RecursionError, OverflowError):
+            self._reject_no_cache(400, "json too complex or value out of range")
+            return
+
+        if not isinstance(payload, dict):
+            self._reject_no_cache(400, "payload must be a json object")
+            return
+
+        try:
+            _check_no_nan_inf(payload)
+        except (ValueError, RecursionError):
+            self._reject_no_cache(400, "non-finite float in payload")
+            return
+
+        # Validate ack fields: exactly client_record_id (string) and client_record_version (int)
+        expected_keys = {"client_record_id", "client_record_version"}
+        if set(payload.keys()) != expected_keys:
+            self._reject_no_cache(400, "ack must contain exactly client_record_id and client_record_version")
+            return
+
+        crid = payload.get("client_record_id")
+        crv = payload.get("client_record_version")
+
+        if not isinstance(crid, str) or not crid:
+            self._reject_no_cache(400, "client_record_id must be a non-empty string")
+            return
+        if isinstance(crv, bool) or not isinstance(crv, int) or crv < 1:
+            self._reject_no_cache(400, "client_record_version must be a positive integer")
+            return
+        # Guard against huge ints that signal malice
+        if crv > 2 ** 53:
+            self._reject_no_cache(400, "client_record_version out of range")
+            return
+
+        try:
+            result = ns.ack_record(crid, crv)
+        except NotFound:
+            self._reject_no_cache(404, "not found")
+            return
+        except VersionConflict:
+            self._reject_no_cache(409, "version conflict")
+            return
+        except InvalidState:
+            self._reject_no_cache(409, "record not in confirmable state")
+            return
+        except Exception:
+            logger.error("Nutrition ack error (details suppressed)")
+            self._reject_no_cache(500, "internal error")
+            return
+
+        self._send_json_no_cache(200, {"ok": True, "result": result})
+
+    # ── Standard method handlers ──────────────────────────────────────────────
 
     def do_HEAD(self) -> None:
         self._reject(405, "method not allowed")
@@ -336,27 +611,116 @@ class _BoundedTCPServer(socketserver.TCPServer):
 
 # ── Server lifecycle ──────────────────────────────────────────────────────────
 
+def _check_no_path_alias(path_a: Path, path_b: Path) -> None:
+    """
+    Raise RuntimeError if path_a and path_b refer to the same inode
+    (hardlink or same file) or if either is a symlink.
+    Only checks existing paths; called after both exist.
+    """
+    for p in (path_a, path_b):
+        if p.is_symlink():
+            raise RuntimeError(f"DB path must not be a symlink: {p}")
+    try:
+        st_a = path_a.stat()
+        st_b = path_b.stat()
+        if (st_a.st_dev == st_b.st_dev) and (st_a.st_ino == st_b.st_ino):
+            raise RuntimeError(
+                f"Nutrition DB and health DB must not alias each other: "
+                f"{path_a} and {path_b}"
+            )
+    except FileNotFoundError:
+        pass  # one or both don't exist yet; alias check deferred
+
+
 class BridgeServer:
-    def __init__(self, host: str, port: int, token_path: Path, db_path: Path) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        token_path: Path,
+        db_path: Path,
+        nutrition_token_path: Optional[Path] = None,
+        nutrition_db_path: Optional[Path] = None,
+    ) -> None:
         self._host = host
         self._port = port
         self._token_path = token_path
         self._db_path = db_path
+        self._nutrition_token_path = nutrition_token_path
+        self._nutrition_db_path = nutrition_db_path
         self._server: Optional[_BoundedTCPServer] = None
         self._store: Optional[HealthStore] = None
+        self._nutrition_store = None
+
+        # Fail closed if only one of the two nutrition args is provided
+        has_nt = nutrition_token_path is not None
+        has_nd = nutrition_db_path is not None
+        if has_nt != has_nd:
+            raise RuntimeError(
+                "Both --nutrition-token-path and --nutrition-db-path must be "
+                "provided together, or neither (partial nutrition config rejected)"
+            )
 
     def start(self) -> None:
+        # Alias check using resolved paths FIRST — before any token loading or
+        # file creation.  Path.resolve() normalises ./x, ../x, and symlinks even
+        # for absent files (strict=False default), so identical absent paths are
+        # caught before HealthStore creates any DB file.
+        if self._nutrition_db_path is not None:
+            try:
+                resolved_db = Path(self._db_path).resolve()
+                resolved_ndb = Path(self._nutrition_db_path).resolve()
+                if resolved_db == resolved_ndb:
+                    raise RuntimeError(
+                        "Nutrition DB and health DB resolve to the same path — "
+                        "they must not alias each other"
+                    )
+            except RuntimeError:
+                raise
+            except (OSError, ValueError) as e:
+                raise RuntimeError(
+                    f"Cannot resolve DB paths for alias check: {e}"
+                ) from e
+
+        # Load and validate all tokens and path aliases BEFORE opening any database.
+        # This ensures no DB is created or mutated if configuration is invalid.
         token = _load_token(self._token_path)
+
+        ntoken: bytes = b""
+        nstore = None
+        nrl = None
+
+        # Nutrition validation (optional — only if both paths provided)
+        if self._nutrition_token_path is not None and self._nutrition_db_path is not None:
+            from .nutrition_queue import NutritionStore
+            # Inode/symlink alias check (complements the resolved-path check above)
+            _check_no_path_alias(self._db_path, self._nutrition_db_path)
+            ntoken = _load_token(self._nutrition_token_path)
+            # Reject identical token bytes
+            if hmac.compare_digest(token, ntoken):
+                raise RuntimeError(
+                    "Nutrition token and ingest token must not share bytes"
+                )
+
+        # All pre-flight checks passed; now open databases
         store = HealthStore(self._db_path)
         rl = RateLimitManager()
 
-        _BridgeHandler._token = token
-        _BridgeHandler._store = store
-        _BridgeHandler._rate_limiter = rl
+        if self._nutrition_token_path is not None and self._nutrition_db_path is not None:
+            from .nutrition_queue import NutritionStore
+            nstore = NutritionStore(self._nutrition_db_path)
+            nrl = RateLimitManager()
+            self._nutrition_store = nstore
+            logger.info("Nutrition write-back enabled")
+
+        # Per-server isolated handler class — no class-level state shared between instances
+        HandlerClass = _make_bridge_handler_class(
+            token, store, rl, ntoken, nstore, nrl
+        )
 
         self._store = store
         self._server = _BoundedTCPServer(
-            (self._host, self._port), _BridgeHandler, MAX_CONCURRENCY
+            (self._host, self._port), HandlerClass, MAX_CONCURRENCY
         )
         logger.info("Listening on %s:%d", self._host, self._port)
 
@@ -374,6 +738,8 @@ class BridgeServer:
             self._server.shutdown()
         if self._store:
             self._store.close()
+        if self._nutrition_store:
+            self._nutrition_store.close()
 
 
 def main() -> None:
@@ -401,12 +767,26 @@ def main() -> None:
         type=Path,
         default=_DEFAULT_BASE / "data/health.sqlite3",
     )
+    parser.add_argument(
+        "--nutrition-token-path",
+        type=Path,
+        default=None,
+        help="Path to nutrition pairing token (enables nutrition write-back when set)",
+    )
+    parser.add_argument(
+        "--nutrition-db-path",
+        type=Path,
+        default=None,
+        help="Path to nutrition SQLite database (required when --nutrition-token-path is set)",
+    )
     args = parser.parse_args()
     BridgeServer(
         host=args.host,
         port=args.port,
         token_path=args.token_path,
         db_path=args.db_path,
+        nutrition_token_path=args.nutrition_token_path,
+        nutrition_db_path=args.nutrition_db_path,
     ).start()
 
 
