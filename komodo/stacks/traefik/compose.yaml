@@ -92,6 +92,11 @@ services:
       # Regex matched against req.URL.String() (path+query, no host).
       # $$ escapes to literal $ after Docker Compose variable substitution.
       - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[0]=^/ingest/health-connect(\\?.*)?$$"
+      # Exclude nutrition queue and ack paths from analytics (privacy: meal timing must not leak).
+      # These routes MUST be excluded BEFORE the health-connect-bridge nutrition routes are live.
+      # Gate: traefik must deploy and confirm exclusions active before health-connect-bridge deploys.
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[1]=^/nutrition/queue(\\?.*)?$$"
+      - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[2]=^/nutrition/ack(\\?.*)?$$"
 
   whoami:
     image: traefik/whoami
