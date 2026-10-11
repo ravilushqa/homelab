@@ -1,0 +1,12 @@
+running=true
+ignoreURLs[0]=^/ingest/health-connect(\?.*)?$
+ignoreURLs[1]=^/nutrition/queue(\?.*)?$
+ignoreURLs[2]=^/nutrition/ack(\?.*)?$
+qp_drop=true
+hd_drop=true
+qp_override=false
+hd_override=false
+qp_conflict=true
+hd_conflict=false
+qp_dup_drop=false
+hd_dup_drop=false

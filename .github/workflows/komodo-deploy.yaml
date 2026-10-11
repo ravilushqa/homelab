@@ -121,15 +121,45 @@ jobs:
           CHANGED="${{ steps.changed.outputs.stacks }}"
           FAILED=0
 
-          # traefik must deploy and confirm complete before health-connect-bridge.
-          # traefik carries the umami-feeder ignoreURLs privacy exclusion for
-          # /ingest/health-connect; health-connect-bridge MUST NOT be live until
-          # that exclusion is active and confirmed.
-          # Runbook: if traefik fails here, fix traefik first — do not force-deploy
-          # health-connect-bridge independently.
-          if echo " $CHANGED " | grep -qw traefik; then
+          # Privacy + ordering gate:
+          # traefik ALWAYS deploys first when health-connect-bridge changes —
+          # even if traefik is not in the changed set. This ensures the running
+          # Traefik has the required Umami exclusions BEFORE nutrition routes go live.
+          #
+          # gate_script runs privacy_gate_check.py:
+          #   --source: validates actual compose label values (not comments)
+          #   --live-host: SSHes to host, runs docker inspect to verify live state
+          # If either check fails: ABORT. Runbook: fix traefik compose, redeploy.
+          gate_privacy_check() {
+            local traefik_host="192.168.1.166"
+            echo "Running privacy gate check (source + live Traefik API)..."
+            python3 services/health-connect-bridge/privacy_gate_check.py \
+              --source komodo/stacks/traefik/compose.yaml \
+              --live-host "$traefik_host" \
+              --ssh-user claw \
+            || {
+              echo "ABORT: privacy gate FAILED — nutrition routes must not be exposed" >&2
+              echo "  Traefik must have active Umami exclusions before health-connect-bridge deploys." >&2
+              echo "  Runbook: fix traefik compose labels + redeploy traefik, then retry." >&2
+              return 1
+            }
+          }
+
+          if echo " $CHANGED " | grep -qw "health-connect-bridge"; then
+            # Always deploy-and-wait traefik first, regardless of whether it changed,
+            # to ensure the running Traefik has current privacy exclusions.
+            echo "health-connect-bridge changed — deploying traefik first for privacy gate"
             if ! deploy_and_wait "traefik"; then
-              echo "ABORT: traefik deploy failed — skipping all remaining stacks to preserve privacy-exclusion ordering" >&2
+              echo "ABORT: traefik deploy failed — cannot verify privacy exclusions are active" >&2
+              exit 1
+            fi
+            # Run the privacy gate: source check + live Traefik API check
+            if ! gate_privacy_check; then
+              exit 1
+            fi
+          elif echo " $CHANGED " | grep -qw traefik; then
+            if ! deploy_and_wait "traefik"; then
+              echo "ABORT: traefik deploy failed — skipping all remaining stacks" >&2
               exit 1
             fi
           fi
