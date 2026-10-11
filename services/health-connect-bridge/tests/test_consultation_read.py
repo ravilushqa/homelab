@@ -1098,6 +1098,146 @@ class TestQueueDistinction(unittest.TestCase):
         for group in ingest:
             self.assertNotIn("total_energy_kcal", group)
 
+    def test_correlation_server_id_same_value_as_client_id_not_matched(self):
+        """
+        Regression: a health record with expl_ns='server' and expl_id equal to
+        the queue's client_record_id must NOT produce an identity_match.
+        Server and client ID namespaces are distinct identity spaces.
+        """
+        day_start_s, _ = self._day_bounds()
+        mid = day_start_s + 8000
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        crid = "nutr_server_collision_001"
+        # Health record has the same ID value but server namespace
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="server",     # server namespace — must NOT match client query
+            expl_id=crid,         # same value as queue client_record_id
+            client_record_version=1,
+            record_json=json.dumps({
+                "energy_kcal": 500.0, "protein_g": 30.0,
+                "carbohydrate_g": 60.0, "fat_g": 15.0,
+            }),
+            identity_key=f"e_nutrition_server_{crid}",
+        )
+        _insert_queue_record(
+            self.nutrition_db, crid, "acked",
+            "Server Collision Meal", start_iso, end_iso,
+        )
+        health_conn = _open_ro(self.health_db)
+        nutrition_conn = _open_ro(self.nutrition_db)
+        try:
+            by_state = _query_queue_for_day(nutrition_conn, self.DATE, health_conn)
+        finally:
+            health_conn.close()
+            nutrition_conn.close()
+        entry = by_state["acked"][0]
+        self.assertEqual(
+            entry["correlation"]["status"], "not_verified",
+            "Server-namespace expl_id must not match queue client_record_id.",
+        )
+
+    def test_correlation_client_id_in_record_json_when_server_id_primary(self):
+        """
+        Regression: when a health record has expl_ns='server' (server ID primary),
+        the client_record_id may be in record_json.metadata.client_record_id.
+        The secondary lookup must find and match it.
+        """
+        day_start_s, _ = self._day_bounds()
+        mid = day_start_s + 9000
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        crid = "nutr_rj_client_002"
+        server_id = "hc_server_assigned_id_abc"
+        # Health record: server ID is primary (expl_ns='server'), but record_json
+        # contains the client ID in metadata.
+        record_payload = json.dumps({
+            "energy_kcal": 600.0, "protein_g": 40.0,
+            "carbohydrate_g": 70.0, "fat_g": 20.0,
+            "metadata": {
+                "id": server_id,
+                "client_record_id": crid,
+                "client_record_version": 1,
+            },
+        })
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="server",
+            expl_id=server_id,
+            client_record_version=1,
+            record_json=record_payload,
+            identity_key=f"e_nutrition_server_{server_id}",
+        )
+        _insert_queue_record(
+            self.nutrition_db, crid, "acked",
+            "Both IDs Meal", start_iso, end_iso,
+            energy_kcal=600.0, protein_g=40.0, carbohydrate_g=70.0, fat_g=20.0,
+        )
+        health_conn = _open_ro(self.health_db)
+        nutrition_conn = _open_ro(self.nutrition_db)
+        try:
+            by_state = _query_queue_for_day(nutrition_conn, self.DATE, health_conn)
+        finally:
+            health_conn.close()
+            nutrition_conn.close()
+        entry = by_state["acked"][0]
+        corr = entry["correlation"]
+        self.assertEqual(
+            corr["status"], "identity_match",
+            "Client ID in record_json metadata should be found by secondary lookup.",
+        )
+        self.assertEqual(corr["match_via"], "record_json_metadata_client_id")
+        self.assertTrue(corr["content_match"])
+
+    def test_correlation_match_via_field_present_in_identity_match(self):
+        """identity_match result must include match_via field."""
+        day_start_s, _ = self._day_bounds()
+        mid = day_start_s + 10000
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        crid = "nutr_match_via_003"
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="client", expl_id=crid, client_record_version=1,
+            record_json=json.dumps({
+                "energy_kcal": 400.0, "protein_g": 25.0,
+                "carbohydrate_g": 50.0, "fat_g": 10.0,
+            }),
+            identity_key=f"e_nutrition_client_{crid}",
+        )
+        _insert_queue_record(
+            self.nutrition_db, crid, "acked", "Match Via Meal",
+            start_iso, end_iso,
+            energy_kcal=400.0, protein_g=25.0, carbohydrate_g=50.0, fat_g=10.0,
+        )
+        health_conn = _open_ro(self.health_db)
+        nutrition_conn = _open_ro(self.nutrition_db)
+        try:
+            by_state = _query_queue_for_day(nutrition_conn, self.DATE, health_conn)
+        finally:
+            health_conn.close()
+            nutrition_conn.close()
+        corr = by_state["acked"][0]["correlation"]
+        self.assertEqual(corr["status"], "identity_match")
+        self.assertIn("match_via", corr)
+        self.assertEqual(corr["match_via"], "expl_id_client_ns")
+
 
 # ── Tests: run() integration ──────────────────────────────────────────────────
 

@@ -451,6 +451,53 @@ def _query_records_for_day(
 
 # ── Queue-to-ingest correlation ────────────────────────────────────────────────
 
+def _build_correlation_result(
+    row: sqlite3.Row,
+    cver: Optional[int],
+    queue_entry: dict,
+    match_via: str,
+) -> dict:
+    """Build correlation result dict after an identity match is found."""
+    stored_ver = row["client_record_version"]
+    if stored_ver != cver:
+        return {
+            "status": "identity_match_version_mismatch",
+            "match_via": match_via,
+            "health_record_version": stored_ver,
+            "queue_version": cver,
+            "health_record_received_at": row["received_at"],
+            "note": (
+                "Same client_record_id found but version differs; "
+                "may be a stale or edited entry."
+            ),
+        }
+
+    content_issues: list = []
+    try:
+        rec = json.loads(row["record_json"])
+        for field in ("energy_kcal", "protein_g", "carbohydrate_g", "fat_g"):
+            q_val = queue_entry.get(field)
+            r_val = rec.get(field)
+            if q_val is not None and r_val is not None:
+                if abs(float(q_val) - float(r_val)) > 0.01:
+                    content_issues.append(
+                        f"{field}: queue={q_val} health_record={r_val}"
+                    )
+    except (ValueError, TypeError, AttributeError):
+        content_issues.append("record_json unparseable; macros not compared")
+
+    result: dict = {
+        "status": "identity_match",
+        "match_via": match_via,
+        "health_record_version": stored_ver,
+        "health_record_received_at": row["received_at"],
+        "content_match": len(content_issues) == 0,
+    }
+    if content_issues:
+        result["content_discrepancies"] = content_issues
+    return result
+
+
 def _correlate_queue_entry(
     queue_entry: dict,
     health_conn: Optional[sqlite3.Connection],
@@ -458,17 +505,24 @@ def _correlate_queue_entry(
     """
     Attempt to correlate a queue entry with a health_records ingest record.
 
-    Correlation requires an exact match on expl_id = client_record_id AND
-    client_record_version = queue entry version.  This is only possible when
-    health_records contains explicit IDs (expl_ns / expl_id columns), which
-    requires the payload format to include metadata.client_record_id.
+    Correlation requires an exact match on client_record_id AND
+    client_record_version.  Two lookup paths are tried:
 
-    In the current JSON payload format this field is absent, so status will
-    always be not_verified for current records.
+    1. Primary (expl_ns='client'): health_records.expl_id = client_record_id
+       with expl_ns = 'client'.  This is the direct path when the JSON payload
+       includes metadata.client_record_id as the primary explicit ID.
 
-    When an identity match is found, content_match checks whether start_time,
-    end_time, and the four macros agree with the stored health record.
-    Identity match and content match are reported separately.
+    2. Secondary (record_json metadata): when a server-assigned HC ID has
+       precedence in expl_id (expl_ns='server'), the client ID may only appear
+       in record_json.metadata.client_record_id.  A small scan of server-ID
+       records is performed to find it.
+
+    A record whose expl_ns='server' is NEVER matched against the queue
+    client_record_id via expl_id, even if the values happen to be equal.
+    Server-namespace and client-namespace IDs are distinct identity spaces.
+
+    In the current JSON payload format neither ID field is present, so status
+    will be not_verified for all current records.
     """
     if health_conn is None:
         return {
@@ -486,14 +540,15 @@ def _correlate_queue_entry(
         }
 
     try:
+        # ── Primary: expl_ns='client' only ────────────────────────────────
         row = health_conn.execute(
             """
             SELECT record_start_s, record_end_s, record_json,
                    client_record_version, received_at
             FROM health_records
             WHERE record_type = 'nutrition'
+              AND expl_ns = 'client'
               AND expl_id = ?
-            ORDER BY client_record_version DESC
             LIMIT 1
             """,
             (crid,),
@@ -504,49 +559,46 @@ def _correlate_queue_entry(
             "reason": "health_records query failed (schema incompatibility?)",
         }
 
-    if row is None:
-        return {
-            "status": "not_verified",
-            "reason": (
-                "no health_records entry with matching expl_id; "
-                "client_record_id is absent in the current JSON payload format"
-            ),
-        }
+    if row is not None:
+        return _build_correlation_result(row, cver, queue_entry, "expl_id_client_ns")
 
-    stored_ver = row["client_record_version"]
-    if stored_ver != cver:
-        return {
-            "status": "identity_match_version_mismatch",
-            "health_record_version": stored_ver,
-            "queue_version": cver,
-            "health_record_received_at": row["received_at"],
-            "note": "Same client_record_id found but version differs; may be a stale or edited entry.",
-        }
-
-    # Identity matched — now check content
-    content_issues: list = []
     try:
-        rec = json.loads(row["record_json"])
-        for field in ("energy_kcal", "protein_g", "carbohydrate_g", "fat_g"):
-            q_val = queue_entry.get(field)
-            r_val = rec.get(field)
-            if q_val is not None and r_val is not None:
-                if abs(float(q_val) - float(r_val)) > 0.01:
-                    content_issues.append(
-                        f"{field}: queue={q_val} health_record={r_val}"
-                    )
-    except (ValueError, TypeError, AttributeError):
-        content_issues.append("record_json unparseable; macros not compared")
+        # ── Secondary: server ID primary, client ID in record_json ─────────
+        # Handles future payloads where both server and client IDs exist and
+        # the server ID takes precedence in expl_id.  Scans a bounded set of
+        # server-ID records and parses record_json for the client ID.
+        server_rows = health_conn.execute(
+            """
+            SELECT record_start_s, record_end_s, record_json,
+                   client_record_version, received_at
+            FROM health_records
+            WHERE record_type = 'nutrition'
+              AND expl_ns = 'server'
+            LIMIT 200
+            """,
+        ).fetchall()
+    except sqlite3.OperationalError:
+        server_rows = []
 
-    result: dict = {
-        "status": "identity_match",
-        "health_record_version": stored_ver,
-        "health_record_received_at": row["received_at"],
-        "content_match": len(content_issues) == 0,
+    for sr in server_rows:
+        try:
+            rec_data = json.loads(sr["record_json"])
+            meta = rec_data.get("metadata") or {}
+            if meta.get("client_record_id") == crid:
+                return _build_correlation_result(
+                    sr, cver, queue_entry, "record_json_metadata_client_id"
+                )
+        except (ValueError, TypeError):
+            continue
+
+    return {
+        "status": "not_verified",
+        "reason": (
+            "no health_records entry with matching client_record_id "
+            "(checked expl_ns='client' expl_id and record_json metadata); "
+            "client_record_id is absent in the current JSON payload format"
+        ),
     }
-    if content_issues:
-        result["content_discrepancies"] = content_issues
-    return result
 
 
 # ── Nutrition queue queries ────────────────────────────────────────────────────
