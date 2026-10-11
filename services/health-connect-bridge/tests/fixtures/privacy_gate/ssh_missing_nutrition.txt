@@ -1,0 +1,8 @@
+running=true
+ignoreURLs[0]=^/ingest/health-connect(\?.*)?$
+ignoreURLs[1]=
+ignoreURLs[2]=
+qp_drop=true
+hd_drop=true
+qp_override=false
+hd_override=false

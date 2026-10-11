@@ -10,13 +10,24 @@ services:
   #   - No whoami fallback: the rule is exact (Host+Path+Method), so
   #     non-matching requests hit the default 404 from Traefik.
   #
+  # Nutrition write-back routes (GET /nutrition/queue, POST /nutrition/ack):
+  #   - Only active when the receiver is started with --nutrition-token-path
+  #     and --nutrition-db-path. The Traefik rules are always present in the
+  #     compose labels, but the receiver fails closed (404) when not configured.
+  #   - Authentication: X-Nutrition-Token (separate from ingest token).
+  #   - Scoped: nutrition token cannot ingest; ingest token cannot read nutrition.
+  #
   # Privacy / Umami analytics:
   #   Traefik applies the global "umami@docker" middleware to ALL websecure
-  #   entrypoints. The umami-feeder ignoreURLs exclusion for /ingest/health-connect
-  #   is configured in komodo/stacks/traefik/compose.yaml (same PR).
-  #   This exclusion is NOT active until that traefik stack is redeployed via
-  #   GitOps after PR merge. Do not deploy this router stack before the traefik
-  #   stack is redeployed with the exclusion active.
+  #   entrypoints. The umami-feeder ignoreURLs exclusions for /ingest/health-connect,
+  #   /nutrition/queue, and /nutrition/ack are configured in
+  #   komodo/stacks/traefik/compose.yaml (same PR).
+  #
+  #   PRIVACY GATE: These exclusions are NOT active until the traefik stack is
+  #   redeployed via GitOps after PR merge. The komodo-deploy.yaml workflow
+  #   enforces that traefik deploys and confirms complete BEFORE this stack
+  #   deploys. Do not bypass this gate: if traefik deploy fails, fix traefik
+  #   first. Do not force-deploy this stack independently.
   health-connect-bridge-router:
     image: traefik/whoami
     restart: unless-stopped
@@ -25,14 +36,32 @@ services:
     labels:
       - "traefik.enable=true"
 
-      # Router — ingest endpoint only (no OIDC, exact path+method match)
+      # ── Ingest route (POST only, no OIDC, exact path+method match) ──────────
       - "traefik.http.routers.health-connect-bridge.rule=Host(`health-connect.ravil.space`) && Path(`/ingest/health-connect`) && Method(`POST`)"
       - "traefik.http.routers.health-connect-bridge.entrypoints=websecure"
       - "traefik.http.routers.health-connect-bridge.tls.certresolver=cloudflare"
       - "traefik.http.routers.health-connect-bridge.priority=200"
       - "traefik.http.routers.health-connect-bridge.service=health-connect-bridge-svc"
 
-      # Service — receiver on Hermes host port 9121
+      # ── Nutrition queue route (GET /nutrition/queue, X-Nutrition-Token auth) ─
+      # Privacy gate: /nutrition/queue is excluded from Umami analytics in
+      # traefik/compose.yaml. Traefik must confirm that exclusion active first.
+      - "traefik.http.routers.health-connect-nutrition-queue.rule=Host(`health-connect.ravil.space`) && Path(`/nutrition/queue`) && Method(`GET`)"
+      - "traefik.http.routers.health-connect-nutrition-queue.entrypoints=websecure"
+      - "traefik.http.routers.health-connect-nutrition-queue.tls.certresolver=cloudflare"
+      - "traefik.http.routers.health-connect-nutrition-queue.priority=200"
+      - "traefik.http.routers.health-connect-nutrition-queue.service=health-connect-bridge-svc"
+
+      # ── Nutrition ack route (POST /nutrition/ack, X-Nutrition-Token auth) ────
+      # Privacy gate: /nutrition/ack is excluded from Umami analytics in
+      # traefik/compose.yaml. Traefik must confirm that exclusion active first.
+      - "traefik.http.routers.health-connect-nutrition-ack.rule=Host(`health-connect.ravil.space`) && Path(`/nutrition/ack`) && Method(`POST`)"
+      - "traefik.http.routers.health-connect-nutrition-ack.entrypoints=websecure"
+      - "traefik.http.routers.health-connect-nutrition-ack.tls.certresolver=cloudflare"
+      - "traefik.http.routers.health-connect-nutrition-ack.priority=200"
+      - "traefik.http.routers.health-connect-nutrition-ack.service=health-connect-bridge-svc"
+
+      # ── Shared service backend — receiver on Hermes host port 9121 ───────────
       - "traefik.http.services.health-connect-bridge-svc.loadbalancer.server.url=http://192.168.1.65:9121"
       - "traefik.http.services.health-connect-bridge-svc.loadbalancer.passHostHeader=true"
 
