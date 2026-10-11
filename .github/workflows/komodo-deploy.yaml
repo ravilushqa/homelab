@@ -16,6 +16,11 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Set up privacy gate Python environment
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gate_venv"
+          "$RUNNER_TEMP/gate_venv/bin/pip" install --quiet pyyaml
+
       - name: Detect changed stacks
         id: changed
         run: |
@@ -133,7 +138,7 @@ jobs:
           gate_privacy_check() {
             local traefik_host="192.168.1.166"
             echo "Running privacy gate check (source + live Traefik API)..."
-            python3 services/health-connect-bridge/privacy_gate_check.py \
+            "$RUNNER_TEMP/gate_venv/bin/python" services/health-connect-bridge/privacy_gate_check.py \
               --source komodo/stacks/traefik/compose.yaml \
               --live-host "$traefik_host" \
               --ssh-user claw \
