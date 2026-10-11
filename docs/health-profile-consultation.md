@@ -97,9 +97,11 @@ The bridge receives exercise records with session type, start/end times, and
 distance where applicable.  Individual sets, reps, and weights are absent from
 HC exports.  Refer to the Hevy app directly for set-level data.
 
-**Pixel Watch provenance**: The tool flags records from two Pixel Watch
-source patterns:
-1. Origin `com.google.android.wearable.healthservices` (exclusive to Pixel Watch).
+**Pixel Watch provenance**: The tool flags records from two heuristic source
+patterns associated with Pixel Watch.  These are **NOT verified product
+guarantees** — other devices or apps may share the same origins:
+1. Origin `com.google.android.wearable.healthservices` (heuristic: often
+   seen with Pixel Watch, but not exclusively guaranteed to be Pixel Watch).
 2. Origin `com.google.android.apps.fitness` **combined with** a device model
    containing "Pixel Watch".
 
@@ -122,19 +124,24 @@ cancelled  cancelled
 
 | State | Meaning |
 |---|---|
-| `draft` | AI estimate created; not yet reviewed by user |
-| `confirmed` | User consent recorded; entry queued and pending phone delivery |
-| `acked` | Phone client reported successful HC delivery after insert attempt |
-| `cancelled` | Entry withdrawn; will not be delivered |
+| `draft` | AI estimate created; unapproved — NOT pending automatic delivery |
+| `confirmed` | User consent recorded; entry queued for phone delivery |
+| `acked` | Phone client reported a successful Health Connect insert |
+| `cancelled` | Entry withdrawn; will not be delivered to phone |
 
 **`acked` is client-reported**: the phone calls `POST /nutrition/ack` after
-it has attempted to write the record to Health Connect.  This is
-**client-reported** and is **not independently verified** — the client could
-report success without the write completing.  Independent phone verification
-is always required (see below).
+reporting a successful Health Connect insert.  This is **client-reported**
+and is **not independently verified** by the bridge or this tool.
+Independent phone UI readback is always required (see below).
+
+**Cancelled-after-fetch caveat**: if an entry was already fetched by the phone
+before being cancelled, the bridge cannot guarantee it was not written to
+Health Connect.  A cancelled entry that had `delivery_possible=true` should
+be checked in Health Connect UI.
 
 **`acked` and `cancelled` are terminal**: do not describe them as "waiting
-for delivery".  Only `draft` and `confirmed` entries are pending.
+for delivery".  Only `confirmed` entries are pending delivery; `draft`
+entries are unapproved.
 
 Each queue entry includes a `correlation` field.  Correlation requires an
 exact `client_record_id` AND `client_record_version` match in `health_records`
@@ -171,7 +178,7 @@ The installed skill (`nutrition_writeback.py`) requires explicit production
 privacy gate flags.  The full command template for a confirm subcommand is:
 
 ```bash
-python /home/claw/.hermes/hermes-agent/homelab/services/health-connect-bridge/agent-workflow/nutrition_writeback.py \
+python /home/claw/.hermes/profiles/health/skills/health/nutrition-writeback/nutrition_writeback.py \
     --privacy-verifier /home/claw/.hermes/hermes-agent/homelab/services/health-connect-bridge/privacy_gate_check.py \
     --privacy-source /home/claw/.hermes/hermes-agent/homelab/komodo/stacks/traefik/compose.yaml \
     --live-host 192.168.1.166 \
@@ -180,12 +187,19 @@ python /home/claw/.hermes/hermes-agent/homelab/services/health-connect-bridge/ag
     confirm \
     --id <client_record_id> \
     --version <client_record_version> \
-    --consent "<exact Russian or English consent text>"
+    --confirmer Равиль \
+    --meal-name "<meal name from draft>" \
+    --consent-file /PRIVATE/actual-user-consent.txt
 ```
+
+`--consent-file` must point to a file containing the user's raw consent text
+from their actual message (never agent-generated).  The file is read once and
+its contents are never logged.
 
 All flags are mandatory for production.  The `--privacy-verifier` and
 `--privacy-source` flags are explicit production gates; omitting them causes
-the wrapper to refuse to proceed.
+the wrapper to refuse to proceed.  Never call `nutrition_cli.py confirm`
+directly — it bypasses the wrapper and consent validation.
 
 ### Complete workflow: photo to Health Connect
 
@@ -206,22 +220,28 @@ The full order for a new meal entry is:
 
 5. **Status readback** — run `consultation_read.py --date <date>` and read
    back the exact draft record: name, `client_record_id`, `client_record_version`,
-   start/end times, and macros.  Confirm these match intent.
+   start/end times.  Also note the КБЖУ preview (К=energy_kcal,
+   Б=protein_g, Ж=fat_g, У=carbohydrate_g) from the draft macros.
+   Confirm all values match intent before proceeding.
 
 6. **Preview consent** — display the consent statement with `{name}`, `{id}`,
    and `{version}` substituted from the actual draft values:
    > Я, Равиль, подтверждаю запись Health Connect для {name}, ID {id}, версия {version}, с показанным временем и макросами.
 
-7. **Re-read draft status** — run `consultation_read.py` again immediately
-   before confirming to verify the record is still in `draft` state with the
-   same version.  Another process may have edited or cancelled it.
+7. **User provides consent** — the user reads the full consent statement and
+   their exact message text is saved to a private consent file (e.g.
+   `/PRIVATE/actual-user-consent.txt`).  This raw text is never
+   agent-generated or paraphrased.
 
-8. **User provides consent** — the user reads the full consent statement aloud
-   and passes it unchanged to the wrapper.
+8. **Re-read draft status immediately after consent, before confirm** — run
+   `consultation_read.py` again to verify the record is still in `draft`
+   state with the same version.  Another process may have edited or cancelled
+   it between consent and confirmation.
 
 9. **Confirm via wrapper** — invoke the installed `nutrition_writeback.py`
-   confirm command (see above).  The wrapper validates consent and calls the
-   technical affirm internally.
+   confirm command (see above) with `--consent-file` pointing to the user's
+   raw consent file.  The wrapper validates consent, enforces privacy gates,
+   and calls the technical affirm internally.
 
 10. **Status ACK readback** — run `consultation_read.py` and verify the entry
     has transitioned to `confirmed`, then `acked` after phone delivery.
@@ -260,13 +280,19 @@ Health Connect, independent of the bridge `acked` state.
 - **ACK is client-reported**: the `acked` state does not prove the write
   succeeded.  Always verify in Health Connect UI regardless of queue state.
 
-**Evidence scope**: server-side and unit tests (including the consultation
-tool's own test suite) establish behaviour of the bridge server, the queue
-state machine, and the read-only tool.  They do **not** establish that
-background writes succeed, that offline replay is duplicate-free, or that
-the real Android app correctly reads and writes on a physical phone.
-Server/unit evidence and real-phone acceptance evidence must be stated
-separately.
+**Evidence scope**: server-side and unit tests establish behaviour of the
+bridge server, the queue state machine, and the read-only tool.  They do
+**not** establish that background writes succeed, that offline replay is
+duplicate-free, or that the real Android app correctly reads and writes on a
+physical phone.  Server/unit evidence and real-phone acceptance evidence must
+be stated separately.
+
+**Display evidence (confirmed 2026-10-11)**: an existing breakfast entry was
+confirmed visible in both Health Connect and Google Health
+(`com.fitbit.FitbitMobile` version `5.09.health-mobile-1104120883-985409492`)
+on the real phone.  This closes the HC/display check for that specific entry.
+Still open for each new entry: exact ID/version readback confirmation and
+real-phone background-write / offline-replay acceptance.
 
 **No new production test meals**: do not create new meals in the queue solely
 to test the delivery pipeline.  Test entries in Health Connect cannot easily
@@ -300,14 +326,15 @@ The following flags apply to all production runs.
 [ ] Review date_nutrition_ingest for HC-received nutrition records (if any)
 [ ] Review queue_by_state.draft for pending AI estimates
 [ ] For each draft to confirm:
-    [ ] Read exact draft values: name, ID, version, times, macros
+    [ ] Read exact draft: name, ID, version, times, КБЖУ macros
     [ ] Display full consent statement with actual name/ID/version substituted
-    [ ] Re-read draft status immediately before confirming (same version?)
-    [ ] User provides exact consent text unchanged
-    [ ] Run nutrition_writeback.py wrapper with all production privacy flags
-    [ ] Run consultation_read.py and confirm state transitions to confirmed/acked
+    [ ] User provides consent — save raw message text to /PRIVATE/consent-file
+    [ ] Re-read draft status AFTER consent, BEFORE confirm (same version?)
+    [ ] Run INSTALLED nutrition_writeback.py wrapper with all production flags:
+        --confirmer Равиль --meal-name NAME --consent-file /PRIVATE/...
+    [ ] Run consultation_read.py and confirm state → confirmed → acked
     [ ] Verify independently on phone in Health Connect UI
-    [ ] Note: server/unit tests do not establish real-phone acceptance
+    [ ] Note: server/unit tests do not establish real-phone background/offline acceptance
 [ ] Confirm no cross-source sums or numeric totals have been computed
 [ ] Confirm no production identifiers have been captured in notes or files
 ```
