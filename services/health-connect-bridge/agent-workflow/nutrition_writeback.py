@@ -1038,7 +1038,8 @@ def cmd_draft(args: argparse.Namespace) -> int:
 _STAGE = {"v": "pre"}
 
 
-def _confirm_with_readback(cli, db, rid, version, meal_name, confirmer, pre_confirm=None) -> int:
+def _confirm_with_readback(cli, db, rid, version, meal_name, confirmer, pre_confirm=None,
+                           extra_confirm_args=None) -> int:
     """
     Shared confirm path: read back before, verify draft/version/name, optionally
     run pre_confirm(before) -> error str | None (e.g. content-hash check and
@@ -1110,7 +1111,7 @@ def _confirm_with_readback(cli, db, rid, version, meal_name, confirmer, pre_conf
         "--version", str(version),
         "--affirm", _CONFIRM_AFFIRM,
         "--confirmer", confirmer,
-    ])
+    ] + list(extra_confirm_args or []))
     if rc2 != 0:
         sys.stderr.write(err2 if err2 else json.dumps({"error": "confirm CLI failed"}) + "\n")
         return 1
@@ -1664,15 +1665,34 @@ def _validate_short_reply(text: str) -> list:
 
 
 def _claim_preview(d: Path, path: Path, transport: dict, expect: dict) -> str | None:
-    """Atomically mark pending -> consuming under the lock. Returns error or None."""
+    """
+    Atomically mark pending -> consuming under the lock. Returns error or None.
+
+    Everything that made the selected preview valid is re-verified HERE, under
+    the lock: store ambiguity, that the reply target still maps to exactly this
+    one file, that the file is byte-for-byte (field-for-field) the record that was
+    validated, and that this raw reply was never claimed before.
+    """
     with _PreviewLock(d):
+        if _unreadable_previews(d):
+            return "pending-preview store has unreadable/insecure entries; failing closed"
+        key = (transport["chat_id"], transport["thread_id"], transport["reply_to_message_id"])
+        same_target = [
+            p for p, data in _iter_previews(d)
+            if data is not None and (data.get("chat_id"), data.get("thread_id"),
+                                     data.get("preview_message_id")) == key
+        ]
+        if same_target != [path]:
+            return "ambiguous or changed preview set for this reply target"
         cur, errs = _load_preview(path)
         if errs or cur is None:
             return "pending preview unreadable at claim"
         if cur.get("status") != "pending":
             return f"preview already {cur.get('status')} (replay rejected)"
-        if cur.get("preview_id") != expect["preview_id"]:
+        if cur != expect:
             return "preview changed during confirm"
+        if transport["message_id"] in (cur.get("used_reply_ids") or []):
+            return "this reply was already used (replay rejected)"
         cur["status"] = "consuming"
         cur["claimed_at"] = _now().isoformat()
         cur["reply_message_id"] = transport["message_id"]
@@ -1680,11 +1700,30 @@ def _claim_preview(d: Path, path: Path, transport: dict, expect: dict) -> str | 
     return None
 
 
+def _revoke_if_pending(d: Path, path: Path, expect: dict) -> None:
+    """Revoke a still-pending, unchanged preview (stale authorization)."""
+    with _PreviewLock(d):
+        cur, errs = _load_preview(path)
+        if errs or cur is None or cur.get("status") != "pending" or cur != expect:
+            return
+        cur["status"] = "revoked"
+        cur["finished_at"] = _now().isoformat()
+        _write_preview(path, cur, exclusive=False)
+
+
 def _finish_preview(d: Path, path: Path, status: str) -> None:
     with _PreviewLock(d):
         cur, errs = _load_preview(path)
         if errs or cur is None or cur.get("status") != "consuming":
             return
+        if status == "pending":
+            # Released after a failed confirm: remember the consumed raw reply so it
+            # can never be replayed; a NEW actual reply is required.
+            used = list(cur.get("used_reply_ids") or [])
+            if cur.get("reply_message_id") is not None:
+                used.append(cur["reply_message_id"])
+            cur["used_reply_ids"] = used
+            cur.pop("claimed_at", None)
         cur["status"] = status
         cur["finished_at"] = _now().isoformat()
         _write_preview(path, cur, exclusive=False)
@@ -1741,6 +1780,8 @@ def cmd_short_confirm(args: argparse.Namespace) -> int:
     errs = []
     if pv.get("status") != "pending":
         errs.append(f"preview is {pv.get('status')}, not pending (replay or superseded)")
+    if transport["message_id"] in (pv.get("used_reply_ids") or []):
+        errs.append("this reply was already used (replay rejected)")
     if pv.get("provenance_level") != _PROVENANCE_LEVEL:
         errs.append("preview has unexpected provenance level")
     if transport["sender_id"] != pv.get("user_id"):
@@ -1779,6 +1820,7 @@ def cmd_short_confirm(args: argparse.Namespace) -> int:
     def _pre_confirm(before: dict):
         live = _snapshot_of(before)
         if live is None or _snapshot_hash(live) != pv["snapshot_hash"]:
+            _revoke_if_pending(d, path, pv)  # drift kills the consent for good
             return "record content differs from the previewed content — new preview required"
         # Expiry is re-checked right before the claim.
         if _now() > expires:
@@ -1791,8 +1833,19 @@ def cmd_short_confirm(args: argparse.Namespace) -> int:
 
     _STAGE["v"] = "pre"
     rc = _confirm_with_readback(
-        cli, db, rid, version, snap["name"], pv["confirmer"], pre_confirm=_pre_confirm
+        cli, db, rid, version, snap["name"], pv["confirmer"], pre_confirm=_pre_confirm,
+        # The queue verifies this INSIDE its confirm transaction (before any mutation).
+        extra_confirm_args=["--expected-snapshot-hash", pv["snapshot_hash"]],
     )
+    if not claimed["v"] and rc != 0 and _STAGE["v"] == "pre":
+        # Rejected before the claim: if the draft drifted (state/version/content),
+        # this preview is stale and must not revive if the content is restored.
+        rec, _ = _read_record(cli, db, rid)
+        live = _snapshot_of(rec) if rec else None
+        if rec and (rec.get("state") != "draft"
+                    or rec.get("client_record_version") != version
+                    or live is None or _snapshot_hash(live) != pv["snapshot_hash"]):
+            _revoke_if_pending(d, path, pv)
     if claimed["v"]:
         if rc == 0:
             _finish_preview(d, path, "consumed")

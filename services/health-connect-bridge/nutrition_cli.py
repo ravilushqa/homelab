@@ -260,7 +260,10 @@ def cmd_confirm(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        entry = store.confirm_entry(args.id, args.version, args.affirm, args.confirmer)
+        entry = store.confirm_entry(
+            args.id, args.version, args.affirm, args.confirmer,
+            expected_snapshot_hash=getattr(args, "expected_snapshot_hash", None),
+        )
     except NotFound:
         print(json.dumps({"error": "not found"}), file=sys.stderr)
         return 1
@@ -411,6 +414,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_confirm.add_argument("--confirmer", required=True, metavar="NAME",
                            help="Name of the person confirming")
+    p_confirm.add_argument(
+        "--expected-snapshot-hash", default=None, metavar="HEX64",
+        help="Optional: confirm only if stored content hashes to this value "
+             "(checked inside the confirm transaction)",
+    )
 
     # status
     p_status = sub.add_parser("status", help="Show status of one or all entries")

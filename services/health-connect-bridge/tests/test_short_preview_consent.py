@@ -58,6 +58,12 @@ class FakeQueue:
                 self.on_confirm(self)
             if self.fail_confirm:
                 return 1, "", "boom"
+            # Contract of the real CLI: the expected hash is verified atomically
+            # with the state change, before any mutation.
+            if "--expected-snapshot-hash" in cli_args:
+                exp = cli_args[cli_args.index("--expected-snapshot-hash") + 1]
+                if nw._record_snapshot_hash(self.rec) != exp:
+                    return 1, "", '{"error": "content differs from the expected snapshot"}'
             self.rec["state"] = "confirmed"
             self.rec["confirmed_by"] = cli_args[cli_args.index("--confirmer") + 1]
             self.rec["confirmed_at"] = "2026-10-12T12:01:00Z"
@@ -412,6 +418,109 @@ class TestUnreadableStoreFailsClosed(Base):
         self.assertRejected(self.reply(), "unreadable")
 
 
+class TestReplayAfterRelease(Base):
+    def setUp(self):
+        super().setUp()
+        self.assertEqual(self.preview()[0], 0)
+
+    def _rec(self):
+        f = next((self.root / "pending-previews").glob("preview-*.json"))
+        return json.loads(f.read_text())
+
+    def test_same_reply_rejected_after_untouched_release(self):
+        self.q.fail_confirm = True
+        self.assertEqual(self.reply(mid="same")[0], 1)
+        self.assertEqual(self._rec()["status"], "pending")
+        self.assertEqual(self._rec()["used_reply_ids"], ["same"])
+        self.q.fail_confirm = False
+        before = self.q.confirm_calls
+        res = self.reply(mid="same")
+        self.assertEqual(res[0], 1)
+        self.assertIn("already used", (res[1] + res[2]).lower())
+        self.assertEqual(self.q.confirm_calls, before)
+        self.assertEqual(self.q.rec["state"], "draft")
+
+    def test_new_actual_reply_accepted_after_release(self):
+        self.q.fail_confirm = True
+        self.assertEqual(self.reply(mid="first")[0], 1)
+        self.q.fail_confirm = False
+        self.assertEqual(self.reply(mid="second")[0], 0)
+        self.assertEqual(self.q.rec["state"], "confirmed")
+        self.assertEqual(self._rec()["status"], "consumed")
+
+    def test_used_ids_accumulate_over_repeated_failures(self):
+        self.q.fail_confirm = True
+        for mid in ("a", "b"):
+            self.assertEqual(self.reply(mid=mid)[0], 1)
+        self.assertEqual(self._rec()["used_reply_ids"], ["a", "b"])
+        for mid in ("a", "b"):
+            self.assertEqual(self.reply(mid=mid)[0], 1)
+        self.assertEqual(self._rec()["used_reply_ids"], ["a", "b"])
+
+
+class TestClaimTimeRecheck(Base):
+    """Anything changing between selection/readiness and the claim lock must fail closed."""
+
+    def setUp(self):
+        super().setUp()
+        self.assertEqual(self.preview()[0], 0)
+        self.d = self.root / "pending-previews"
+        self.pfile = next(self.d.glob("preview-*.json"))
+
+    def reply_with_hook(self, hook, **kw):
+        def readiness(*a, **k):
+            hook()
+            return []
+        with mock.patch.object(nw, "_check_mutation_readiness", readiness):
+            return self.reply(**kw)
+
+    def test_duplicate_file_for_same_target_appears(self):
+        def hook():
+            dup = self.d / "preview-dup.json"
+            dup.write_text(self.pfile.read_text())
+            os.chmod(dup, 0o600)
+        self.assertRejected(self.reply_with_hook(hook))
+        self.assertEqual(json.loads(self.pfile.read_text())["status"], "pending")
+
+    def test_corrupt_file_appears(self):
+        def hook():
+            c = self.d / "preview-corrupt.json"
+            c.write_text("{broken")
+            os.chmod(c, 0o600)
+        self.assertRejected(self.reply_with_hook(hook), "unreadable")
+
+    def test_matched_file_binding_changed(self):
+        def hook():
+            data = json.loads(self.pfile.read_text())
+            data["expires_at"] = (T0 + timedelta(days=30)).isoformat()
+            self.pfile.write_text(json.dumps(data))
+        res = self.reply_with_hook(hook)
+        self.assertRejected(res)
+        self.assertEqual(json.loads(self.pfile.read_text())["status"], "pending")
+
+    def test_matched_file_snapshot_hash_swapped(self):
+        def hook():
+            data = json.loads(self.pfile.read_text())
+            data["snapshot_hash"] = "0" * 64
+            self.pfile.write_text(json.dumps(data))
+        self.assertRejected(self.reply_with_hook(hook))
+
+    def test_superseded_between_selection_and_claim(self):
+        self.assertEqual(self.reply_with_hook(lambda: self.preview(msg="p2")[0])[0], 1)
+        self.assertEqual(self.q.confirm_calls, 0)
+        self.assertEqual(self.q.rec["state"], "draft")
+        statuses = sorted(json.loads(f.read_text())["status"] for f in self.d.glob("preview-*.json"))
+        self.assertEqual(statuses, ["pending", "superseded"])
+
+    def test_content_drift_after_selection_revokes_and_restore_does_not_revive(self):
+        self.assertEqual(
+            self.reply_with_hook(lambda: self.q.rec.__setitem__("energy_kcal", 999.0))[0], 1)
+        self.assertEqual(self.q.confirm_calls, 0)
+        self.assertEqual(json.loads(self.pfile.read_text())["status"], "revoked")
+        self.q.rec["energy_kcal"] = 300.0   # restore: must not revive consent
+        self.assertRejected(self.reply(mid="r2"), "not pending")
+
+
 class FileQueue:
     """Cross-process fake queue: JSON state + flock, so forked children share it."""
 
@@ -466,6 +575,11 @@ class FileQueue:
             try:
                 st = self.load()
                 st["confirm_calls"] += 1
+                if "--expected-snapshot-hash" in cli_args:
+                    exp = cli_args[cli_args.index("--expected-snapshot-hash") + 1]
+                    if nw._record_snapshot_hash(st["rec"]) != exp:
+                        self.save(st)
+                        return 1, "", '{"error": "content differs from the expected snapshot"}'
                 if st["rec"]["state"] != "draft":
                     self.save(st)
                     return 1, "", "not draft"
@@ -587,19 +701,16 @@ class TestMultiprocess(MPBase):
         self.assertEqual(self.preview()[0], 0)
         tf = self.write_reply("r1")
         rcs = self.spawn([self.confirm_job(tf), lambda: self.q.update(fat_g=50.0) or 0])
-        # The queue CLI confirm is not content-bound, so a mutation landing before
-        # the confirm can still be confirmed there. The workflow must then fail
-        # closed: success (rc 0) is only allowed if the confirmed content is exactly
-        # the previewed content.
+        # The expected snapshot is verified inside the queue transaction, so a
+        # mutated record can NEVER reach confirmed, whichever side wins the race.
         rec = self.q.rec
         prev_hash = nw._snapshot_hash(nw._snapshot_of(_draft()))
-        if rcs[0] == 0:
-            self.assertEqual(rec["state"], "confirmed")
+        if rec["state"] == "confirmed":
+            self.assertEqual(rcs[0], 0)
             self.assertEqual(nw._record_snapshot_hash(rec), prev_hash)
         else:
-            self.assertLessEqual(self.q.confirm_calls, 1)
-            if rec["state"] == "confirmed":
-                self.assertNotEqual(nw._record_snapshot_hash(rec), prev_hash)
+            self.assertEqual(rcs[0], 1)
+            self.assertNotEqual(nw._record_snapshot_hash(rec), prev_hash)
 
 
 class TestLegacyLongGrammarUnchanged(unittest.TestCase):

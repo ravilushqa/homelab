@@ -276,9 +276,24 @@ sent** and accept a short reply to that exact message.
    identical content hash. If anything changed (including same-version content)
    the preview is `revoked` and can never authorize again; a crash or any other
    outcome stays `consuming` and fails closed (new preview + reply required).
-   The queue CLI confirm is not content-bound, so a mutation landing between the
-   final reread and the CLI confirm is detected by the post-confirm readback and
-   reported as a failure, never as success.
+   The content binding is enforced **inside the queue's own `BEGIN IMMEDIATE`
+   transaction**: `short-confirm` always passes
+   `confirm ... --expected-snapshot-hash H` (`NutritionStore.confirm_entry(...,
+   expected_snapshot_hash=H)`). The store recomputes the same canonical hash
+   (name, start, end, four macros as floats, description; SHA-256 of compact
+   sorted-key JSON) after the version check and raises *before any state
+   mutation* on mismatch, so a late same-version mutation can never reach the
+   confirmed queue (version CAS alone is insufficient). The option is optional
+   and validated as 64 lowercase hex; the long-consent grammar passes none.
+   The claim step is also rechecked under the lock: the store must still have no
+   unreadable entries, exactly one file must match the reply target, that file must
+   be field-for-field the record that was validated and still `pending`, and the
+   raw reply `message_id` must not be in the preview's durable `used_reply_ids`.
+   A released (untouched-draft) preview records the failed reply's id in
+   `used_reply_ids`; the same raw reply is rejected afterwards and a NEW actual
+   reply is required. Content/version/state drift at any point (selection, claim,
+   pre-confirm, or after a failed confirm) revokes the preview; restoring the
+   content never revives it.
 6. Store integrity: any unreadable, corrupt, wrong-mode, symlinked, foreign or
    unsupported-schema entry in `pending-previews/` makes both `preview` and
    `short-confirm` fail closed (ambiguity is never ignored).
@@ -308,15 +323,19 @@ user consent, and is reachable only after the checks above.
 | Source (repo) | Deployed to |
 | --- | --- |
 | `services/health-connect-bridge/agent-workflow/nutrition_writeback.py` | installed bridge `bin/` via `install.sh` (not done) |
-| `services/health-connect-bridge/tests/test_short_preview_consent.py` | repo only |
+| `services/health-connect-bridge/nutrition_queue.py` (adds `snapshot_hash_of_row`, `confirm_entry(expected_snapshot_hash=)`) | installed bridge code dir, **required** together with the wrapper |
+| `services/health-connect-bridge/nutrition_cli.py` (adds `confirm --expected-snapshot-hash`) | installed bridge code dir, **required**; the CLI launcher script from `install.sh` is unchanged |
+| `services/health-connect-bridge/tests/test_short_preview_consent.py`, `tests/test_short_consent_sqlite.py` | repo only |
 | proposed workflow text above | Hermes health skill (not done) |
 
 #### Proposed deployment / workflow list (not yet performed)
 
 1. Parent independently reviews the diff and runs the focused tests
-   (`tests/test_short_preview_consent.py`, `tests/test_skill_isolation_root.py`).
-2. Merge, then install the updated `nutrition_writeback.py` into the installed
-   bridge `bin/` via the normal `install.sh` flow (bridge otherwise unchanged).
+   (`tests/test_short_preview_consent.py`, `tests/test_short_consent_sqlite.py` (real SQLite, wrapper to isolated CLI, multiprocess, synthetic photo/text integration; synthetic fixtures are not user consent nor vision validation), `tests/test_skill_isolation_root.py`).
+2. Merge, then install the updated `nutrition_writeback.py`, `nutrition_queue.py`
+   and `nutrition_cli.py` via the normal `install.sh` flow. The wrapper's
+   `short-confirm` requires the new CLI option; an old CLI rejects it, so short
+   confirm fails closed (never confirms unbound).
 3. Update the Hermes health skill (outside this repo; NOT edited in this run) so
    the workflow: creates the draft, takes `client_record_version` and
    `snapshot_hash` from its output, sends the final preview, calls `preview` with
