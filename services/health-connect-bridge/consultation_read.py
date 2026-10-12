@@ -100,9 +100,11 @@ _NOTICES = [
         "to any specific device or application."
     ),
     (
-        "queue-to-ingest correlation requires exact client_record_id and version in "
-        "health_records (expl_id column). This field is absent in the current JSON "
-        "payload format; correlation will be not_verified for all current records."
+        "queue-to-ingest correlation requires exact client_record_id and expected "
+        "data_origin in health_records (expl_id with expl_ns='client'). "
+        "In payload formats without explicit IDs, status will be not_verified. "
+        "Check actual record expl_ns/expl_id columns; this tool cannot determine "
+        "payload format at runtime."
     ),
 ]
 
@@ -248,10 +250,14 @@ def _parse_source_key(source_key: str) -> Any:
 
 def _is_pixel_watch_source(parsed: dict) -> bool:
     """
-    Return True if the source is identifiably Pixel Watch.
+    Return True if the source matches heuristic Pixel Watch markers.
 
-    Two cases:
-    1. Origin is com.google.android.wearable.healthservices (exclusive to Pixel Watch).
+    These are heuristic patterns, NOT verified product guarantees.  Other
+    devices or apps may share the same origins.
+
+    Two cases (both heuristic):
+    1. Origin is com.google.android.wearable.healthservices (often associated
+       with Pixel Watch wearable services, but not exclusively guaranteed).
     2. Origin is com.google.android.apps.fitness (shared) AND device model
        contains 'pixel watch' (case-insensitive).
     """
@@ -472,29 +478,55 @@ def _query_records_for_day(
 
 # ── Queue-to-ingest correlation ────────────────────────────────────────────────
 
-def _extract_macro_value(rec: dict, field: str) -> Optional[float]:
+def _extract_macro_value(rec: dict, field: str) -> tuple:
     """
     Extract a macro value from a health record dict using canonical aliases.
 
-    Returns a finite float on success, None if the field is absent, and
-    raises ValueError if a value is present but nonfinite or malformed.
+    Returns (float_value, None) on success or (None, reason_str) on error.
+    Never raises.
+
+    Validation rules:
+    - Bool values are rejected (isinstance check before float()).
+    - Non-numeric types (strings, lists, etc.) are rejected.
+    - Nonfinite (NaN, Inf) values are rejected.
+    - Negative values are rejected.
+    - Multiple aliases with conflicting values → error (avoids silently picking
+      one when the data is inconsistent).
     """
-    for alias in _MACRO_ALIASES.get(field, [field]):
+    if not isinstance(rec, dict):
+        return None, "record is not a JSON object"
+
+    aliases = _MACRO_ALIASES.get(field, [field])
+    found: dict = {}
+    for alias in aliases:
         raw = rec.get(alias)
         if raw is None:
             continue
-        try:
-            val = float(raw)
-        except (ValueError, TypeError):
-            raise ValueError(f"{alias!r} is not a number: {raw!r}")
+        if isinstance(raw, bool):
+            return None, f"{alias!r}: boolean value rejected"
+        if not isinstance(raw, (int, float)):
+            return None, f"{alias!r}: non-numeric value {raw!r}"
+        val = float(raw)
         if not math.isfinite(val):
-            raise ValueError(f"{alias!r} is nonfinite: {val}")
-        return val
-    return None  # field not found under any alias
+            return None, f"{alias!r}: nonfinite ({val})"
+        if val < 0:
+            return None, f"{alias!r}: negative ({val})"
+        found[alias] = val
+
+    if not found:
+        return None, f"not found under aliases {aliases}"
+
+    values = list(found.values())
+    if len(values) > 1:
+        if max(values) - min(values) > 0.01:
+            return None, f"conflicting alias values: {found}"
+
+    return values[0], None
 
 
 def _iso_to_epoch(ts: str) -> Optional[float]:
-    """Convert ISO-8601 string to epoch seconds, or None on failure."""
+    """Convert ISO-8601 string to epoch seconds for queue date filtering.
+    Returns None on failure. Does not reject naive timestamps."""
     try:
         s = ts.strip()
         if s.endswith("Z"):
@@ -502,6 +534,27 @@ def _iso_to_epoch(ts: str) -> Optional[float]:
         return datetime.fromisoformat(s).timestamp()
     except (ValueError, AttributeError, TypeError):
         return None
+
+
+def _iso_to_epoch_strict(ts: str) -> tuple:
+    """
+    Convert ISO-8601 aware timestamp to epoch seconds for correlation.
+
+    Returns (epoch_s, None) on success, (None, reason_str) on failure.
+    Rejects naive timestamps (no explicit timezone).
+    """
+    if not ts:
+        return None, "empty timestamp"
+    try:
+        s = ts.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            return None, f"naive timestamp rejected (no timezone): {ts!r}"
+        return dt.timestamp(), None
+    except (ValueError, AttributeError, TypeError) as exc:
+        return None, f"unparseable: {exc}"
 
 
 def _build_correlation_result(
@@ -514,21 +567,70 @@ def _build_correlation_result(
     Build correlation result after identity (client_record_id) match.
 
     Version check:
-      - cver and stored_ver must both be plain integers (not bool, not None).
-      - Mismatch or invalid type → identity_match_version_mismatch.
+      - Both cver and stored_ver must be plain integers (not bool, not None).
+      - If record_json contains metadata.client_record_version, that raw value
+        is also checked for bool/non-integer type.
+      - Any mismatch or invalid type → identity_match_version_mismatch.
 
-    Content check:
-      - Macros are extracted from record_json using canonical aliases.
-      - Missing or nonfinite values → content_match=False with reason.
-      - Start/end instants are compared with 1-second tolerance.
-      - Any failure to parse → content_match=False.
-      - Never returns content_match=True on absent fields.
+    Content check (all four required macros + start/end instants):
+      - Queue macro values are validated: must be finite non-negative numeric
+        non-bool.  Malformed queue values → content_match=False, never True.
+      - Record macros extracted via canonical aliases; bool, string, nonfinite,
+        negative, alias conflict → content_match=False.
+      - Start/end instants compared with zero tolerance (exact epoch equality).
+        Nonfinite epoch values → content_match=False.
+      - Never returns content_match=True when any field is absent or malformed.
     """
     stored_ver = row["client_record_version"]
 
-    # Versions must be plain integers (not bool, not None).
+    # Parse record_json once; used for both metadata version check and content.
+    rec: Any = None
+    rec_parse_err: Optional[str] = None
+    try:
+        rec = json.loads(row["record_json"])
+    except (ValueError, TypeError) as exc:
+        rec_parse_err = str(exc)
+
+    # ── Version check ─────────────────────────────────────────────────────────
     cver_ok = isinstance(cver, int) and not isinstance(cver, bool)
     stored_ok = isinstance(stored_ver, int) and not isinstance(stored_ver, bool)
+
+    # Inspect raw metadata version in record_json if the key is explicitly present.
+    # Key presence (even with null value) requires a valid integer matching cver.
+    # Absence of the key allows falling through to the stored_ver comparison.
+    if rec is not None and isinstance(rec, dict):
+        raw_meta = rec.get("metadata")
+        if isinstance(raw_meta, dict) and "client_record_version" in raw_meta:
+            raw_ver = raw_meta["client_record_version"]
+            # null, bool, non-integer, or mismatch with queue cver → reject.
+            if raw_ver is None:
+                note = "record_json metadata.client_record_version is null"
+            elif isinstance(raw_ver, bool):
+                note = (
+                    f"record_json metadata.client_record_version is boolean {raw_ver!r}"
+                )
+            elif not isinstance(raw_ver, int):
+                note = (
+                    f"record_json metadata.client_record_version is not a plain integer "
+                    f"(got {type(raw_ver).__name__} {raw_ver!r})"
+                )
+            elif raw_ver != cver:
+                note = (
+                    f"record_json metadata.client_record_version {raw_ver!r} "
+                    f"does not match queue version {cver!r}"
+                )
+            else:
+                note = None  # raw_ver is a valid integer equal to cver
+
+            if note is not None:
+                return {
+                    "status": "identity_match_version_mismatch",
+                    "match_via": match_via,
+                    "health_record_version": stored_ver,
+                    "queue_version": cver,
+                    "health_record_received_at": row["received_at"],
+                    "note": note,
+                }
 
     if not cver_ok or not stored_ok or stored_ver != cver:
         return {
@@ -544,63 +646,85 @@ def _build_correlation_result(
         }
 
     content_issues: list = []
-    try:
-        rec = json.loads(row["record_json"])
-    except (ValueError, TypeError):
+
+    if rec_parse_err:
         return {
             "status": "identity_match",
             "match_via": match_via,
             "health_record_version": stored_ver,
             "health_record_received_at": row["received_at"],
             "content_match": False,
-            "content_issues": ["record_json unparseable; content cannot be verified"],
+            "content_issues": [f"record_json unparseable: {rec_parse_err}"],
         }
 
-    # ── Macro comparison (all four required; missing → not verified) ─────────
+    if not isinstance(rec, dict):
+        return {
+            "status": "identity_match",
+            "match_via": match_via,
+            "health_record_version": stored_ver,
+            "health_record_received_at": row["received_at"],
+            "content_match": False,
+            "content_issues": ["record_json is not a JSON object"],
+        }
+
+    # ── Macro comparison ──────────────────────────────────────────────────────
     for field in ("energy_kcal", "protein_g", "carbohydrate_g", "fat_g"):
         q_val = queue_entry.get(field)
+
+        # Validate queue value: must be finite non-negative non-bool numeric.
         if q_val is None:
             content_issues.append(f"{field}: absent from queue entry")
             continue
-        try:
-            r_val = _extract_macro_value(rec, field)
-        except ValueError as exc:
-            content_issues.append(f"{field}: health record value invalid — {exc}")
+        if isinstance(q_val, bool):
+            content_issues.append(f"{field}: queue value is boolean")
             continue
-        if r_val is None:
+        if not isinstance(q_val, (int, float)):
+            content_issues.append(f"{field}: queue value is not numeric ({q_val!r})")
+            continue
+        q_float = float(q_val)
+        if not math.isfinite(q_float):
+            content_issues.append(f"{field}: queue value is nonfinite ({q_float})")
+            continue
+        if q_float < 0:
+            content_issues.append(f"{field}: queue value is negative ({q_float})")
+            continue
+
+        # Extract and validate record value.
+        r_val, r_err = _extract_macro_value(rec, field)
+        if r_err:
+            content_issues.append(f"{field}: health record — {r_err}")
+            continue
+
+        if abs(q_float - r_val) > 0.01:
+            content_issues.append(f"{field}: queue={q_float} health_record={r_val}")
+
+    # ── Time comparison (exact instants, zero tolerance) ──────────────────────
+    for time_field, r_epoch_field in (
+        ("start_time", "record_start_s"),
+        ("end_time", "record_end_s"),
+    ):
+        q_ts, q_err = _iso_to_epoch_strict(queue_entry.get(time_field) or "")
+        if q_err:
+            content_issues.append(f"{time_field}: {q_err}")
+            continue
+
+        r_raw = row[r_epoch_field]
+        if r_raw is None:
+            content_issues.append(f"{r_epoch_field}: absent from health record")
+            continue
+        if isinstance(r_raw, bool) or not isinstance(r_raw, (int, float)):
             content_issues.append(
-                f"{field}: not found in health record (checked aliases "
-                f"{_MACRO_ALIASES.get(field, [field])})"
+                f"{r_epoch_field}: not numeric ({r_raw!r})"
             )
             continue
-        if abs(float(q_val) - r_val) > 0.01:
+        r_epoch = float(r_raw)
+        if not math.isfinite(r_epoch):
+            content_issues.append(f"{r_epoch_field}: nonfinite ({r_epoch})")
+            continue
+        if q_ts != r_epoch:
             content_issues.append(
-                f"{field}: queue={q_val} health_record={r_val}"
+                f"{time_field} mismatch: queue={q_ts} health_record={r_epoch}"
             )
-
-    # ── Time comparison (start/end instants) ──────────────────────────────────
-    q_start_s = _iso_to_epoch(queue_entry.get("start_time") or "")
-    q_end_s = _iso_to_epoch(queue_entry.get("end_time") or "")
-    r_start_s = row["record_start_s"]
-    r_end_s = row["record_end_s"]
-
-    if q_start_s is None:
-        content_issues.append("start_time: queue value unparseable")
-    elif r_start_s is None:
-        content_issues.append("record_start_s: health record value absent")
-    elif abs(q_start_s - float(r_start_s)) > 1.0:
-        content_issues.append(
-            f"start_time: queue={q_start_s:.0f}s health_record={r_start_s:.0f}s"
-        )
-
-    if q_end_s is None:
-        content_issues.append("end_time: queue value unparseable")
-    elif r_end_s is None:
-        content_issues.append("record_end_s: health record value absent")
-    elif abs(q_end_s - float(r_end_s)) > 1.0:
-        content_issues.append(
-            f"end_time: queue={q_end_s:.0f}s health_record={r_end_s:.0f}s"
-        )
 
     result: dict = {
         "status": "identity_match",
@@ -651,7 +775,9 @@ def _correlate_queue_entry(
         }
 
     try:
-        # ── Primary: expl_ns='client', data_origin enforced ───────────────
+        # ── Primary: expl_ns='client', data_origin in SQL WHERE ────────────
+        # Origin is enforced in SQL so a correct-origin record is found even
+        # if a wrong-origin record with the same expl_id exists.
         row = health_conn.execute(
             """
             SELECT record_start_s, record_end_s, record_json,
@@ -660,9 +786,10 @@ def _correlate_queue_entry(
             WHERE record_type = 'nutrition'
               AND expl_ns = 'client'
               AND expl_id = ?
+              AND data_origin = ?
             LIMIT 1
             """,
-            (crid,),
+            (crid, _EXPECTED_NUTRITION_ORIGIN),
         ).fetchone()
     except sqlite3.OperationalError:
         return {
@@ -671,21 +798,39 @@ def _correlate_queue_entry(
         }
 
     if row is not None:
-        if row["data_origin"] != _EXPECTED_NUTRITION_ORIGIN:
+        return _build_correlation_result(row, cver, queue_entry, "expl_id_client_ns")
+
+    # Diagnostic: check if a wrong-origin record exists with this client_id.
+    try:
+        diag = health_conn.execute(
+            """
+            SELECT data_origin FROM health_records
+            WHERE record_type = 'nutrition'
+              AND expl_ns = 'client'
+              AND expl_id = ?
+            LIMIT 1
+            """,
+            (crid,),
+        ).fetchone()
+        if diag is not None:
             return {
                 "status": "identity_found_wrong_origin",
                 "match_via": "expl_id_client_ns",
-                "found_origin": row["data_origin"],
+                "found_origin": diag["data_origin"],
                 "expected_origin": _EXPECTED_NUTRITION_ORIGIN,
                 "note": (
                     "client_record_id matched but data_origin differs; "
                     "may be from a different app. Not correlated."
                 ),
             }
-        return _build_correlation_result(row, cver, queue_entry, "expl_id_client_ns")
+    except sqlite3.OperationalError:
+        pass
 
     try:
         # ── Secondary: server ID primary, client ID in record_json ─────────
+        # Bounded scan of server-ID records with expected origin.
+        # This scan is limited to 200 rows; results may be incomplete for
+        # large tables with many server-ID nutrition records.
         server_rows = health_conn.execute(
             """
             SELECT record_start_s, record_end_s, record_json,
@@ -693,8 +838,10 @@ def _correlate_queue_entry(
             FROM health_records
             WHERE record_type = 'nutrition'
               AND expl_ns = 'server'
+              AND data_origin = ?
             LIMIT 200
             """,
+            (_EXPECTED_NUTRITION_ORIGIN,),
         ).fetchall()
     except sqlite3.OperationalError:
         server_rows = []
@@ -705,18 +852,6 @@ def _correlate_queue_entry(
             meta = rec_data.get("metadata") or {}
             if meta.get("client_record_id") != crid:
                 continue
-            rec_origin = sr["data_origin"] or meta.get("data_origin")
-            if rec_origin != _EXPECTED_NUTRITION_ORIGIN:
-                return {
-                    "status": "identity_found_wrong_origin",
-                    "match_via": "record_json_metadata_client_id",
-                    "found_origin": rec_origin,
-                    "expected_origin": _EXPECTED_NUTRITION_ORIGIN,
-                    "note": (
-                        "client_record_id found in record_json but data_origin "
-                        "differs; may be from a different app. Not correlated."
-                    ),
-                }
             return _build_correlation_result(
                 sr, cver, queue_entry, "record_json_metadata_client_id"
             )
@@ -727,9 +862,9 @@ def _correlate_queue_entry(
         "status": "not_verified",
         "reason": (
             "no health_records entry with matching client_record_id "
-            "and expected origin "
-            f"'{_EXPECTED_NUTRITION_ORIGIN}'; "
-            "client_record_id is absent in the current JSON payload format"
+            f"and expected origin '{_EXPECTED_NUTRITION_ORIGIN}' "
+            "(checked expl_ns='client' expl_id and bounded server-ID scan "
+            "of record_json metadata; scan limited to 200 rows)"
         ),
     }
 

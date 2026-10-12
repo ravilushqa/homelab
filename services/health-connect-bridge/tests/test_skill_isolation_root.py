@@ -92,6 +92,11 @@ class TestCheckIsolationRoot(unittest.TestCase):
     def test_insecure_mode_rejected(self):
         d = self._base / "insecure"
         d.mkdir(mode=0o755)
+        # umask (typically 077) prevents mkdir(mode=0755) from setting group/other
+        # bits.  Explicitly chmod to 0755 to simulate an insecure root regardless
+        # of the process umask.  This only affects the test fixture directory;
+        # production security is unchanged.
+        os.chmod(d, 0o755)
         errs = _check_isolation_root(d)
         self.assertTrue(errs, "expected errors for 0755 root, got none")
         self.assertTrue(

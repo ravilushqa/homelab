@@ -1496,6 +1496,391 @@ class TestQueueDistinction(unittest.TestCase):
         self.assertEqual(result["status"], "identity_match_version_mismatch",
                          "bool cver must be rejected by integer check")
 
+    # ── False-success regression tests (parent-verified failures at c24a9ab) ──
+
+    def _make_matched_health_record(self, crid, mid, macros=None):
+        """Insert a health record with exact times and expected macros."""
+        if macros is None:
+            macros = {"energy_kcal": 500.0, "protein_g": 30.0,
+                      "carbohydrate_g": 60.0, "fat_g": 15.0}
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="client", expl_id=crid, client_record_version=1,
+            record_json=json.dumps(macros),
+            identity_key=f"e_nutrition_client_{crid}",
+            data_origin=_mod._EXPECTED_NUTRITION_ORIGIN,
+        )
+
+    def _make_queue_record_at(self, crid, mid, **kwargs):
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        kw = {"energy_kcal": 500.0, "protein_g": 30.0,
+              "carbohydrate_g": 60.0, "fat_g": 15.0}
+        kw.update(kwargs)
+        _insert_queue_record(
+            self.nutrition_db, crid, "acked", "Regression Meal",
+            start_iso, end_iso, **kw
+        )
+        return start_iso, end_iso
+
+    def _correlate(self, crid):
+        day_start_s, _ = self._day_bounds()
+        health_conn = _open_ro(self.health_db)
+        nutrition_conn = _open_ro(self.nutrition_db)
+        try:
+            by_state = _query_queue_for_day(nutrition_conn, self.DATE, health_conn)
+        finally:
+            health_conn.close()
+            nutrition_conn.close()
+        for entry in by_state.get("acked", []):
+            if entry.get("client_record_id") == crid:
+                return entry["correlation"]
+        return None
+
+    def test_false_success_baseline_exact_match_is_true(self):
+        """Baseline: exact macros + exact times → content_match=True (proves other tests are real failures)."""
+        mid = self._day_bounds()[0] + 50000
+        crid = "nutr_baseline_001"
+        self._make_matched_health_record(crid, mid)
+        self._make_queue_record_at(crid, mid)
+        corr = self._correlate(crid)
+        self.assertIsNotNone(corr)
+        self.assertEqual(corr["status"], "identity_match")
+        self.assertTrue(corr["content_match"],
+                        "Baseline with exact macros and times must be True")
+
+    def test_false_success_fractional_start_mismatch(self):
+        """health record start +0.5s vs queue → content_match=False (was True with 1s tolerance)."""
+        mid = self._day_bounds()[0] + 51000
+        crid = "nutr_frac_start_001"
+        # Health record start is 0.5s later than queue start
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900 + 0.5, end_s=mid + 900,  # 0.5s mismatch
+            expl_ns="client", expl_id=crid, client_record_version=1,
+            record_json=json.dumps({"energy_kcal": 500.0, "protein_g": 30.0,
+                                    "carbohydrate_g": 60.0, "fat_g": 15.0}),
+            identity_key=f"e_nutrition_client_{crid}",
+            data_origin=_mod._EXPECTED_NUTRITION_ORIGIN,
+        )
+        self._make_queue_record_at(crid, mid)
+        corr = self._correlate(crid)
+        self.assertIsNotNone(corr)
+        self.assertEqual(corr["status"], "identity_match")
+        self.assertFalse(corr["content_match"],
+                         "0.5s start mismatch must yield content_match=False")
+        issues = corr.get("content_issues", [])
+        self.assertTrue(any("start_time" in i for i in issues),
+                        "start_time issue must be reported")
+
+    def test_false_success_record_start_s_nan(self):
+        """record_start_s = float NaN → content_match=False (was True via NaN != comparison).
+
+        SQLite cannot store float NaN (NOT NULL constraint).  We test via
+        _build_correlation_result directly with a dict mock row that contains NaN,
+        proving the code path handles it correctly regardless of storage layer.
+        """
+        mid = self._day_bounds()[0] + 52000
+        crid = "nutr_nan_start_001"
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Simulate a row where record_start_s is float NaN (can't be stored in SQLite REAL).
+        nan_row = {
+            "record_start_s": float("nan"),  # NaN epoch
+            "record_end_s": mid + 900,
+            "record_json": json.dumps({"energy_kcal": 500.0, "protein_g": 30.0,
+                                       "carbohydrate_g": 60.0, "fat_g": 15.0}),
+            "client_record_version": 1,
+            "received_at": _SYNTHETIC_RECEIVED,
+            "data_origin": _mod._EXPECTED_NUTRITION_ORIGIN,
+        }
+        queue_entry = {
+            "client_record_id": crid, "client_record_version": 1,
+            "start_time": start_iso, "end_time": end_iso,
+            "energy_kcal": 500.0, "protein_g": 30.0,
+            "carbohydrate_g": 60.0, "fat_g": 15.0,
+        }
+        result = _mod._build_correlation_result(nan_row, 1, queue_entry, "test")
+        self.assertEqual(result["status"], "identity_match")
+        self.assertFalse(result["content_match"],
+                         "NaN record_start_s must yield content_match=False")
+        issues = result.get("content_issues", [])
+        self.assertTrue(any("nonfinite" in i or "record_start_s" in i for i in issues),
+                        f"nonfinite record_start_s issue must be reported; got: {issues}")
+
+    def test_false_success_queue_energy_kcal_nan(self):
+        """queue energy_kcal = float NaN → content_match=False (was True via NaN comparison)."""
+        mid = self._day_bounds()[0] + 53000
+        crid = "nutr_qnan_kcal_001"
+        self._make_matched_health_record(crid, mid)
+        # Build a queue entry dict with NaN energy (bypassing DB storage)
+        start_iso, end_iso = self._make_queue_record_at(crid, mid)
+        # Directly invoke _build_correlation_result with NaN queue value
+        health_conn = _open_ro(self.health_db)
+        try:
+            row = health_conn.execute(
+                "SELECT * FROM health_records WHERE expl_id=?", (crid,)
+            ).fetchone()
+            nan_queue_entry = {
+                "client_record_id": crid,
+                "client_record_version": 1,
+                "start_time": start_iso,
+                "end_time": end_iso,
+                "energy_kcal": float("nan"),  # NaN
+                "protein_g": 30.0,
+                "carbohydrate_g": 60.0,
+                "fat_g": 15.0,
+            }
+            result = _mod._build_correlation_result(row, 1, nan_queue_entry, "test")
+        finally:
+            health_conn.close()
+        self.assertEqual(result["status"], "identity_match")
+        self.assertFalse(result["content_match"],
+                         "NaN queue energy_kcal must yield content_match=False")
+        issues = result.get("content_issues", [])
+        self.assertTrue(any("energy_kcal" in i and "nonfinite" in i for i in issues),
+                        "energy_kcal nonfinite issue must be reported")
+
+    def test_correlation_same_client_id_two_origins_finds_correct(self):
+        """Same client_id exists with wrong origin AND correct origin; correct one found."""
+        mid = self._day_bounds()[0] + 54000
+        crid = "nutr_two_origins_001"
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Wrong-origin record (from unrelated app)
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="client", expl_id=crid, client_record_version=1,
+            record_json=json.dumps({"energy_kcal": 999.0, "protein_g": 99.0,
+                                    "carbohydrate_g": 99.0, "fat_g": 99.0}),
+            identity_key=f"e_nutrition_wrong_{crid}",
+            data_origin="com.some.other.app",
+        )
+        # Correct-origin record
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="client", expl_id=crid, client_record_version=1,
+            record_json=json.dumps({"energy_kcal": 500.0, "protein_g": 30.0,
+                                    "carbohydrate_g": 60.0, "fat_g": 15.0}),
+            identity_key=f"e_nutrition_correct_{crid}",
+            data_origin=_mod._EXPECTED_NUTRITION_ORIGIN,
+        )
+        _insert_queue_record(
+            self.nutrition_db, crid, "acked", "Two Origins Meal",
+            start_iso, end_iso,
+            energy_kcal=500.0, protein_g=30.0, carbohydrate_g=60.0, fat_g=15.0,
+        )
+        corr = self._correlate(crid)
+        self.assertIsNotNone(corr)
+        self.assertEqual(corr["status"], "identity_match",
+                         "Correct-origin record must be found despite wrong-origin record.")
+        self.assertTrue(corr["content_match"])
+
+    def test_naive_queue_timestamp_rejected(self):
+        """Queue start_time with no timezone → content_match=False."""
+        mid = self._day_bounds()[0] + 55000
+        crid = "nutr_naive_ts_001"
+        self._make_matched_health_record(crid, mid)
+        # Build a queue entry with naive (no TZ) start_time
+        health_conn = _open_ro(self.health_db)
+        try:
+            row = health_conn.execute(
+                "SELECT * FROM health_records WHERE expl_id=?", (crid,)
+            ).fetchone()
+            naive_queue = {
+                "client_record_id": crid,
+                "client_record_version": 1,
+                "start_time": "2026-01-15T12:00:00",  # no timezone
+                "end_time": "2026-01-15T12:30:00",    # no timezone
+                "energy_kcal": 500.0, "protein_g": 30.0,
+                "carbohydrate_g": 60.0, "fat_g": 15.0,
+            }
+            result = _mod._build_correlation_result(row, 1, naive_queue, "test")
+        finally:
+            health_conn.close()
+        self.assertEqual(result["status"], "identity_match")
+        self.assertFalse(result["content_match"],
+                         "Naive queue timestamp must yield content_match=False")
+        issues = result.get("content_issues", [])
+        self.assertTrue(any("naive" in i or "timezone" in i.lower() for i in issues),
+                        "naive timestamp issue must be reported")
+
+    def test_queue_macro_bool_value_rejected(self):
+        """Queue macro as bool → content_match=False."""
+        mid = self._day_bounds()[0] + 56000
+        crid = "nutr_qbool_macro_001"
+        self._make_matched_health_record(crid, mid)
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        health_conn = _open_ro(self.health_db)
+        try:
+            row = health_conn.execute(
+                "SELECT * FROM health_records WHERE expl_id=?", (crid,)
+            ).fetchone()
+            bool_queue = {
+                "client_record_id": crid, "client_record_version": 1,
+                "start_time": start_iso, "end_time": end_iso,
+                "energy_kcal": True,  # bool, even though True==1 numerically
+                "protein_g": 30.0, "carbohydrate_g": 60.0, "fat_g": 15.0,
+            }
+            result = _mod._build_correlation_result(row, 1, bool_queue, "test")
+        finally:
+            health_conn.close()
+        self.assertEqual(result["status"], "identity_match")
+        self.assertFalse(result["content_match"],
+                         "Bool queue macro must yield content_match=False")
+        issues = result.get("content_issues", [])
+        self.assertTrue(any("energy_kcal" in i and "boolean" in i.lower() for i in issues))
+
+    def test_extract_macro_alias_conflict_rejected(self):
+        """Record JSON with conflicting alias values → extraction error."""
+        rec = {
+            "energy_kcal": 500.0,
+            "calories": 600.0,  # conflicting alias for energy_kcal
+        }
+        val, err = _mod._extract_macro_value(rec, "energy_kcal")
+        self.assertIsNone(val, "Conflicting aliases must not return a value")
+        self.assertIsNotNone(err)
+        self.assertIn("conflicting", err.lower())
+
+    def test_extract_macro_string_value_rejected(self):
+        """Record JSON with string macro value → extraction error."""
+        rec = {"energy_kcal": "500.0"}  # numeric string, not float
+        val, err = _mod._extract_macro_value(rec, "energy_kcal")
+        self.assertIsNone(val)
+        self.assertIsNotNone(err)
+        self.assertIn("non-numeric", err)
+
+    def test_record_json_metadata_version_bool_mismatch(self):
+        """record_json metadata.client_record_version is bool → version_mismatch."""
+        mid = self._day_bounds()[0] + 57000
+        crid = "nutr_rj_bool_ver_001"
+        _insert_health_record(
+            self.health_db, "nutrition", _SK_FULL,
+            start_s=mid - 900, end_s=mid + 900,
+            expl_ns="client", expl_id=crid, client_record_version=1,
+            record_json=json.dumps({
+                "energy_kcal": 500.0, "protein_g": 30.0,
+                "carbohydrate_g": 60.0, "fat_g": 15.0,
+                "metadata": {"client_record_version": True},  # bool in raw JSON
+            }),
+            identity_key=f"e_nutrition_client_{crid}",
+            data_origin=_mod._EXPECTED_NUTRITION_ORIGIN,
+        )
+        start_iso = datetime.fromtimestamp(
+            mid - 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(
+            mid + 900, tz=timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        health_conn = _open_ro(self.health_db)
+        try:
+            row = health_conn.execute(
+                "SELECT * FROM health_records WHERE expl_id=?", (crid,)
+            ).fetchone()
+            queue_entry = {
+                "client_record_id": crid, "client_record_version": 1,
+                "start_time": start_iso, "end_time": end_iso,
+                "energy_kcal": 500.0, "protein_g": 30.0,
+                "carbohydrate_g": 60.0, "fat_g": 15.0,
+            }
+            result = _mod._build_correlation_result(row, 1, queue_entry, "test")
+        finally:
+            health_conn.close()
+        self.assertEqual(result["status"], "identity_match_version_mismatch",
+                         "Bool metadata version in record_json must yield version mismatch")
+        self.assertIn("boolean", result.get("note", "").lower())
+
+    def test_record_json_metadata_version_null_rejects(self):
+        """Probe regression: metadata.client_record_version=null (key present) must be rejected.
+
+        Null is distinct from key-absent; when the key is explicitly present with a
+        null value, the raw metadata is malformed/incomplete and must not silently
+        fall through to the stored column comparison.
+        """
+        mid = self._day_bounds()[0] + 58000
+        start_iso = datetime.fromtimestamp(mid - 900, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(mid + 900, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Row where record_json metadata has client_record_version=null (key present).
+        null_ver_row = {
+            "record_start_s": mid - 900,
+            "record_end_s": mid + 900,
+            "record_json": json.dumps({
+                "energy_kcal": 500.0, "protein_g": 30.0,
+                "carbohydrate_g": 60.0, "fat_g": 15.0,
+                "metadata": {"client_record_version": None},  # key present, value null
+            }),
+            "client_record_version": 1,  # stored column=1 (would match queue=1)
+            "received_at": _SYNTHETIC_RECEIVED,
+        }
+        queue_entry = {
+            "client_record_id": "nutr_null_ver_test", "client_record_version": 1,
+            "start_time": start_iso, "end_time": end_iso,
+            "energy_kcal": 500.0, "protein_g": 30.0,
+            "carbohydrate_g": 60.0, "fat_g": 15.0,
+        }
+        result = _mod._build_correlation_result(null_ver_row, 1, queue_entry, "test")
+        self.assertEqual(
+            result["status"], "identity_match_version_mismatch",
+            "Null metadata version (key present) must reject even when stored_ver==cver==1"
+        )
+        self.assertIn("null", result.get("note", "").lower())
+
+    def test_record_json_metadata_version_stored_disagreement_rejects(self):
+        """Probe regression: metadata.client_record_version=2 disagrees with stored=1/queue=1.
+
+        When raw metadata has a valid integer but it doesn't match queue cver, it must
+        reject regardless of what the SQLite-stored column says.  SQLite type coercion
+        can silently normalize values; the raw JSON value is authoritative.
+        """
+        mid = self._day_bounds()[0] + 59000
+        start_iso = datetime.fromtimestamp(mid - 900, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = datetime.fromtimestamp(mid + 900, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        disagreement_row = {
+            "record_start_s": mid - 900,
+            "record_end_s": mid + 900,
+            "record_json": json.dumps({
+                "energy_kcal": 500.0, "protein_g": 30.0,
+                "carbohydrate_g": 60.0, "fat_g": 15.0,
+                "metadata": {"client_record_version": 2},  # raw=2, stored=1
+            }),
+            "client_record_version": 1,  # SQLite stored 1 (would match queue=1)
+            "received_at": _SYNTHETIC_RECEIVED,
+        }
+        queue_entry = {
+            "client_record_id": "nutr_disagree_ver_test", "client_record_version": 1,
+            "start_time": start_iso, "end_time": end_iso,
+            "energy_kcal": 500.0, "protein_g": 30.0,
+            "carbohydrate_g": 60.0, "fat_g": 15.0,
+        }
+        result = _mod._build_correlation_result(disagreement_row, 1, queue_entry, "test")
+        self.assertEqual(
+            result["status"], "identity_match_version_mismatch",
+            "raw metadata version=2 must reject even though stored=1==cver=1"
+        )
+        note = result.get("note", "")
+        self.assertIn("2", note)  # raw version mentioned
+        self.assertIn("1", note)  # queue version mentioned
+
 
 # ── Tests: run() integration ──────────────────────────────────────────────────
 
