@@ -1693,6 +1693,10 @@ def _claim_preview(d: Path, path: Path, transport: dict, expect: dict) -> str | 
             return "preview changed during confirm"
         if transport["message_id"] in (cur.get("used_reply_ids") or []):
             return "this reply was already used (replay rejected)"
+        # Expiry is judged under the lock too: the caller may have waited for flock.
+        exp, eerr = _parse_ts(cur.get("expires_at"), "expires_at")
+        if eerr or exp is None or _now() > exp:
+            return "preview expired"
         cur["status"] = "consuming"
         cur["claimed_at"] = _now().isoformat()
         cur["reply_message_id"] = transport["message_id"]

@@ -381,7 +381,7 @@ class TestPhotoAndTextIntegration(RealBase):
         return nw._now().astimezone(ZoneInfo("Europe/Berlin"))
 
     def _render_preview(self, fx, draft):
-        """Compact final preview as the workflow must render it (text is workflow-side)."""
+        """Compact final preview as the workflow renders it. id/version/hash stay hidden (internal binding)."""
         rb = draft["readback"]
         start, _ = nw._parse_ts(rb["start_time"], "start")
         end, _ = nw._parse_ts(rb["end_time"], "end")
@@ -391,11 +391,10 @@ class TestPhotoAndTextIntegration(RealBase):
             f"{rb['name']}: {portions}. Assumptions: {fx['assumptions']}.\n"
             f"{rb['energy_kcal']:g} kcal, P {rb['protein_g']:g} g, C {rb['carbohydrate_g']:g} g, "
             f"F {rb['fat_g']:g} g.\n"
-            f"Berlin now: {self._berlin_now():%Y-%m-%d %H:%M}; technical interval "
+            f"Berlin now: {self._berlin_now():%Y-%m-%d %H:%M}; proposed technical interval "
             f"{bs:%H:%M}-{be:%H:%M} (1 min).\n"
-            f"id {draft['client_record_id']} v{draft['client_record_version']} "
-            f"hash {draft['snapshot_hash']}\n"
-            "Reply «Да» or «Запиши» to write this meal."), start, end
+            "Технический интервал в очереди, это не реальная длительность еды.\n"
+            "Записать или поправишь?"), start, end
 
     def _scenario(self, key):
         fx = self.FIXTURES[key]
@@ -413,16 +412,20 @@ class TestPhotoAndTextIntegration(RealBase):
         self.assertEqual(draft["snapshot_hash"], nq.snapshot_hash_of_row(self.q.rec))
         # exact compact final preview
         text, start, end = self._render_preview(fx, draft)
-        self.assertEqual(self._berlin_now().utcoffset(), timedelta(hours=2))  # CEST, tool-derived
+        self.assertEqual(self._berlin_now().utcoffset(), timedelta(hours=2))  # CEST, controlled-clock fixture (not tool-derived)
         self.assertIn("Berlin now: 2026-10-12 14:00", text)
         self.assertEqual(end - start, timedelta(minutes=1))                   # positive 1-min interval
-        self.assertIn(draft["client_record_id"], text)
-        self.assertIn(draft["snapshot_hash"], text)
+        self.assertNotIn(draft["client_record_id"], text)
+        self.assertNotIn(draft["snapshot_hash"], text)
+        self.assertNotRegex(text, r"\bv\d+\b|hash|\bid\b")
+        self.assertTrue(text.endswith("Записать или поправишь?"))
+        self.assertEqual(len(text.strip().split("\n\n")), 1)
+        self.assertIn("не реальная длительность", text)
         for f, p, *_ in fx["items"]:
             self.assertIn(f, text)
             self.assertIn(p, text)
         self.assertIn(fx["assumptions"], text)
-        # register the preview for exactly the displayed id/version/hash
+        # register the preview bound (internally) to the draft id/version/hash
         self.assertEqual(self.preview(
             msg=f"{key}-p", version=draft["client_record_version"],
             shash=draft["snapshot_hash"])[0], 0)

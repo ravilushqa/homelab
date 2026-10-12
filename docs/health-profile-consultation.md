@@ -299,9 +299,11 @@ sent** and accept a short reply to that exact message.
    `short-confirm` fail closed (ambiguity is never ignored).
 
 **Final preview content (workflow text).** One compact message: meal name,
-assumptions/portion, the four macros, tool-checked Berlin local time, and the
+assumptions/portion, the four macros, the Berlin local time (from a real tool call in production; the test uses a controlled-clock fixture, not tool output), and the
 proposed technical one-minute interval (start to start+1 min, stated as a
-technical queue interval, not the real duration). A correction invalidates the
+technical queue interval, not the real duration), ending exactly «Записать или поправишь?». The record id, version and
+snapshot hash are never shown; they are bound internally at `preview` registration. Synthetic photo/text
+fixtures are not vision validation and the fixture "Да" is not the user's consent. A correction invalidates the
 previous preview (send and register a new one). Only after `short-confirm` and
 exact readback may the workflow say
 "Отправлено в очередь Health Connect. Телефон запишет при синхронизации."; a

@@ -474,6 +474,26 @@ class TestClaimTimeRecheck(Base):
         with mock.patch.object(nw, "_check_mutation_readiness", readiness):
             return self.reply(**kw)
 
+    def test_expiry_judged_inside_claim_lock(self):
+        """Clock passes expiry while the caller waits for the flock: fail closed, no claim."""
+        real_claim, real_enter = nw._claim_preview, nw._PreviewLock.__enter__
+        state = {"in_claim": False}
+
+        def claim(*a, **k):
+            state["in_claim"] = True  # pre-lock expiry checks already passed
+            return real_claim(*a, **k)
+
+        def enter(lock):
+            if state["in_claim"]:
+                self.now = T0 + timedelta(seconds=901)  # time advances while waiting
+            return real_enter(lock)
+
+        with mock.patch.object(nw, "_claim_preview", claim), \
+                mock.patch.object(nw._PreviewLock, "__enter__", enter):
+            res = self.reply(ts=(T0 + timedelta(seconds=60)).isoformat())
+        self.assertRejected(res, "expired")
+        self.assertEqual(json.loads(self.pfile.read_text())["status"], "pending")
+
     def test_duplicate_file_for_same_target_appears(self):
         def hook():
             dup = self.d / "preview-dup.json"
