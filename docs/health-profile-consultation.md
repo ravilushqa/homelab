@@ -234,6 +234,64 @@ All flags are mandatory for production.  The `--privacy-verifier` and
 the wrapper to refuse to proceed.  Never call `nutrition_cli.py confirm`
 directly — it bypasses the wrapper and consent validation.
 
+### Short final-preview consent (`preview` / `short-confirm`)
+
+The long named consent grammar above stays valid and unchanged. For a lower
+friction path the workflow may instead register the **final preview it actually
+sent** and accept a short reply to that exact message.
+
+1. After sending the final preview, the workflow runs
+   `nutrition_writeback.py preview --id ID --confirmer NAME --user-id U --chat-id C
+   [--thread-id T] --preview-message-id M --preview-sent-at ISO8601 [--ttl-seconds N]`.
+   This rereads the draft (must be `draft`) and stores a private (0700 dir, 0600
+   file, atomic, flock-serialised) pending preview bound to: queue ID, version,
+   name, start, end, the four macros and description (SHA-256 snapshot hash), the
+   intended user/chat/thread, the preview message ID and send time, and
+   created/expiry times (default 15 min, max 60 min). A newer preview for the same
+   record supersedes older ones; reusing a preview message ID is refused.
+2. When the user replies, the workflow writes the raw transport reply (0600 JSON:
+   `sender_id, chat_id, thread_id, message_id, timestamp` with offset,
+   `reply_to_message_id, text`) and runs
+   `nutrition_writeback.py short-confirm --transport-file PATH`. There is **no
+   `--id`**: the preview is found only by (chat, thread, reply target); zero or
+   several matches are rejected.
+3. Accepted text is only a bare `да`, `запиши`, `да, запиши`, `yes`, `record it`
+   (case-insensitive, trailing `.`/`!` ignored). Negation, conditionals and
+   anything longer are rejected.
+4. Rejected: wrong sender/chat/thread/reply target, reply not strictly after the
+   preview, expiry, non-draft state, version change, **any change to the four
+   macros, name, times or description at the same version**, tampered preview
+   file, replay, and insecure/symlinked store or reply file. The privacy,
+   token and receiver readiness gates run first, exactly as for long consent.
+5. Consumption: the draft is reread, then the preview is claimed
+   `pending -> consuming` under flock *before* the CLI confirm, then post-confirm
+   readback runs and the preview becomes `consumed`. A CLI refusal that leaves the
+   same untouched draft releases the claim back to `pending`; a crash or any other
+   outcome stays `consuming` and fails closed (new preview + reply required).
+
+**Trust boundary.** Both the preview file and the transport-reply file are
+written by the trusted agent workflow as the same OS user. They are cross-bound
+and tamper-checked, but a local JSON file is *workflow-attested*, not
+*server-authenticated*: anything able to write as this user can forge a reply.
+Results carry `provenance_level: "workflow_attested"` and any self-declared
+"server authenticated" claim is ignored. Independent authentication would need
+the messaging gateway to sign reply records (e.g. HMAC with a key the agent
+cannot read); that is **not implemented**. The wrapper still passes the CLI's
+own internal affirm string when confirming; that string is a CLI argument, not
+user consent, and is reachable only after the checks above.
+
+#### Proposed deployment / workflow list (not yet performed)
+
+1. Parent independently reviews the diff and runs the focused tests
+   (`tests/test_short_preview_consent.py`, `tests/test_skill_isolation_root.py`).
+2. Merge, then install the updated `nutrition_writeback.py` into the installed
+   bridge `bin/` via the normal `install.sh` flow (bridge otherwise unchanged).
+3. Update the Hermes health skill (outside this repo) so the workflow: sends the
+   final preview, calls `preview` with the real transport message ID/time, writes
+   the raw reply record, and calls `short-confirm`.
+4. Decide whether to build a gateway-signed reply record for server-authenticated
+   provenance before treating short consent as more than workflow-attested.
+
 ### Complete workflow: photo to Health Connect
 
 The full order for a new meal entry is:
