@@ -47,12 +47,15 @@ class FakeQueue:
         self.rec = _draft()
         self.confirm_calls = 0
         self.fail_confirm = False
+        self.on_confirm = None  # optional hook run before the confirm outcome
 
     def run(self, cli, db, cli_args, stdin_bytes=None):
         if cli_args[0] == "status":
             return 0, json.dumps(self.rec), ""
         if cli_args[0] == "confirm":
             self.confirm_calls += 1
+            if self.on_confirm:
+                self.on_confirm(self)
             if self.fail_confirm:
                 return 1, "", "boom"
             self.rec["state"] = "confirmed"
@@ -66,7 +69,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(dir=_SCRATCH, prefix="test_shortprev_"))
         os.chmod(self.root, 0o700)
-        self.q = FakeQueue()
+        self.q = self.make_queue()
         self.now = T0
         self.patches = [
             mock.patch.object(nw, "_resolve",
@@ -78,6 +81,9 @@ class Base(unittest.TestCase):
         for p in self.patches:
             p.start()
         self.tf_n = 0
+
+    def make_queue(self):
+        return FakeQueue()
 
     def tearDown(self):
         for p in self.patches:
@@ -92,11 +98,20 @@ class Base(unittest.TestCase):
             rc = fn(argparse.Namespace(**base))
         return rc, out.getvalue(), err.getvalue()
 
-    def preview(self, msg="p1", sent=None, ttl=900, user="u1", chat="c1", thread="", rid=RID):
+    def displayed(self):
+        """(version, hash) of the draft as currently displayed to the user."""
+        rec = self.q.rec
+        return rec["client_record_version"], nw._record_snapshot_hash(rec)
+
+    def preview(self, msg="p1", sent=None, ttl=900, user="u1", chat="c1", thread="",
+                rid=RID, version=None, shash=None):
         sent = sent or T0.isoformat()
+        dv, dh = self.displayed()
         return self.run_cmd(
             nw.cmd_preview, id=rid, confirmer="Ravil", user_id=user, chat_id=chat,
-            thread_id=thread, preview_message_id=msg, preview_sent_at=sent, ttl_seconds=ttl)
+            thread_id=thread, preview_message_id=msg, preview_sent_at=sent, ttl_seconds=ttl,
+            expected_version=dv if version is None else version,
+            expected_snapshot_hash=dh if shash is None else shash)
 
     def reply(self, text="Да", sender="u1", chat="c1", thread="", mid="r1",
               ts=None, reply_to="p1", mode=0o600, raw=None):
@@ -303,6 +318,288 @@ class TestConcurrencyAndCrash(Base):
             return real(d, path, transport, expect)
         with mock.patch.object(nw, "_claim_preview", racing):
             self.assertRejected(self.reply(), "consuming")
+
+
+class TestExpectedBinding(Base):
+    def test_requires_matching_displayed_version_and_hash(self):
+        v, h = self.displayed()
+        self.assertEqual(self.preview(version=v + 1)[0], 1)
+        self.assertEqual(self.preview(shash="0" * 64)[0], 1)
+        self.assertEqual(self.preview(shash="xyz")[0], 1)
+        self.assertEqual(self.preview(version=0)[0], 1)
+
+    def test_mutation_between_display_and_registration_rejected(self):
+        v, h = self.displayed()           # user was shown this exact draft
+        self.q.rec["protein_g"] = 99.0    # changed at the SAME version before registration
+        res = self.preview(version=v, shash=h)
+        self.assertEqual(res[0], 1)
+        self.assertIn("differs", res[1] + res[2])
+        self.assertFalse((self.root / "pending-previews").exists())
+
+    def test_version_bump_between_display_and_registration_rejected(self):
+        v, h = self.displayed()
+        self.q.rec["client_record_version"] = v + 1
+        self.assertEqual(self.preview(version=v, shash=h)[0], 1)
+
+    def test_draft_output_exposes_snapshot_hash(self):
+        self.assertEqual(self.displayed()[1], nw._record_snapshot_hash(_draft()))
+
+
+class TestFailedConfirmRelease(Base):
+    def setUp(self):
+        super().setUp()
+        self.assertEqual(self.preview()[0], 0)
+
+    def _status(self):
+        f = next((self.root / "pending-previews").glob("preview-*.json"))
+        return json.loads(f.read_text())["status"]
+
+    def test_failed_confirm_with_changed_same_version_content_revokes(self):
+        self.q.fail_confirm = True
+        self.q.on_confirm = lambda q: q.rec.__setitem__("energy_kcal", 777.0)
+        self.assertEqual(self.reply()[0], 1)
+        self.assertEqual(self._status(), "revoked")
+        # even after the content is restored, the authorization is gone
+        self.q.rec["energy_kcal"] = 300.0
+        self.q.confirm_calls = 0
+        self.assertRejected(self.reply(mid="r2"), "not pending")
+
+    def test_failed_confirm_with_state_change_revokes(self):
+        self.q.fail_confirm = True
+        self.q.on_confirm = lambda q: q.rec.__setitem__("state", "cancelled")
+        self.assertEqual(self.reply()[0], 1)
+        self.assertEqual(self._status(), "revoked")
+
+    def test_failed_confirm_untouched_draft_releases(self):
+        self.q.fail_confirm = True
+        self.assertEqual(self.reply()[0], 1)
+        self.assertEqual(self._status(), "pending")
+
+
+class TestUnreadableStoreFailsClosed(Base):
+    def setUp(self):
+        super().setUp()
+        self.assertEqual(self.preview()[0], 0)
+        self.d = self.root / "pending-previews"
+
+    def _plant(self, name, content="{not json", mode=0o600):
+        p = self.d / name
+        p.write_text(content)
+        os.chmod(p, mode)
+        return p
+
+    def test_corrupt_file_blocks_confirm_and_registration(self):
+        self._plant("preview-corrupt.json")
+        self.assertRejected(self.reply(), "unreadable")
+        self.assertEqual(self.preview(msg="p2")[0], 1)
+
+    def test_insecure_mode_file_blocks_confirm(self):
+        self._plant("preview-open.json", "{}", mode=0o644)
+        self.assertRejected(self.reply(), "unreadable")
+
+    def test_symlink_entry_blocks_confirm(self):
+        target = self.root / "elsewhere.json"
+        target.write_text("{}")
+        os.symlink(target, self.d / "preview-link.json")
+        self.assertRejected(self.reply(), "unreadable")
+
+    def test_foreign_entry_blocks_confirm(self):
+        self._plant("stray.txt", "x")
+        self.assertRejected(self.reply(), "unreadable")
+
+    def test_unsupported_schema_blocks_confirm(self):
+        self._plant("preview-schema.json", json.dumps({"schema": 99}))
+        self.assertRejected(self.reply(), "unreadable")
+
+
+class FileQueue:
+    """Cross-process fake queue: JSON state + flock, so forked children share it."""
+
+    def __init__(self, root):
+        self.path = root / "queue.json"
+        self.lockp = root / "queue.lock"
+        self.confirm_delay = 0.0
+        self.save({"rec": _draft(), "confirm_calls": 0})
+
+    def _locked(self):
+        import fcntl
+        fd = os.open(str(self.lockp), os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return fd
+
+    def load(self):
+        return json.loads(self.path.read_text())
+
+    def save(self, st):
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(st))
+        os.replace(tmp, self.path)
+
+    def update(self, **kw):
+        fd = self._locked()
+        try:
+            st = self.load()
+            st["rec"].update(kw)
+            self.save(st)
+        finally:
+            os.close(fd)
+
+    @property
+    def rec(self):
+        return self.load()["rec"]
+
+    @property
+    def confirm_calls(self):
+        return self.load()["confirm_calls"]
+
+    @confirm_calls.setter
+    def confirm_calls(self, v):
+        pass
+
+    def run(self, cli, db, cli_args, stdin_bytes=None):
+        import time
+        if cli_args[0] == "status":
+            return 0, json.dumps(self.rec), ""
+        if cli_args[0] == "confirm":
+            time.sleep(self.confirm_delay)  # widen the race window
+            fd = self._locked()
+            try:
+                st = self.load()
+                st["confirm_calls"] += 1
+                if st["rec"]["state"] != "draft":
+                    self.save(st)
+                    return 1, "", "not draft"
+                st["rec"]["state"] = "confirmed"
+                st["rec"]["confirmed_by"] = cli_args[cli_args.index("--confirmer") + 1]
+                st["rec"]["confirmed_at"] = "2026-10-12T12:01:00Z"
+                self.save(st)
+                return 0, json.dumps(st["rec"]), ""
+            finally:
+                os.close(fd)
+        return 1, "", "unsupported"
+
+
+def _mp_ctx():
+    import multiprocessing
+    return multiprocessing.get_context("fork")  # children inherit the patches
+
+
+class MPBase(Base):
+    def make_queue(self):
+        q = FileQueue(self.root)
+        q.confirm_delay = 0.3
+        return q
+
+    def spawn(self, jobs, timeout=60):
+        """Run callables in real processes released together by a Barrier.
+        Each job returns a JSON-able value; results come back in job order."""
+        ctx = _mp_ctx()
+        barrier = ctx.Barrier(len(jobs))
+        results = ctx.Queue()
+
+        def runner(i, job):
+            try:
+                barrier.wait(timeout=30)
+                results.put((i, job()))
+            except BaseException as exc:  # report, never hang the parent
+                results.put((i, f"EXC {exc!r}"))
+
+        procs = [ctx.Process(target=runner, args=(i, j)) for i, j in enumerate(jobs)]
+        for pr in procs:
+            pr.start()
+        out = {}
+        for _ in procs:
+            i, v = results.get(timeout=timeout)
+            out[i] = v
+        for pr in procs:
+            pr.join(timeout)
+            self.assertEqual(pr.exitcode, 0)
+        return [out[i] for i in range(len(jobs))]
+
+    def write_reply(self, mid, reply_to="p1", text="Да"):
+        self.tf_n += 1
+        p = self.root / f"mp-reply-{self.tf_n}.json"
+        fd = os.open(str(p), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            json.dump({"sender_id": "u1", "chat_id": "c1", "thread_id": "", "message_id": mid,
+                       "timestamp": (T0 + timedelta(seconds=30)).isoformat(),
+                       "reply_to_message_id": reply_to, "text": text}, fh)
+        return str(p)
+
+    def confirm_job(self, tf):
+        return lambda: self.run_cmd(nw.cmd_short_confirm, transport_file=tf)[0]
+
+
+class TestMultiprocess(MPBase):
+    def test_concurrent_confirm_exactly_one_winner(self):
+        self.assertEqual(self.preview()[0], 0)
+        files = [self.write_reply(f"r{i}") for i in range(6)]
+        rcs = self.spawn([self.confirm_job(f) for f in files])
+        self.assertEqual(sorted(rcs), [0, 1, 1, 1, 1, 1], rcs)
+        self.assertEqual(self.q.confirm_calls, 1)
+        self.assertEqual(self.q.rec["state"], "confirmed")
+        f = next((self.root / "pending-previews").glob("preview-*.json"))
+        self.assertEqual(json.loads(f.read_text())["status"], "consumed")
+
+    def test_concurrent_replay_of_same_reply_file(self):
+        self.assertEqual(self.preview()[0], 0)
+        tf = self.write_reply("r1")
+        rcs = self.spawn([self.confirm_job(tf) for _ in range(5)])
+        self.assertEqual(sorted(rcs), [0, 1, 1, 1, 1], rcs)
+        self.assertEqual(self.q.confirm_calls, 1)
+
+    def test_replay_after_success_in_new_process(self):
+        self.assertEqual(self.preview()[0], 0)
+        self.assertEqual(self.spawn([self.confirm_job(self.write_reply("r1"))]), [0])
+        self.q.update(state="draft")
+        before = self.q.confirm_calls
+        self.assertEqual(self.spawn([self.confirm_job(self.write_reply("r2"))]), [1])
+        self.assertEqual(self.q.confirm_calls, before)
+
+    def test_concurrent_registration_same_message_one_winner(self):
+        v, h = self.displayed()
+
+        def reg():
+            return self.preview(version=v, shash=h)[0]
+        rcs = self.spawn([reg for _ in range(5)])
+        self.assertEqual(sorted(rcs), [0, 1, 1, 1, 1], rcs)
+        self.assertEqual(len(list((self.root / "pending-previews").glob("preview-*.json"))), 1)
+
+    def test_registration_vs_content_mutation_race(self):
+        original = _draft()
+        for i in range(6):
+            self.q.update(**original)
+            v, h = self.displayed()
+            msg = f"race{i}"
+            rcs = self.spawn([
+                lambda: self.preview(msg=msg, version=v, shash=h)[0],
+                lambda: self.q.update(energy_kcal=999.0) or 0,
+            ])
+            self.assertEqual(rcs[1], 0)
+            # Content is now mutated at the SAME version: whether or not the
+            # registration won the race, confirming must be impossible.
+            res = self.reply(reply_to=msg, mid=f"rr{i}")
+            self.assertEqual(res[0], 1, (i, rcs, res))
+            self.assertEqual(self.q.confirm_calls, 0)
+            self.assertEqual(self.q.rec["state"], "draft")
+
+    def test_confirm_vs_content_mutation_race(self):
+        self.assertEqual(self.preview()[0], 0)
+        tf = self.write_reply("r1")
+        rcs = self.spawn([self.confirm_job(tf), lambda: self.q.update(fat_g=50.0) or 0])
+        # The queue CLI confirm is not content-bound, so a mutation landing before
+        # the confirm can still be confirmed there. The workflow must then fail
+        # closed: success (rc 0) is only allowed if the confirmed content is exactly
+        # the previewed content.
+        rec = self.q.rec
+        prev_hash = nw._snapshot_hash(nw._snapshot_of(_draft()))
+        if rcs[0] == 0:
+            self.assertEqual(rec["state"], "confirmed")
+            self.assertEqual(nw._record_snapshot_hash(rec), prev_hash)
+        else:
+            self.assertLessEqual(self.q.confirm_calls, 1)
+            if rec["state"] == "confirmed":
+                self.assertNotEqual(nw._record_snapshot_hash(rec), prev_hash)
 
 
 class TestLegacyLongGrammarUnchanged(unittest.TestCase):

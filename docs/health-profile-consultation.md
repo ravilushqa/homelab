@@ -242,8 +242,14 @@ sent** and accept a short reply to that exact message.
 
 1. After sending the final preview, the workflow runs
    `nutrition_writeback.py preview --id ID --confirmer NAME --user-id U --chat-id C
-   [--thread-id T] --preview-message-id M --preview-sent-at ISO8601 [--ttl-seconds N]`.
-   This rereads the draft (must be `draft`) and stores a private (0700 dir, 0600
+   [--thread-id T] --preview-message-id M --preview-sent-at ISO8601
+   --expected-version V --expected-snapshot-hash H [--ttl-seconds N]`.
+   `V` and `H` are the `client_record_version` and `snapshot_hash` that
+   `draft`/`status` returned for the draft the preview text was rendered from
+   (the exact displayed content). Registration rereads the draft and refuses
+   unless it is still `draft`, at version `V`, with live content hash `H`; this is
+   checked before and again under the store lock, so a mutation between display and
+   registration (even at the same version) is rejected. It then stores a private (0700 dir, 0600
    file, atomic, flock-serialised) pending preview bound to: queue ID, version,
    name, start, end, the four macros and description (SHA-256 snapshot hash), the
    intended user/chat/thread, the preview message ID and send time, and
@@ -265,9 +271,26 @@ sent** and accept a short reply to that exact message.
    token and receiver readiness gates run first, exactly as for long consent.
 5. Consumption: the draft is reread, then the preview is claimed
    `pending -> consuming` under flock *before* the CLI confirm, then post-confirm
-   readback runs and the preview becomes `consumed`. A CLI refusal that leaves the
-   same untouched draft releases the claim back to `pending`; a crash or any other
+   readback runs and the preview becomes `consumed`. A CLI refusal releases the claim
+   back to `pending` **only** if the draft is still `draft`, same version and
+   identical content hash. If anything changed (including same-version content)
+   the preview is `revoked` and can never authorize again; a crash or any other
    outcome stays `consuming` and fails closed (new preview + reply required).
+   The queue CLI confirm is not content-bound, so a mutation landing between the
+   final reread and the CLI confirm is detected by the post-confirm readback and
+   reported as a failure, never as success.
+6. Store integrity: any unreadable, corrupt, wrong-mode, symlinked, foreign or
+   unsupported-schema entry in `pending-previews/` makes both `preview` and
+   `short-confirm` fail closed (ambiguity is never ignored).
+
+**Final preview content (workflow text).** One compact message: meal name,
+assumptions/portion, the four macros, tool-checked Berlin local time, and the
+proposed technical one-minute interval (start to start+1 min, stated as a
+technical queue interval, not the real duration). A correction invalidates the
+previous preview (send and register a new one). Only after `short-confirm` and
+exact readback may the workflow say
+"Отправлено в очередь Health Connect. Телефон запишет при синхронизации."; a
+client-confirmed write may be claimed only after an ACK.
 
 **Trust boundary.** Both the preview file and the transport-reply file are
 written by the trusted agent workflow as the same OS user. They are cross-bound
@@ -280,14 +303,24 @@ cannot read); that is **not implemented**. The wrapper still passes the CLI's
 own internal affirm string when confirming; that string is a CLI argument, not
 user consent, and is reachable only after the checks above.
 
+#### Source / deployment mapping
+
+| Source (repo) | Deployed to |
+| --- | --- |
+| `services/health-connect-bridge/agent-workflow/nutrition_writeback.py` | installed bridge `bin/` via `install.sh` (not done) |
+| `services/health-connect-bridge/tests/test_short_preview_consent.py` | repo only |
+| proposed workflow text above | Hermes health skill (not done) |
+
 #### Proposed deployment / workflow list (not yet performed)
 
 1. Parent independently reviews the diff and runs the focused tests
    (`tests/test_short_preview_consent.py`, `tests/test_skill_isolation_root.py`).
 2. Merge, then install the updated `nutrition_writeback.py` into the installed
    bridge `bin/` via the normal `install.sh` flow (bridge otherwise unchanged).
-3. Update the Hermes health skill (outside this repo) so the workflow: sends the
-   final preview, calls `preview` with the real transport message ID/time, writes
+3. Update the Hermes health skill (outside this repo; NOT edited in this run) so
+   the workflow: creates the draft, takes `client_record_version` and
+   `snapshot_hash` from its output, sends the final preview, calls `preview` with
+   those values and the real transport message ID/time, writes
    the raw reply record, and calls `short-confirm`.
 4. Decide whether to build a gateway-signed reply record for server-authenticated
    provenance before treating short consent as more than workflow-attested.

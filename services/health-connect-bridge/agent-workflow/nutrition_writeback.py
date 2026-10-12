@@ -1029,6 +1029,7 @@ def cmd_draft(args: argparse.Namespace) -> int:
         "client_record_id": crid,
         "client_record_version": create_out.get("client_record_version"),
         "state": create_out.get("state"),
+        "snapshot_hash": _record_snapshot_hash(readback),
         "readback": readback,
     }, indent=2))
     return 0
@@ -1335,6 +1336,11 @@ def _snapshot_hash(snap: dict) -> str:
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
+def _record_snapshot_hash(record: dict) -> str | None:
+    snap = _snapshot_of(record)
+    return _snapshot_hash(snap) if snap is not None else None
+
+
 def _check_private_dir(d: Path, label: str) -> list:
     errs = _check_path_no_symlink_ancestor(d, label)
     if errs:
@@ -1440,6 +1446,22 @@ def _iter_previews(d: Path):
         yield p, data
 
 
+def _unreadable_previews(d: Path) -> list:
+    """Names of preview-like entries that cannot be securely loaded (fail closed)."""
+    bad = []
+    for p in sorted(d.iterdir()):
+        n = p.name
+        if n in (".lock",) or (n.startswith(".") and n.endswith(".tmp")):
+            continue
+        if not (n.startswith("preview-") and n.endswith(".json")):
+            bad.append(n)
+            continue
+        data, _ = _load_preview(p)
+        if data is None:
+            bad.append(n)
+    return bad
+
+
 def _read_record(cli, db, rid) -> tuple:
     rc, out, _ = _run_cli(cli, db, ["status", rid])
     if rc != 0:
@@ -1492,21 +1514,38 @@ def cmd_preview(args: argparse.Namespace) -> int:
         _emit_err({"error": "preview already expired"})
         return 1
 
-    # Exact draft readback; preview must describe a real draft.
-    rec, rerr = _read_record(cli, db, args.id)
-    if rerr:
-        _emit_err({"error": rerr})
+    # The caller supplies the version and canonical snapshot hash of the EXACT
+    # draft it displayed; the live record must still match both.
+    exp_version = args.expected_version
+    exp_hash = (args.expected_snapshot_hash or "").strip().lower()
+    if isinstance(exp_version, bool) or not isinstance(exp_version, int) or exp_version < 1:
+        _emit_err({"error": "--expected-version must be a positive integer"})
         return 1
-    if rec.get("state") != "draft":
-        _emit_err({"error": "record is not in draft state", "state": rec.get("state")})
+    if len(exp_hash) != 64 or any(c not in "0123456789abcdef" for c in exp_hash):
+        _emit_err({"error": "--expected-snapshot-hash must be a 64-char hex SHA-256"})
         return 1
-    version = rec.get("client_record_version")
-    if isinstance(version, bool) or not isinstance(version, int):
-        _emit_err({"error": "record has no integer version"})
-        return 1
-    snap = _snapshot_of(rec)
-    if snap is None:
-        _emit_err({"error": "record is missing name/time/macro fields"})
+
+    def _verify_live():
+        rec, rerr = _read_record(cli, db, args.id)
+        if rerr:
+            return None, None, rerr
+        if rec.get("state") != "draft":
+            return None, None, "record is not in draft state"
+        v = rec.get("client_record_version")
+        if isinstance(v, bool) or not isinstance(v, int):
+            return None, None, "record has no integer version"
+        if v != exp_version:
+            return None, None, "record version differs from the displayed preview version"
+        sn = _snapshot_of(rec)
+        if sn is None:
+            return None, None, "record is missing name/time/macro fields"
+        if _snapshot_hash(sn) != exp_hash:
+            return None, None, "record content differs from the displayed preview content"
+        return v, sn, None
+
+    version, snap, verr = _verify_live()
+    if verr:
+        _emit_err({"error": verr})
         return 1
 
     d, derrs = _preview_dir(isolation_root, create=True)
@@ -1532,6 +1571,14 @@ def cmd_preview(args: argparse.Namespace) -> int:
         **fields,
     }
     with _PreviewLock(d):
+        if _unreadable_previews(d):
+            _emit_err({"error": "pending-preview store has unreadable/insecure entries"})
+            return 1
+        # Final check inside the lock, immediately before the preview is stored.
+        _, _, verr = _verify_live()
+        if verr:
+            _emit_err({"error": verr})
+            return 1
         for p, other in _iter_previews(d):
             if other is None:
                 continue
@@ -1667,12 +1714,16 @@ def cmd_short_confirm(args: argparse.Namespace) -> int:
         _emit_err({"error": "no pending preview"})
         return 1
 
+    # Any unreadable/insecure/corrupt/foreign entry makes the store ambiguous.
+    if _unreadable_previews(d):
+        _emit_err({"error": "pending-preview store has unreadable/insecure entries; "
+                            "failing closed"})
+        return 1
+
     # Locate the preview ONLY via the reply target; the caller never names a queue ID.
     matches = []
-    unreadable = 0
     for p, data in _iter_previews(d):
         if data is None:
-            unreadable += 1
             continue
         if (data.get("chat_id"), data.get("thread_id"),
                 data.get("preview_message_id")) == (
@@ -1748,9 +1799,16 @@ def cmd_short_confirm(args: argparse.Namespace) -> int:
         elif _STAGE["v"] == "confirm":
             # CLI refused/failed: release only if the draft is verifiably untouched.
             rec, _ = _read_record(cli, db, rid)
+            live = _snapshot_of(rec) if rec else None
             if (rec and rec.get("state") == "draft"
-                    and rec.get("client_record_version") == version):
+                    and rec.get("client_record_version") == version
+                    and live is not None
+                    and _snapshot_hash(live) == pv["snapshot_hash"]):
+                # Verifiably untouched (same version AND same content): safe to release.
                 _finish_preview(d, path, "pending")
+            else:
+                # Changed content/version/state: authorization is revoked for good.
+                _finish_preview(d, path, "revoked")
         # Any other outcome (crash, post-readback failure) stays "consuming":
         # fail closed — a fresh preview and reply are required.
     return rc
@@ -1782,6 +1840,9 @@ def cmd_status(args: argparse.Namespace) -> int:
         if not isinstance(parsed, dict):
             _emit_err({"error": "invalid JSON from CLI status: expected object for single-ID query"})
             return 1
+        h = _record_snapshot_hash(parsed)
+        if h:
+            parsed["snapshot_hash"] = h
         print(json.dumps(parsed))
     else:
         print(out, end="")
@@ -1868,6 +1929,10 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Transport message ID of the final preview actually sent")
     p_p.add_argument("--preview-sent-at", required=True, metavar="ISO8601",
                      help="Transport timestamp (with offset) of that preview message")
+    p_p.add_argument("--expected-version", required=True, type=int, metavar="N",
+                     help="Version of the exact draft shown in the final preview")
+    p_p.add_argument("--expected-snapshot-hash", required=True, metavar="SHA256",
+                     help="snapshot_hash (from draft/status output) of the displayed draft")
     p_p.add_argument("--ttl-seconds", type=int, default=_PREVIEW_DEFAULT_TTL, metavar="N")
 
     # short-confirm
