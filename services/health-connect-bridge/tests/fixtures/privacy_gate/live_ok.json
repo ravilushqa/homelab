@@ -1,0 +1,15 @@
+{
+  "name": "umami@docker",
+  "type": "Plugin",
+  "status": "enabled",
+  "plugin": {
+    "umami-feeder": {
+      "umamiHost": "http://umami:3000",
+      "ignoreURLs": [
+        "^/ingest/health-connect(\\?.*)?$",
+        "^/nutrition/queue(\\?.*)?$",
+        "^/nutrition/ack(\\?.*)?$"
+      ]
+    }
+  }
+}
