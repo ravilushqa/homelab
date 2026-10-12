@@ -20,23 +20,27 @@ in read-only mode and emits a JSON summary:
 
 **Ingest and queue are never summed.**  Records in `date_nutrition_ingest`
 were already read from Health Connect.  Records in `queue_by_state` represent
-meal entries at various stages of the write-back pipeline — `draft` and
-`confirmed` entries are pending delivery; `acked` and `cancelled` entries are
-terminal states.  Never merge or compare these two data sources numerically.
+meal entries in the write-back pipeline.  `draft` entries are unapproved and
+are not queued for delivery; only `confirmed` entries are pending phone
+delivery.  `acked` and `cancelled` are terminal states.  Never merge or
+compare these two data sources numerically.
 
 ---
 
 ## Running the tool
 
+After the standalone file is deployed (see Deployment below), use the
+installed path:
+
 ```bash
-python -m health-connect-bridge.consultation_read \
+python3 /home/claw/.hermes/profiles/health/scripts/consultation_read.py \
     --date 2026-10-11        # optional; defaults to today in Europe/Berlin
 ```
 
-Or as a script:
+From the repository (pre-deployment / development):
 
 ```bash
-python services/health-connect-bridge/consultation_read.py --date 2026-10-11
+python3 services/health-connect-bridge/consultation_read.py --date 2026-10-11
 ```
 
 Defaults:
@@ -46,6 +50,29 @@ Defaults:
 
 The tool exits with status 0 on success.  Individual database errors are
 captured in the `errors` key without aborting the whole run.
+
+### Deployment
+
+`consultation_read.py` is a standalone stdlib-only file (no dependency on the
+`health_connect_bridge` package or any third-party library).  It is deployed
+as a single file copy separate from `install.sh`, which installs only the
+bridge receiver package.
+
+Proposed deployment command (execute after parent verifies PR #767):
+
+```bash
+cp /path/to/repo/services/health-connect-bridge/consultation_read.py \
+   /home/claw/.hermes/profiles/health/scripts/consultation_read.py
+chmod 0700 /home/claw/.hermes/profiles/health/scripts/consultation_read.py
+```
+
+Verify after copy:
+
+```bash
+python3 /home/claw/.hermes/profiles/health/scripts/consultation_read.py \
+    --date "$(python3 -c "from datetime import datetime; from zoneinfo import ZoneInfo; print(datetime.now(ZoneInfo('Europe/Berlin')).strftime('%Y-%m-%d'))")" \
+    2>/dev/null | python3 -m json.tool | head -10
+```
 
 ---
 
@@ -143,13 +170,19 @@ be checked in Health Connect UI.
 for delivery".  Only `confirmed` entries are pending delivery; `draft`
 entries are unapproved.
 
-Each queue entry includes a `correlation` field.  Correlation requires an
-exact `client_record_id` AND `client_record_version` match in `health_records`
-(stored in `expl_id` with `expl_ns='client'`, or in `record_json` metadata
-when a server-assigned HC ID takes precedence).  In the current JSON payload
-format neither ID is present, so `correlation.status` will be `not_verified`
-for all current entries.  Identity match and content match are reported
-separately and must not be conflated.
+Each queue entry includes a `correlation` field.  At runtime the tool
+searches `health_records` for:
+1. A primary match: `expl_ns='client'`, `expl_id=client_record_id`,
+   `data_origin='com.ravil.healthconnect.nutrition'`.
+2. A secondary bounded scan (up to 200 rows with `expl_ns='server'` and
+   expected origin) of `record_json` metadata for the client ID.
+
+`correlation.status` reflects what is found in the database at query time:
+`not_verified` when no matching explicit ID is present; `identity_match`
+when one is found.  Do not assume the absence of IDs is permanent — this
+depends on what the ingest payload contained, not on a fixed format
+constraint.  Identity match (ID + version) and content match (macros + times)
+are reported separately and must not be conflated.
 
 ---
 
@@ -218,7 +251,7 @@ The full order for a new meal entry is:
 4. **Create draft** — invoke the skill to create a draft entry with the
    agreed name, time, and AI-estimated macros.
 
-5. **Status readback** — run `consultation_read.py --date <date>` and read
+5. **Status readback** — run `consultation_read.py --date <date>` (installed at `/home/claw/.hermes/profiles/health/scripts/consultation_read.py`) and read
    back the exact draft record: name, `client_record_id`, `client_record_version`,
    start/end times.  Also note the КБЖУ preview (К=energy_kcal,
    Б=protein_g, Ж=fat_g, У=carbohydrate_g) from the draft macros.
@@ -243,13 +276,16 @@ The full order for a new meal entry is:
    raw consent file.  The wrapper validates consent, enforces privacy gates,
    and calls the technical affirm internally.
 
-10. **Status ACK readback** — run `consultation_read.py` and verify the entry
+10. **Status ACK readback** — run `consultation_read.py` (installed path) and verify the entry
     has transitioned to `confirmed`, then `acked` after phone delivery.
 
-11. **HC export correlation** — once `acked`, check `correlation.status` in the
-    tool output.  In the current format this will be `not_verified`.  If a
-    future format supports explicit IDs, verify `identity_match` and
-    `content_match`.
+11. **HC export correlation** — once `acked`, check `correlation.status` in
+    the tool output.  The tool searches `health_records` at runtime for an
+    explicit ID match; status is `not_verified` when no matching record is
+    found, or `identity_match` with a separate `content_match` field when
+    one is.  If `identity_match`, verify `content_match` is `true` and that
+    `content_issues` is absent before treating the ingest record as
+    independently confirmed.
 
 12. **Google Health display** — independently verify the entry appears in the
     Google Health or Health Connect UI on the phone with the correct time and
@@ -320,7 +356,7 @@ The following flags apply to all production runs.
 ## Operational checklist
 
 ```
-[ ] Run consultation_read.py --date <date> and review inventory age fields
+[ ] Run /home/claw/.hermes/profiles/health/scripts/consultation_read.py --date <date> and review inventory age fields
 [ ] Check provenance_notes for any source ambiguity warnings
 [ ] Review date_exercise for exercise sessions from expected sources
 [ ] Review date_nutrition_ingest for HC-received nutrition records (if any)
@@ -332,7 +368,7 @@ The following flags apply to all production runs.
     [ ] Re-read draft status AFTER consent, BEFORE confirm (same version?)
     [ ] Run INSTALLED nutrition_writeback.py wrapper with all production flags:
         --confirmer Равиль --meal-name NAME --consent-file /PRIVATE/...
-    [ ] Run consultation_read.py and confirm state → confirmed → acked
+    [ ] Run installed consultation_read.py and confirm state → confirmed → acked
     [ ] Verify independently on phone in Health Connect UI
     [ ] Note: server/unit tests do not establish real-phone background/offline acceptance
 [ ] Confirm no cross-source sums or numeric totals have been computed
