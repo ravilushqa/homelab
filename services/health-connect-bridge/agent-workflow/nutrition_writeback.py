@@ -6,12 +6,30 @@ Calls the installed nutrition-queue CLI as a subprocess. Never imports
 production modules or creates databases. Fails closed if system not deployed.
 
 Subcommands:
-  draft     Read JSON from stdin or --file, create draft, read back written record.
-  confirm   Read back current record, verify name/version, verify explicit raw
-            user consent text, confirm with technical affirm phrase, read back
-            before AND after. Requires --consent-text or --consent-file and
-            --confirmer and --meal-name.
-  status    Show status of one or all entries (readonly).
+  draft         Read JSON from stdin or --file, create draft, read back written record.
+  confirm       Read back current record, verify name/version, verify explicit raw
+                user consent text, confirm with technical affirm phrase, read back
+                before AND after. Requires --consent-text or --consent-file and
+                --confirmer and --meal-name.
+  preview       Read back a draft, compute a content hash, and register a durable
+                pending-preview context file binding the exact ID/version/content to
+                the expected user/chat/thread and preview message. Required before
+                short-confirm. Does not mutate the queue.
+  short-confirm Consume a registered pending preview. Validates: short affirmative
+                text (Да/Запиши), same user/chat/thread as bound, explicit reply to
+                the bound preview message, message within the preview window, re-reads
+                draft and checks content hash for drift. Then runs full mutation
+                readiness and confirms via CLI. No long consent phrase required from
+                the user; all binding is via the preview context.
+  status        Show status of one or all entries (readonly).
+
+Short-confirm trust boundary: the preview file and the --transport-file are
+written by the trusted agent workflow, not independently authenticated by the
+messaging server. They are private (0700/0600, no symlinks), bound to each other
+and to the live draft, but a local file is workflow-attested evidence only
+(provenance_level "workflow_attested"). Preview authorizations are single-use:
+pending -> consuming (under flock) -> consumed; a crash leaves "consuming",
+which fails closed and requires a new preview and reply.
 
 Isolation mode (testing only):
   --isolation-root DIR   Private directory under allowed scratch; BOTH --cli and
@@ -1011,7 +1029,170 @@ def cmd_draft(args: argparse.Namespace) -> int:
         "client_record_id": crid,
         "client_record_version": create_out.get("client_record_version"),
         "state": create_out.get("state"),
+        "snapshot_hash": _record_snapshot_hash(readback),
         "readback": readback,
+    }, indent=2))
+    return 0
+
+
+_STAGE = {"v": "pre"}
+
+
+def _confirm_with_readback(cli, db, rid, version, meal_name, confirmer, pre_confirm=None,
+                           extra_confirm_args=None) -> int:
+    """
+    Shared confirm path: read back before, verify draft/version/name, optionally
+    run pre_confirm(before) -> error str | None (e.g. content-hash check and
+    preview claim), confirm via CLI, read back after and verify immutability.
+    Prints the success JSON and returns 0, or emits an error and returns 1.
+    _STAGE records how far it got: "pre" / "confirm" / "post".
+    """
+    _STAGE["v"] = "pre"
+    # ── Read back BEFORE confirming ───────────────────────────────────────────
+    rc, out, _ = _run_cli(cli, db, ["status", rid])
+    if rc != 0:
+        _emit_err({"error": "cannot read record before confirm"})
+        return 1
+
+    try:
+        before = json.loads(out)
+    except (json.JSONDecodeError, ValueError):
+        _emit_err({"error": "invalid JSON from CLI status (before)"})
+        return 1
+    if not isinstance(before, dict):
+        _emit_err({"error": "invalid JSON from CLI status (before): expected object"})
+        return 1
+
+    if before.get("client_record_id") != rid:
+        _emit_err({
+            "error": "readback id mismatch before confirm",
+            "expected": rid,
+            "got": before.get("client_record_id"),
+        })
+        return 1
+
+    state = before.get("state")
+    if state != "draft":
+        _emit_err({
+            "error": "record is not in draft state",
+            "state": state,
+            "hint": "only draft records can be confirmed",
+        })
+        return 1
+
+    stored_version = before.get("client_record_version")
+    if stored_version != version:
+        _emit_err({
+            "error": "version mismatch — stale or incorrect consent",
+            "consent_version": version,
+            "stored_version": stored_version,
+            "hint": "read the current record and require new explicit consent",
+        })
+        return 1
+
+    stored_name = before.get("name")
+    if stored_name != meal_name:
+        _emit_err({
+            "error": "meal name mismatch — consent named a different meal",
+            "hint": "re-read the record and require new explicit consent",
+        })
+        return 1
+
+    if pre_confirm is not None:
+        pre_err = pre_confirm(before)
+        if pre_err:
+            _emit_err({"error": pre_err})
+            return 1
+
+    # ── Confirm via CLI ───────────────────────────────────────────────────────
+    _STAGE["v"] = "confirm"
+    rc2, out2, err2 = _run_cli(cli, db, [
+        "confirm", rid,
+        "--version", str(version),
+        "--affirm", _CONFIRM_AFFIRM,
+        "--confirmer", confirmer,
+    ] + list(extra_confirm_args or []))
+    if rc2 != 0:
+        sys.stderr.write(err2 if err2 else json.dumps({"error": "confirm CLI failed"}) + "\n")
+        return 1
+
+    try:
+        confirm_out = json.loads(out2)
+    except (json.JSONDecodeError, ValueError):
+        _emit_err({"error": "invalid JSON from CLI confirm"})
+        return 1
+    if not isinstance(confirm_out, dict):
+        _emit_err({"error": "invalid JSON from CLI confirm: expected object"})
+        return 1
+
+    # ── Read back AFTER confirming ────────────────────────────────────────────
+    _STAGE["v"] = "post"
+    rc3, out3, _ = _run_cli(cli, db, ["status", rid])
+    if rc3 != 0:
+        _emit_err({"error": "readback failed after confirm", "confirm_result": confirm_out})
+        return 1
+
+    try:
+        after = json.loads(out3)
+    except (json.JSONDecodeError, ValueError):
+        _emit_err({"error": "invalid JSON from CLI status (after)"})
+        return 1
+    if not isinstance(after, dict):
+        _emit_err({"error": "invalid JSON from CLI status (after): expected object"})
+        return 1
+
+    # Verify readback_after: id, version, state, name, confirmed_by all must match
+    after_errs = []
+    if after.get("client_record_id") != rid:
+        after_errs.append(
+            f"readback_after id mismatch: expected {rid!r}, "
+            f"got {after.get('client_record_id')!r}"
+        )
+    if after.get("client_record_version") != version:
+        after_errs.append(
+            f"readback_after version mismatch: expected {version}, "
+            f"got {after.get('client_record_version')!r}"
+        )
+    if after.get("state") != "confirmed":
+        after_errs.append(
+            f"readback_after state is not confirmed: got {after.get('state')!r}"
+        )
+    if after.get("name") != meal_name:
+        after_errs.append(
+            f"readback_after name mismatch: expected {meal_name!r}, "
+            f"got {after.get('name')!r}"
+        )
+    if after.get("confirmed_by") != confirmer:
+        after_errs.append(
+            f"readback_after confirmed_by mismatch: expected {confirmer!r}, "
+            f"got {after.get('confirmed_by')!r}"
+        )
+    # Verify immutable fields: full nutrient/time/name/description must be unchanged
+    _IMMUTABLE = ("name", "start_time", "end_time", "energy_kcal",
+                  "protein_g", "carbohydrate_g", "fat_g", "description")
+    for field in _IMMUTABLE:
+        before_val = before.get(field)
+        after_val = after.get(field)
+        if before_val != after_val:
+            after_errs.append(
+                f"immutable field {field!r} changed after confirm: "
+                f"before={before_val!r}, after={after_val!r}"
+            )
+    if after_errs:
+        _emit_err({"error": "readback_after verification failed", "details": after_errs})
+        return 1
+
+    # Output state comes from validated readback, not unchecked CLI confirm output
+    print(json.dumps({
+        "ok": True,
+        "action": "confirm",
+        "client_record_id": rid,
+        "client_record_version": after.get("client_record_version"),
+        "state": after.get("state"),
+        "confirmed_by": after.get("confirmed_by"),
+        "confirmed_at": after.get("confirmed_at"),
+        "readback_before": before,
+        "readback_after": after,
     }, indent=2))
     return 0
 
@@ -1069,145 +1250,625 @@ def cmd_confirm(args: argparse.Namespace) -> int:
         })
         return 1
 
-    # ── Read back BEFORE confirming ───────────────────────────────────────────
-    rc, out, _ = _run_cli(cli, db, ["status", args.id])
+    return _confirm_with_readback(
+        cli, db, args.id, args.version, args.meal_name, args.confirmer
+    )
+
+
+# ── Short final-preview consent ──────────────────────────────────────────────
+#
+# Trust boundary: the pending-preview file and the transport-reply file are both
+# written by the trusted agent workflow (the same OS user). They are bound,
+# private (0700/0600, no symlinks) and cross-checked, but a local JSON file is
+# NOT proof of server-authenticated provenance: whoever can write it as this user
+# can forge a reply. Results therefore carry provenance_level
+# "workflow_attested". Independently authenticated provenance would need the
+# messaging gateway to sign the reply record; that is not implemented here.
+
+_PREVIEW_SCHEMA = 1
+_PREVIEW_DIRNAME = "pending-previews"
+_PREVIEW_DEFAULT_TTL = 900
+_PREVIEW_MAX_TTL = 3600
+_PREVIEW_CLOCK_SKEW = 60  # seconds a preview timestamp may be ahead of now
+_PROVENANCE_LEVEL = "workflow_attested"
+_SNAPSHOT_FIELDS = ("name", "start_time", "end_time",
+                    "energy_kcal", "protein_g", "carbohydrate_g", "fat_g")
+_MACRO_FIELDS = ("energy_kcal", "protein_g", "carbohydrate_g", "fat_g")
+_SHORT_AFFIRMATIVES = frozenset({
+    "да", "запиши", "да, запиши", "да запиши", "yes", "record it",
+})
+_SHORT_MAX_LEN = 40
+# Conditional / hedging words: rejected with a clear reason even though the
+# exact whitelist already excludes them.
+_CONDITIONAL_RE = re.compile(r"\b(if|but|maybe|unless)\b|(?<!\w)(если|но|может|потом)(?!\w)",
+                             re.IGNORECASE)
+
+
+def _now():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc)
+
+
+def _parse_ts(value, label: str):
+    """Parse an ISO-8601 timestamp that carries a timezone. Returns (dt, err)."""
+    from datetime import datetime, timezone
+    if not isinstance(value, str) or not value.strip():
+        return None, f"{label} must be an ISO-8601 timestamp string"
+    s = value.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None, f"{label} is not a valid ISO-8601 timestamp"
+    if dt.tzinfo is None:
+        return None, f"{label} must include a timezone offset"
+    return dt.astimezone(timezone.utc), None
+
+
+def _norm_id(value) -> str | None:
+    """Transport identifiers: str or int (never bool); '' for absent thread."""
+    if value is None:
+        return ""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    return str(value).strip()
+
+
+def _snapshot_of(record: dict) -> dict | None:
+    snap = {}
+    for f in _SNAPSHOT_FIELDS:
+        v = record.get(f)
+        if v is None:
+            return None
+        if f in _MACRO_FIELDS:
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+                return None
+            v = float(v)
+        snap[f] = v
+    # The AI description is part of what gets written, so bind it too.
+    snap["description"] = record.get("description")
+    return snap
+
+
+def _snapshot_hash(snap: dict) -> str:
+    import hashlib
+    canon = json.dumps(snap, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def _record_snapshot_hash(record: dict) -> str | None:
+    snap = _snapshot_of(record)
+    return _snapshot_hash(snap) if snap is not None else None
+
+
+def _check_private_dir(d: Path, label: str) -> list:
+    errs = _check_path_no_symlink_ancestor(d, label)
+    if errs:
+        return errs
+    if not d.is_dir():
+        return [f"{label} must be a directory: {d}"]
+    try:
+        st = d.stat()
+    except OSError as exc:
+        return [f"cannot stat {label}: {exc}"]
+    if st.st_uid != os.getuid():
+        return [f"{label} must be owned by the current user: {d}"]
+    if (st.st_mode & 0o777) != 0o700:
+        return [f"{label} must have 0700 permissions: {d}"]
+    return []
+
+
+def _preview_dir(isolation_root: Path | None, create: bool) -> tuple:
+    """Return (dir, errors). Parent must already be secure; dir is created 0700."""
+    base = isolation_root if isolation_root is not None else _PROD_BASE
+    d = base / _PREVIEW_DIRNAME
+    if _has_symlink_ancestor(d):
+        return None, [f"{_PREVIEW_DIRNAME} path must not have a symlink in any ancestor"]
+    if not d.exists():
+        if not create:
+            return d, []
+        if not base.is_dir():
+            return None, [f"preview base directory missing: {base}"]
+        try:
+            d.mkdir(mode=0o700)
+            os.chmod(d, 0o700)
+        except OSError as exc:
+            return None, [f"cannot create preview directory: {exc}"]
+    errs = _check_private_dir(d, "pending-preview directory")
+    return (None, errs) if errs else (d, [])
+
+
+class _PreviewLock:
+    """Exclusive flock on <dir>/.lock serialising register/claim/release."""
+
+    def __init__(self, d: Path):
+        self._path = d / ".lock"
+        self._fd = None
+
+    def __enter__(self):
+        import fcntl
+        fd = os.open(str(self._path), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        self._fd = fd
+        return self
+
+    def __exit__(self, *exc):
+        import fcntl
+        if self._fd is not None:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            os.close(self._fd)
+        return False
+
+
+def _write_preview(path: Path, data: dict, exclusive: bool) -> None:
+    """Atomic durable write: tmp (O_EXCL, 0600) + fsync + rename (or link if exclusive)."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False))
+            fh.flush()
+            os.fsync(fh.fileno())
+        if exclusive:
+            os.link(str(tmp), str(path))  # fails if path exists
+        else:
+            os.replace(str(tmp), str(path))
+    finally:
+        try:
+            os.unlink(str(tmp))
+        except FileNotFoundError:
+            pass
+    dfd = os.open(str(path.parent), os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
+def _load_preview(path: Path) -> tuple:
+    errs = _check_regular_file_secure(path, "pending preview", need_mode=0o600)
+    if errs:
+        return None, errs
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, ["pending preview unreadable"]
+    if not isinstance(data, dict) or data.get("schema") != _PREVIEW_SCHEMA:
+        return None, ["pending preview has unsupported schema"]
+    return data, []
+
+
+def _iter_previews(d: Path):
+    """Yield (path, data) for every readable preview; unreadable ones are skipped
+    but reported via data=None so callers can fail closed on ambiguity."""
+    for p in sorted(d.glob("preview-*.json")):
+        data, _ = _load_preview(p)
+        yield p, data
+
+
+def _unreadable_previews(d: Path) -> list:
+    """Names of preview-like entries that cannot be securely loaded (fail closed)."""
+    bad = []
+    for p in sorted(d.iterdir()):
+        n = p.name
+        if n in (".lock",) or (n.startswith(".") and n.endswith(".tmp")):
+            continue
+        if not (n.startswith("preview-") and n.endswith(".json")):
+            bad.append(n)
+            continue
+        data, _ = _load_preview(p)
+        if data is None:
+            bad.append(n)
+    return bad
+
+
+def _read_record(cli, db, rid) -> tuple:
+    rc, out, _ = _run_cli(cli, db, ["status", rid])
     if rc != 0:
-        _emit_err({"error": "cannot read record before confirm"})
-        return 1
-
+        return None, "cannot read record"
     try:
-        before = json.loads(out)
+        rec = json.loads(out)
     except (json.JSONDecodeError, ValueError):
-        _emit_err({"error": "invalid JSON from CLI status (before)"})
-        return 1
-    if not isinstance(before, dict):
-        _emit_err({"error": "invalid JSON from CLI status (before): expected object"})
+        return None, "invalid JSON from CLI status"
+    if not isinstance(rec, dict) or rec.get("client_record_id") != rid:
+        return None, "readback id mismatch"
+    return rec, None
+
+
+def cmd_preview(args: argparse.Namespace) -> int:
+    """Register a durable pending preview for an existing draft (no queue mutation)."""
+    cli, db, isolation_root = _resolve(args)
+    if cli is None:
         return 1
 
-    if before.get("client_record_id") != args.id:
-        _emit_err({
-            "error": "readback id mismatch before confirm",
-            "expected": args.id,
-            "got": before.get("client_record_id"),
-        })
+    fields = {
+        "user_id": _norm_id(args.user_id),
+        "chat_id": _norm_id(args.chat_id),
+        "thread_id": _norm_id(args.thread_id),
+        "preview_message_id": _norm_id(args.preview_message_id),
+    }
+    if not fields["user_id"] or not fields["chat_id"] or not fields["preview_message_id"]:
+        _emit_err({"error": "--user-id, --chat-id and --preview-message-id are required"})
+        return 1
+    if fields["thread_id"] is None:
+        _emit_err({"error": "invalid --thread-id"})
+        return 1
+    if not args.confirmer or not args.confirmer.strip():
+        _emit_err({"error": "--confirmer is required"})
+        return 1
+    ttl = args.ttl_seconds
+    if not (1 <= ttl <= _PREVIEW_MAX_TTL):
+        _emit_err({"error": f"--ttl-seconds must be between 1 and {_PREVIEW_MAX_TTL}"})
+        return 1
+    sent_at, err = _parse_ts(args.preview_sent_at, "--preview-sent-at")
+    if err:
+        _emit_err({"error": err})
+        return 1
+    now = _now()
+    from datetime import timedelta
+    if (sent_at - now).total_seconds() > _PREVIEW_CLOCK_SKEW:
+        _emit_err({"error": "preview timestamp is in the future"})
+        return 1
+    expires = sent_at + timedelta(seconds=ttl)
+    if expires <= now:
+        _emit_err({"error": "preview already expired"})
         return 1
 
-    state = before.get("state")
-    if state != "draft":
-        _emit_err({
-            "error": "record is not in draft state",
-            "state": state,
-            "hint": "only draft records can be confirmed",
-        })
+    # The caller supplies the version and canonical snapshot hash of the EXACT
+    # draft it displayed; the live record must still match both.
+    exp_version = args.expected_version
+    exp_hash = (args.expected_snapshot_hash or "").strip().lower()
+    if isinstance(exp_version, bool) or not isinstance(exp_version, int) or exp_version < 1:
+        _emit_err({"error": "--expected-version must be a positive integer"})
+        return 1
+    if len(exp_hash) != 64 or any(c not in "0123456789abcdef" for c in exp_hash):
+        _emit_err({"error": "--expected-snapshot-hash must be a 64-char hex SHA-256"})
         return 1
 
-    stored_version = before.get("client_record_version")
-    if stored_version != args.version:
-        _emit_err({
-            "error": "version mismatch — stale or incorrect consent",
-            "consent_version": args.version,
-            "stored_version": stored_version,
-            "hint": "read the current record and require new explicit consent",
-        })
+    def _verify_live():
+        rec, rerr = _read_record(cli, db, args.id)
+        if rerr:
+            return None, None, rerr
+        if rec.get("state") != "draft":
+            return None, None, "record is not in draft state"
+        v = rec.get("client_record_version")
+        if isinstance(v, bool) or not isinstance(v, int):
+            return None, None, "record has no integer version"
+        if v != exp_version:
+            return None, None, "record version differs from the displayed preview version"
+        sn = _snapshot_of(rec)
+        if sn is None:
+            return None, None, "record is missing name/time/macro fields"
+        if _snapshot_hash(sn) != exp_hash:
+            return None, None, "record content differs from the displayed preview content"
+        return v, sn, None
+
+    version, snap, verr = _verify_live()
+    if verr:
+        _emit_err({"error": verr})
         return 1
 
-    stored_name = before.get("name")
-    if stored_name != args.meal_name:
-        _emit_err({
-            "error": "meal name mismatch — consent named a different meal",
-            "hint": "re-read the record and require new explicit consent",
-        })
+    d, derrs = _preview_dir(isolation_root, create=True)
+    if derrs:
+        _emit_err({"error": "pending-preview store insecure", "details": derrs})
         return 1
 
-    # ── Confirm via CLI ───────────────────────────────────────────────────────
-    rc2, out2, err2 = _run_cli(cli, db, [
-        "confirm", args.id,
-        "--version", str(args.version),
-        "--affirm", _CONFIRM_AFFIRM,
-        "--confirmer", args.confirmer,
-    ])
-    if rc2 != 0:
-        sys.stderr.write(err2 if err2 else json.dumps({"error": "confirm CLI failed"}) + "\n")
-        return 1
+    import secrets
+    preview_id = secrets.token_hex(16)
+    data = {
+        "schema": _PREVIEW_SCHEMA,
+        "preview_id": preview_id,
+        "status": "pending",
+        "client_record_id": args.id,
+        "client_record_version": version,
+        "snapshot": snap,
+        "snapshot_hash": _snapshot_hash(snap),
+        "confirmer": args.confirmer.strip(),
+        "created_at": now.isoformat(),
+        "preview_sent_at": sent_at.isoformat(),
+        "expires_at": expires.isoformat(),
+        "provenance_level": _PROVENANCE_LEVEL,
+        **fields,
+    }
+    with _PreviewLock(d):
+        if _unreadable_previews(d):
+            _emit_err({"error": "pending-preview store has unreadable/insecure entries"})
+            return 1
+        # Final check inside the lock, immediately before the preview is stored.
+        _, _, verr = _verify_live()
+        if verr:
+            _emit_err({"error": verr})
+            return 1
+        for p, other in _iter_previews(d):
+            if other is None:
+                continue
+            same_msg = (other.get("chat_id"), other.get("thread_id"),
+                        other.get("preview_message_id")) == (
+                fields["chat_id"], fields["thread_id"], fields["preview_message_id"])
+            if same_msg:
+                _emit_err({"error": "a preview is already registered for this message"})
+                return 1
+        # A new preview for the same record supersedes older pending ones.
+        for p, other in _iter_previews(d):
+            if (other and other.get("client_record_id") == args.id
+                    and other.get("status") == "pending"):
+                other["status"] = "superseded"
+                other["superseded_by"] = preview_id
+                _write_preview(p, other, exclusive=False)
+        _write_preview(d / f"preview-{preview_id}.json", data, exclusive=True)
 
-    try:
-        confirm_out = json.loads(out2)
-    except (json.JSONDecodeError, ValueError):
-        _emit_err({"error": "invalid JSON from CLI confirm"})
-        return 1
-    if not isinstance(confirm_out, dict):
-        _emit_err({"error": "invalid JSON from CLI confirm: expected object"})
-        return 1
-
-    # ── Read back AFTER confirming ────────────────────────────────────────────
-    rc3, out3, _ = _run_cli(cli, db, ["status", args.id])
-    if rc3 != 0:
-        _emit_err({"error": "readback failed after confirm", "confirm_result": confirm_out})
-        return 1
-
-    try:
-        after = json.loads(out3)
-    except (json.JSONDecodeError, ValueError):
-        _emit_err({"error": "invalid JSON from CLI status (after)"})
-        return 1
-    if not isinstance(after, dict):
-        _emit_err({"error": "invalid JSON from CLI status (after): expected object"})
-        return 1
-
-    # Verify readback_after: id, version, state, name, confirmed_by all must match
-    after_errs = []
-    if after.get("client_record_id") != args.id:
-        after_errs.append(
-            f"readback_after id mismatch: expected {args.id!r}, "
-            f"got {after.get('client_record_id')!r}"
-        )
-    if after.get("client_record_version") != args.version:
-        after_errs.append(
-            f"readback_after version mismatch: expected {args.version}, "
-            f"got {after.get('client_record_version')!r}"
-        )
-    if after.get("state") != "confirmed":
-        after_errs.append(
-            f"readback_after state is not confirmed: got {after.get('state')!r}"
-        )
-    if after.get("name") != args.meal_name:
-        after_errs.append(
-            f"readback_after name mismatch: expected {args.meal_name!r}, "
-            f"got {after.get('name')!r}"
-        )
-    if after.get("confirmed_by") != args.confirmer:
-        after_errs.append(
-            f"readback_after confirmed_by mismatch: expected {args.confirmer!r}, "
-            f"got {after.get('confirmed_by')!r}"
-        )
-    # Verify immutable fields: full nutrient/time/name/description must be unchanged
-    _IMMUTABLE = ("name", "start_time", "end_time", "energy_kcal",
-                  "protein_g", "carbohydrate_g", "fat_g", "description")
-    for field in _IMMUTABLE:
-        before_val = before.get(field)
-        after_val = after.get(field)
-        if before_val != after_val:
-            after_errs.append(
-                f"immutable field {field!r} changed after confirm: "
-                f"before={before_val!r}, after={after_val!r}"
-            )
-    if after_errs:
-        _emit_err({"error": "readback_after verification failed", "details": after_errs})
-        return 1
-
-    # Output state comes from validated readback, not unchecked CLI confirm output
     print(json.dumps({
         "ok": True,
-        "action": "confirm",
+        "action": "preview",
+        "preview_id": preview_id,
         "client_record_id": args.id,
-        "client_record_version": after.get("client_record_version"),
-        "state": after.get("state"),
-        "confirmed_by": after.get("confirmed_by"),
-        "confirmed_at": after.get("confirmed_at"),
-        "readback_before": before,
-        "readback_after": after,
-    }, indent=2))
+        "client_record_version": version,
+        "snapshot": snap,
+        "snapshot_hash": data["snapshot_hash"],
+        "expires_at": data["expires_at"],
+    }, indent=2, ensure_ascii=False))
     return 0
+
+
+def _load_transport(path_arg) -> tuple:
+    """Load the raw user reply transport record. Returns (dict, errors)."""
+    p = Path(path_arg)
+    errs = _check_regular_file_secure(p, "transport reply file", need_mode=0o600)
+    if errs:
+        return None, errs
+    try:
+        if p.stat().st_size > _MAX_JSON_INPUT:
+            return None, ["transport reply file too large"]
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, ["transport reply file unreadable"]
+    if not isinstance(raw, dict):
+        return None, ["transport reply must be a JSON object"]
+    out = {
+        "sender_id": _norm_id(raw.get("sender_id")),
+        "chat_id": _norm_id(raw.get("chat_id")),
+        "thread_id": _norm_id(raw.get("thread_id")),
+        "message_id": _norm_id(raw.get("message_id")),
+        "reply_to_message_id": _norm_id(raw.get("reply_to_message_id")),
+    }
+    for k in ("sender_id", "chat_id", "message_id", "reply_to_message_id"):
+        if not out[k]:
+            return None, [f"transport reply missing {k}"]
+    if out["thread_id"] is None:
+        return None, ["transport reply has invalid thread_id"]
+    text = raw.get("text")
+    if not isinstance(text, str):
+        return None, ["transport reply missing text"]
+    out["text"] = text
+    ts, terr = _parse_ts(raw.get("timestamp"), "transport timestamp")
+    if terr:
+        return None, [terr]
+    out["timestamp"] = ts
+    return out, []
+
+
+def _validate_short_reply(text: str) -> list:
+    if len(text) > _SHORT_MAX_LEN:
+        return ["short reply too long; only a bare affirmative is accepted"]
+    t = text.strip()
+    if not t:
+        return ["reply is empty"]
+    if _NEGATION_RE.search(t):
+        return ["reply contains negation — affirmative required"]
+    if _CONDITIONAL_RE.search(t):
+        return ["reply is conditional — unconditional affirmative required"]
+    norm = " ".join(t.casefold().rstrip(".!").split())
+    if norm not in _SHORT_AFFIRMATIVES:
+        return ["reply is not a recognised short affirmative"]
+    return []
+
+
+def _claim_preview(d: Path, path: Path, transport: dict, expect: dict) -> str | None:
+    """
+    Atomically mark pending -> consuming under the lock. Returns error or None.
+
+    Everything that made the selected preview valid is re-verified HERE, under
+    the lock: store ambiguity, that the reply target still maps to exactly this
+    one file, that the file is byte-for-byte (field-for-field) the record that was
+    validated, and that this raw reply was never claimed before.
+    """
+    with _PreviewLock(d):
+        if _unreadable_previews(d):
+            return "pending-preview store has unreadable/insecure entries; failing closed"
+        key = (transport["chat_id"], transport["thread_id"], transport["reply_to_message_id"])
+        same_target = [
+            p for p, data in _iter_previews(d)
+            if data is not None and (data.get("chat_id"), data.get("thread_id"),
+                                     data.get("preview_message_id")) == key
+        ]
+        if same_target != [path]:
+            return "ambiguous or changed preview set for this reply target"
+        cur, errs = _load_preview(path)
+        if errs or cur is None:
+            return "pending preview unreadable at claim"
+        if cur.get("status") != "pending":
+            return f"preview already {cur.get('status')} (replay rejected)"
+        if cur != expect:
+            return "preview changed during confirm"
+        if transport["message_id"] in (cur.get("used_reply_ids") or []):
+            return "this reply was already used (replay rejected)"
+        # Expiry is judged under the lock too: the caller may have waited for flock.
+        exp, eerr = _parse_ts(cur.get("expires_at"), "expires_at")
+        if eerr or exp is None or _now() > exp:
+            return "preview expired"
+        cur["status"] = "consuming"
+        cur["claimed_at"] = _now().isoformat()
+        cur["reply_message_id"] = transport["message_id"]
+        _write_preview(path, cur, exclusive=False)
+    return None
+
+
+def _revoke_if_pending(d: Path, path: Path, expect: dict) -> None:
+    """Revoke a still-pending, unchanged preview (stale authorization)."""
+    with _PreviewLock(d):
+        cur, errs = _load_preview(path)
+        if errs or cur is None or cur.get("status") != "pending" or cur != expect:
+            return
+        cur["status"] = "revoked"
+        cur["finished_at"] = _now().isoformat()
+        _write_preview(path, cur, exclusive=False)
+
+
+def _finish_preview(d: Path, path: Path, status: str) -> None:
+    with _PreviewLock(d):
+        cur, errs = _load_preview(path)
+        if errs or cur is None or cur.get("status") != "consuming":
+            return
+        if status == "pending":
+            # Released after a failed confirm: remember the consumed raw reply so it
+            # can never be replayed; a NEW actual reply is required.
+            used = list(cur.get("used_reply_ids") or [])
+            if cur.get("reply_message_id") is not None:
+                used.append(cur["reply_message_id"])
+            cur["used_reply_ids"] = used
+            cur.pop("claimed_at", None)
+        cur["status"] = status
+        cur["finished_at"] = _now().isoformat()
+        _write_preview(path, cur, exclusive=False)
+
+
+def cmd_short_confirm(args: argparse.Namespace) -> int:
+    cli, db, isolation_root = _resolve(args)
+    if cli is None:
+        return 1
+    is_isolation = bool(args.cli)
+
+    transport, terrs = _load_transport(args.transport_file)
+    if terrs:
+        _emit_err({"error": "transport reply rejected", "details": terrs})
+        return 1
+
+    reply_errs = _validate_short_reply(transport["text"])
+    if reply_errs:
+        _emit_err({"error": "short reply rejected", "reasons": reply_errs})
+        return 1
+
+    d, derrs = _preview_dir(isolation_root, create=False)
+    if derrs:
+        _emit_err({"error": "pending-preview store insecure", "details": derrs})
+        return 1
+    if not d.is_dir():
+        _emit_err({"error": "no pending preview"})
+        return 1
+
+    # Any unreadable/insecure/corrupt/foreign entry makes the store ambiguous.
+    if _unreadable_previews(d):
+        _emit_err({"error": "pending-preview store has unreadable/insecure entries; "
+                            "failing closed"})
+        return 1
+
+    # Locate the preview ONLY via the reply target; the caller never names a queue ID.
+    matches = []
+    for p, data in _iter_previews(d):
+        if data is None:
+            continue
+        if (data.get("chat_id"), data.get("thread_id"),
+                data.get("preview_message_id")) == (
+                transport["chat_id"], transport["thread_id"],
+                transport["reply_to_message_id"]):
+            matches.append((p, data))
+    if not matches:
+        _emit_err({"error": "no pending preview matches this reply target"})
+        return 1
+    if len(matches) > 1:
+        _emit_err({"error": "ambiguous preview: multiple previews match this reply target"})
+        return 1
+    path, pv = matches[0]
+
+    errs = []
+    if pv.get("status") != "pending":
+        errs.append(f"preview is {pv.get('status')}, not pending (replay or superseded)")
+    if transport["message_id"] in (pv.get("used_reply_ids") or []):
+        errs.append("this reply was already used (replay rejected)")
+    if pv.get("provenance_level") != _PROVENANCE_LEVEL:
+        errs.append("preview has unexpected provenance level")
+    if transport["sender_id"] != pv.get("user_id"):
+        errs.append("reply sender is not the user the preview was addressed to")
+    if transport["message_id"] == pv.get("preview_message_id"):
+        errs.append("reply message id equals the preview message id")
+    sent_at, e1 = _parse_ts(pv.get("preview_sent_at"), "preview_sent_at")
+    expires, e2 = _parse_ts(pv.get("expires_at"), "expires_at")
+    if e1 or e2:
+        errs.append("preview timestamps invalid")
+    else:
+        if transport["timestamp"] <= sent_at:
+            errs.append("reply does not postdate the preview")
+        if transport["timestamp"] > expires or _now() > expires:
+            errs.append("preview expired")
+    snap = pv.get("snapshot")
+    if (not isinstance(snap, dict) or _snapshot_hash(snap) != pv.get("snapshot_hash")):
+        errs.append("preview snapshot does not match its hash (tampered)")
+    rid = pv.get("client_record_id")
+    version = pv.get("client_record_version")
+    if (not isinstance(rid, str) or not rid or isinstance(version, bool)
+            or not isinstance(version, int)):
+        errs.append("preview has invalid record binding")
+    if errs:
+        _emit_err({"error": "short consent rejected", "reasons": errs})
+        return 1
+
+    # Same readiness gates as long consent (privacy → token → receiver).
+    readiness_errs = _check_mutation_readiness(args, is_isolation, isolation_root)
+    if readiness_errs:
+        _emit_err({"error": "mutation readiness check failed", "details": readiness_errs})
+        return 1
+
+    claimed = {"v": False}
+
+    def _pre_confirm(before: dict):
+        live = _snapshot_of(before)
+        if live is None or _snapshot_hash(live) != pv["snapshot_hash"]:
+            _revoke_if_pending(d, path, pv)  # drift kills the consent for good
+            return "record content differs from the previewed content — new preview required"
+        # Expiry is re-checked right before the claim.
+        if _now() > expires:
+            return "preview expired"
+        cerr = _claim_preview(d, path, transport, pv)
+        if cerr:
+            return cerr
+        claimed["v"] = True
+        return None
+
+    _STAGE["v"] = "pre"
+    rc = _confirm_with_readback(
+        cli, db, rid, version, snap["name"], pv["confirmer"], pre_confirm=_pre_confirm,
+        # The queue verifies this INSIDE its confirm transaction (before any mutation).
+        extra_confirm_args=["--expected-snapshot-hash", pv["snapshot_hash"]],
+    )
+    if not claimed["v"] and rc != 0 and _STAGE["v"] == "pre":
+        # Rejected before the claim: if the draft drifted (state/version/content),
+        # this preview is stale and must not revive if the content is restored.
+        rec, _ = _read_record(cli, db, rid)
+        live = _snapshot_of(rec) if rec else None
+        if rec and (rec.get("state") != "draft"
+                    or rec.get("client_record_version") != version
+                    or live is None or _snapshot_hash(live) != pv["snapshot_hash"]):
+            _revoke_if_pending(d, path, pv)
+    if claimed["v"]:
+        if rc == 0:
+            _finish_preview(d, path, "consumed")
+        elif _STAGE["v"] == "confirm":
+            # CLI refused/failed: release only if the draft is verifiably untouched.
+            rec, _ = _read_record(cli, db, rid)
+            live = _snapshot_of(rec) if rec else None
+            if (rec and rec.get("state") == "draft"
+                    and rec.get("client_record_version") == version
+                    and live is not None
+                    and _snapshot_hash(live) == pv["snapshot_hash"]):
+                # Verifiably untouched (same version AND same content): safe to release.
+                _finish_preview(d, path, "pending")
+            else:
+                # Changed content/version/state: authorization is revoked for good.
+                _finish_preview(d, path, "revoked")
+        # Any other outcome (crash, post-readback failure) stays "consuming":
+        # fail closed — a fresh preview and reply are required.
+    return rc
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -1236,6 +1897,9 @@ def cmd_status(args: argparse.Namespace) -> int:
         if not isinstance(parsed, dict):
             _emit_err({"error": "invalid JSON from CLI status: expected object for single-ID query"})
             return 1
+        h = _record_snapshot_hash(parsed)
+        if h:
+            parsed["snapshot_hash"] = h
         print(json.dumps(parsed))
     else:
         print(out, end="")
@@ -1251,7 +1915,7 @@ def build_parser() -> argparse.ArgumentParser:
             "must exist. In isolation mode (--isolation-root + --cli + --db), both\n"
             "CLI and DB must be under the isolation root (private dir under scratch).\n"
             "Never creates production databases. Fails closed if not deployed.\n\n"
-            "Mutation operations (draft/confirm) require --privacy-verifier,\n"
+            "Mutation operations (draft/confirm/short-confirm) require --privacy-verifier,\n"
             "--privacy-source, --receiver-url, and --token-path. Production mode\n"
             "additionally requires --live-host. Isolation mode requires --ssh-fixture\n"
             "inside the isolation root."
@@ -1309,6 +1973,32 @@ def build_parser() -> argparse.ArgumentParser:
     consent_grp.add_argument("--consent-file", default=None, metavar="PATH",
                               help="Path to file containing the raw explicit user consent phrase")
 
+    # preview
+    p_p = sub.add_parser("preview", help="Register a pending final preview for a draft")
+    p_p.add_argument("--id", required=True, metavar="ID", help="draft client_record_id")
+    p_p.add_argument("--confirmer", required=True, metavar="NAME",
+                     help="Name of the user the preview is addressed to")
+    p_p.add_argument("--user-id", required=True, metavar="ID",
+                     help="Transport sender ID of the intended user")
+    p_p.add_argument("--chat-id", required=True, metavar="ID")
+    p_p.add_argument("--thread-id", default="", metavar="ID")
+    p_p.add_argument("--preview-message-id", required=True, metavar="ID",
+                     help="Transport message ID of the final preview actually sent")
+    p_p.add_argument("--preview-sent-at", required=True, metavar="ISO8601",
+                     help="Transport timestamp (with offset) of that preview message")
+    p_p.add_argument("--expected-version", required=True, type=int, metavar="N",
+                     help="Version of the exact draft shown in the final preview")
+    p_p.add_argument("--expected-snapshot-hash", required=True, metavar="SHA256",
+                     help="snapshot_hash (from draft/status output) of the displayed draft")
+    p_p.add_argument("--ttl-seconds", type=int, default=_PREVIEW_DEFAULT_TTL, metavar="N")
+
+    # short-confirm
+    p_sc = sub.add_parser("short-confirm",
+                          help="Confirm via short reply bound to a pending preview")
+    p_sc.add_argument("--transport-file", required=True, metavar="PATH",
+                      help="0600 JSON of the raw user reply: sender_id, chat_id, "
+                           "thread_id, message_id, timestamp, reply_to_message_id, text")
+
     # status
     p_s = sub.add_parser("status", help="Show entry status (readonly)")
     p_s.add_argument("id", nargs="?", default=None, metavar="ID",
@@ -1322,7 +2012,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    dispatch = {"draft": cmd_draft, "confirm": cmd_confirm, "status": cmd_status}
+    dispatch = {"draft": cmd_draft, "confirm": cmd_confirm, "preview": cmd_preview,
+                "short-confirm": cmd_short_confirm, "status": cmd_status}
     fn = dispatch.get(args.command)
     if fn is None:
         parser.print_help()

@@ -30,6 +30,8 @@ Absolute timestamp bounds:
   Not more than 7 days in the future at validation time.
 """
 
+import hmac
+import json
 import logging
 import math
 import os
@@ -984,6 +986,39 @@ def _build_description(user_body) -> str:
     return AI_DESCRIPTION_PREFIX
 
 
+_SNAPSHOT_TEXT_FIELDS = ("name", "start_time", "end_time")
+_SNAPSHOT_MACRO_FIELDS = ("energy_kcal", "protein_g", "carbohydrate_g", "fat_g")
+_SNAPSHOT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def snapshot_hash_of_row(row) -> Optional[str]:
+    """
+    Canonical content hash of a queue row, used to bind a confirmation to the
+    exact content that was shown to the user. MUST stay byte-identical to the
+    agent wrapper's snapshot hash: SHA-256 over compact sorted-key JSON
+    (ensure_ascii=False, UTF-8) of name, start_time, end_time, the four macros
+    as floats, and description. Returns None if a field is missing/invalid.
+    """
+    import hashlib
+    snap = {}
+    for f in _SNAPSHOT_TEXT_FIELDS:
+        v = row[f]
+        if v is None:
+            return None
+        snap[f] = v
+    for f in _SNAPSHOT_MACRO_FIELDS:
+        v = row[f]
+        if v is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        v = float(v)
+        if v != v:
+            return None
+        snap[f] = v
+    snap["description"] = row["description"]
+    canon = json.dumps(snap, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
 def _safe_float(v) -> float:
     """Convert numeric to float; raises ValidationError on overflow/nan/inf."""
     try:
@@ -1194,9 +1229,15 @@ class NutritionStore:
         expected_version: int,
         affirm: str,
         confirmer: str,
+        expected_snapshot_hash: Optional[str] = None,
     ) -> dict:
         """
         Confirm a draft entry for delivery to Health Connect.
+
+        expected_snapshot_hash (optional, 64 lowercase hex): if given, the stored
+        content must hash to exactly this value INSIDE the same BEGIN IMMEDIATE
+        transaction as the state change; otherwise ValidationError is raised before
+        any mutation. Omitted = legacy behaviour.
 
         affirm must be exactly CONFIRM_AFFIRM_PHRASE.
         confirmer must be a non-empty name.
@@ -1214,6 +1255,11 @@ class NutritionStore:
         confirmer = confirmer.strip()
         if len(confirmer) > 200:
             raise ValidationError("confirmer name exceeds maximum length of 200")
+        if expected_snapshot_hash is not None and (
+            not isinstance(expected_snapshot_hash, str)
+            or not _SNAPSHOT_HASH_RE.match(expected_snapshot_hash)
+        ):
+            raise ValidationError("expected snapshot hash must be 64 lowercase hex chars")
 
         now = _now_utc()
 
@@ -1231,6 +1277,15 @@ class NutritionStore:
                     raise VersionConflict(
                         f"expected version {expected_version}, stored version {stored_version}"
                     )
+                if expected_snapshot_hash is not None:
+                    live_hash = snapshot_hash_of_row(row)
+                    if live_hash is None or not hmac.compare_digest(
+                        live_hash, expected_snapshot_hash
+                    ):
+                        raise ValidationError(
+                            "content differs from the expected snapshot; "
+                            "not confirmed"
+                        )
                 state = row["state"]
                 if state == STATE_CONFIRMED:
                     raise InvalidState("entry is already confirmed at this version")

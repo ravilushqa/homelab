@@ -234,6 +234,118 @@ All flags are mandatory for production.  The `--privacy-verifier` and
 the wrapper to refuse to proceed.  Never call `nutrition_cli.py confirm`
 directly — it bypasses the wrapper and consent validation.
 
+### Short final-preview consent (`preview` / `short-confirm`)
+
+The long named consent grammar above stays valid and unchanged. For a lower
+friction path the workflow may instead register the **final preview it actually
+sent** and accept a short reply to that exact message.
+
+1. After sending the final preview, the workflow runs
+   `nutrition_writeback.py preview --id ID --confirmer NAME --user-id U --chat-id C
+   [--thread-id T] --preview-message-id M --preview-sent-at ISO8601
+   --expected-version V --expected-snapshot-hash H [--ttl-seconds N]`.
+   `V` and `H` are the `client_record_version` and `snapshot_hash` that
+   `draft`/`status` returned for the draft the preview text was rendered from
+   (the exact displayed content). Registration rereads the draft and refuses
+   unless it is still `draft`, at version `V`, with live content hash `H`; this is
+   checked before and again under the store lock, so a mutation between display and
+   registration (even at the same version) is rejected. It then stores a private (0700 dir, 0600
+   file, atomic, flock-serialised) pending preview bound to: queue ID, version,
+   name, start, end, the four macros and description (SHA-256 snapshot hash), the
+   intended user/chat/thread, the preview message ID and send time, and
+   created/expiry times (default 15 min, max 60 min). A newer preview for the same
+   record supersedes older ones; reusing a preview message ID is refused.
+2. When the user replies, the workflow writes the raw transport reply (0600 JSON:
+   `sender_id, chat_id, thread_id, message_id, timestamp` with offset,
+   `reply_to_message_id, text`) and runs
+   `nutrition_writeback.py short-confirm --transport-file PATH`. There is **no
+   `--id`**: the preview is found only by (chat, thread, reply target); zero or
+   several matches are rejected.
+3. Accepted text is only a bare `да`, `запиши`, `да, запиши`, `yes`, `record it`
+   (case-insensitive, trailing `.`/`!` ignored). Negation, conditionals and
+   anything longer are rejected.
+4. Rejected: wrong sender/chat/thread/reply target, reply not strictly after the
+   preview, expiry, non-draft state, version change, **any change to the four
+   macros, name, times or description at the same version**, tampered preview
+   file, replay, and insecure/symlinked store or reply file. The privacy,
+   token and receiver readiness gates run first, exactly as for long consent.
+5. Consumption: the draft is reread, then the preview is claimed
+   `pending -> consuming` under flock *before* the CLI confirm, then post-confirm
+   readback runs and the preview becomes `consumed`. A CLI refusal releases the claim
+   back to `pending` **only** if the draft is still `draft`, same version and
+   identical content hash. If anything changed (including same-version content)
+   the preview is `revoked` and can never authorize again; a crash or any other
+   outcome stays `consuming` and fails closed (new preview + reply required).
+   The content binding is enforced **inside the queue's own `BEGIN IMMEDIATE`
+   transaction**: `short-confirm` always passes
+   `confirm ... --expected-snapshot-hash H` (`NutritionStore.confirm_entry(...,
+   expected_snapshot_hash=H)`). The store recomputes the same canonical hash
+   (name, start, end, four macros as floats, description; SHA-256 of compact
+   sorted-key JSON) after the version check and raises *before any state
+   mutation* on mismatch, so a late same-version mutation can never reach the
+   confirmed queue (version CAS alone is insufficient). The option is optional
+   and validated as 64 lowercase hex; the long-consent grammar passes none.
+   The claim step is also rechecked under the lock: the store must still have no
+   unreadable entries, exactly one file must match the reply target, that file must
+   be field-for-field the record that was validated and still `pending`, and the
+   raw reply `message_id` must not be in the preview's durable `used_reply_ids`.
+   A released (untouched-draft) preview records the failed reply's id in
+   `used_reply_ids`; the same raw reply is rejected afterwards and a NEW actual
+   reply is required. Content/version/state drift at any point (selection, claim,
+   pre-confirm, or after a failed confirm) revokes the preview; restoring the
+   content never revives it.
+6. Store integrity: any unreadable, corrupt, wrong-mode, symlinked, foreign or
+   unsupported-schema entry in `pending-previews/` makes both `preview` and
+   `short-confirm` fail closed (ambiguity is never ignored).
+
+**Final preview content (workflow text).** One compact message: meal name,
+assumptions/portion, the four macros, the Berlin local time (from a real tool call in production; the test uses a controlled-clock fixture, not tool output), and the
+proposed technical one-minute interval (start to start+1 min, stated as a
+technical queue interval, not the real duration), ending exactly «Записать или поправишь?». The record id, version and
+snapshot hash are never shown; they are bound internally at `preview` registration. Synthetic photo/text
+fixtures are not vision validation and the fixture "Да" is not the user's consent. A correction invalidates the
+previous preview (send and register a new one). Only after `short-confirm` and
+exact readback may the workflow say
+"Отправлено в очередь Health Connect. Телефон запишет при синхронизации."; a
+client-confirmed write may be claimed only after an ACK.
+
+**Trust boundary.** Both the preview file and the transport-reply file are
+written by the trusted agent workflow as the same OS user. They are cross-bound
+and tamper-checked, but a local JSON file is *workflow-attested*, not
+*server-authenticated*: anything able to write as this user can forge a reply.
+Results carry `provenance_level: "workflow_attested"` and any self-declared
+"server authenticated" claim is ignored. Independent authentication would need
+the messaging gateway to sign reply records (e.g. HMAC with a key the agent
+cannot read); that is **not implemented**. The wrapper still passes the CLI's
+own internal affirm string when confirming; that string is a CLI argument, not
+user consent, and is reachable only after the checks above.
+
+#### Source / deployment mapping
+
+| Source (repo) | Deployed to |
+| --- | --- |
+| `services/health-connect-bridge/agent-workflow/nutrition_writeback.py` | installed bridge `bin/` via `install.sh` (not done) |
+| `services/health-connect-bridge/nutrition_queue.py` (adds `snapshot_hash_of_row`, `confirm_entry(expected_snapshot_hash=)`) | installed bridge code dir, **required** together with the wrapper |
+| `services/health-connect-bridge/nutrition_cli.py` (adds `confirm --expected-snapshot-hash`) | installed bridge code dir, **required**; the CLI launcher script from `install.sh` is unchanged |
+| `services/health-connect-bridge/tests/test_short_preview_consent.py`, `tests/test_short_consent_sqlite.py` | repo only |
+| proposed workflow text above | Hermes health skill (not done) |
+
+#### Proposed deployment / workflow list (not yet performed)
+
+1. Parent independently reviews the diff and runs the focused tests
+   (`tests/test_short_preview_consent.py`, `tests/test_short_consent_sqlite.py` (real SQLite, wrapper to isolated CLI, multiprocess, synthetic photo/text integration; synthetic fixtures are not user consent nor vision validation), `tests/test_skill_isolation_root.py`).
+2. Merge, then install the updated `nutrition_writeback.py`, `nutrition_queue.py`
+   and `nutrition_cli.py` via the normal `install.sh` flow. The wrapper's
+   `short-confirm` requires the new CLI option; an old CLI rejects it, so short
+   confirm fails closed (never confirms unbound).
+3. Update the Hermes health skill (outside this repo; NOT edited in this run) so
+   the workflow: creates the draft, takes `client_record_version` and
+   `snapshot_hash` from its output, sends the final preview, calls `preview` with
+   those values and the real transport message ID/time, writes
+   the raw reply record, and calls `short-confirm`.
+4. Decide whether to build a gateway-signed reply record for server-authenticated
+   provenance before treating short consent as more than workflow-attested.
+
 ### Complete workflow: photo to Health Connect
 
 The full order for a new meal entry is:
