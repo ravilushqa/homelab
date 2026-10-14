@@ -10,10 +10,12 @@ real user's consent.
 """
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 import shutil
+import time
 import unittest
 from datetime import timedelta
 from pathlib import Path
@@ -22,9 +24,7 @@ from unittest import mock
 from tests.test_short_preview_consent import Base, MPBase, RID, T0, nw
 from tests.test_short_consent_sqlite import PAYLOAD, RealBase, SqliteMixin, nq
 
-SHOWN = ("Овсянка (Oatmeal): 300 ккал, белки 10 г, углеводы 50 г, жиры 5 г. "
-         "Время: 08:00–08:01 (технический интервал). Допущения: порция ~250 г. "
-         "Записать или поправишь?")
+NOTES = "Допущения: порция ~250 г, молоко 2.5%, 3 ложки сахара."
 
 
 class PersonalMixin:
@@ -73,20 +73,28 @@ class PersonalMixin:
         os.chmod(p, 0o600)
         return p
 
-    def ppreview(self, scope=None, text=SHOWN, rid=None, version=None, shash=None, ttl=900,
-                 attest=True, textfile=None):
+    def consent_file(self, name, text, age_s=0.0):
+        """Consent file with a precise real mtime (now - age_s): workflow freshness."""
+        p = self.private_file(name, text)
+        t = time.time_ns() - int(age_s * 1e9)
+        os.utime(p, ns=(t, t))
+        return p
+
+    def ppreview(self, scope=None, notes=NOTES, rid=None, version=None, shash=None, ttl=900,
+                 attest=True, notesfile=None, confirmer="Ravil"):
         dv, dh = self.displayed()
-        tf = textfile or self.private_file("shown.txt", text)
+        nf = notesfile if notesfile is not None else (
+            self.private_file("notes.txt", notes) if notes is not None else None)
         return self.run_cmd(
-            nw.cmd_personal_preview, id=rid or self.rid(), confirmer="Ravil",
+            nw.cmd_personal_preview, id=rid or self.rid(), confirmer=confirmer,
             scope=scope or self.scope, attest_personal_chat=attest,
             expected_version=dv if version is None else version,
             expected_snapshot_hash=dh if shash is None else shash,
-            preview_text_file=str(tf), ttl_seconds=ttl)
+            notes_file=str(nf) if nf else None, ttl_seconds=ttl)
 
     def pconfirm(self, text="Да", scope=None, attest=True, mode=0o600, path=None):
         self.tf_n += 1
-        p = path or self.private_file(f"consent{self.tf_n}.txt", text)
+        p = path or self.consent_file(f"consent{self.tf_n}.txt", text)
         if path is None:
             os.chmod(p, mode)
         return self.run_cmd(nw.cmd_personal_confirm, scope=scope or self.scope,
@@ -107,7 +115,12 @@ class PersonalTests(PersonalMixin):
         rc, out, err = self.ppreview()
         self.assertEqual(rc, 0, out + err)
         shown = json.loads(out)
-        self.assertEqual(shown["display_text"], SHOWN)  # exact stored text is output
+        snap = nw._snapshot_of(self.live_record())
+        self.assertEqual(shown["display_text"], nw._compose_display(snap, NOTES))
+        # ONE returned display text: wrapper summary of the SAVED values + agent notes
+        for needle in ("Oatmeal", "300 ккал", "белки 10 г", "углеводы 50 г", "жиры 5 г",
+                       snap["start_time"], snap["end_time"], NOTES):
+            self.assertIn(needle, shown["display_text"])
         self.assertEqual(shown["provenance_level"], "agent_conversation_attested")
         rc, out, err = self.pconfirm("Да")
         self.assertEqual(rc, 0, out + err)
@@ -142,8 +155,12 @@ class PersonalTests(PersonalMixin):
     def test_snapshot_and_text_saved(self):
         self.assertEqual(self.ppreview()[0], 0)
         rec = self.pdata()[0]
-        self.assertEqual(rec["preview_text"], SHOWN)
-        self.assertEqual(rec["preview_text_sha256"], hashlib.sha256(SHOWN.encode()).hexdigest())
+        self.assertEqual(rec["notes_text"], NOTES)
+        self.assertEqual(rec["display_text_sha256"],
+                         hashlib.sha256(rec["display_text"].encode()).hexdigest())
+        self.assertIn(rec["snapshot"]["start_time"], rec["display_text"])
+        self.assertIn(rec["snapshot"]["end_time"], rec["display_text"])
+        self.assertIn("created_wall_ns", rec)
         self.assertEqual(rec["snapshot_hash"], self.displayed()[1])
         self.assertIn("description", rec["snapshot"])
         self.assertEqual(rec["mode"], "personal_chat_scope")
@@ -170,7 +187,7 @@ class PersonalTests(PersonalMixin):
         self.assertEqual(self.ppreview()[0], 0)
         old = self.pdata()[0]["preview_id"]
         self.edit(energy_kcal=350.0)
-        rc, out, err = self.ppreview(text=SHOWN.replace("300", "350"))
+        rc, out, err = self.ppreview()
         self.assertEqual(rc, 0, out + err)
         self.assertEqual(json.loads(out)["superseded_previews"], 1)
         by_id = {d["preview_id"]: d for d in self.pdata()}
@@ -188,7 +205,7 @@ class PersonalTests(PersonalMixin):
         self.assertEqual(self.ppreview()[0], 0)
         before = dict(self.live_record())
         self.edit(name="Oatmeal")  # touch same id: version bump only
-        self.assertEqual(self.ppreview(text=SHOWN)[0], 0)
+        self.assertEqual(self.ppreview()[0], 0)
         self.assertEqual(self.live_record()["state"], "draft")
         self.assertNotEqual(before["client_record_version"],
                             self.live_record()["client_record_version"])
@@ -252,10 +269,20 @@ class PersonalTests(PersonalMixin):
         self.assertNoMutation(self.ppreview(shash="xyz"), "sha-256")
         self.assertFalse(self.pdir().exists() and self.pfiles())
 
-    def test_preview_text_must_show_name_and_macros(self):
-        self.assertNoMutation(self.ppreview(text="Записать?"), "does not match")
-        self.assertNoMutation(self.ppreview(text=SHOWN.replace("300", "310")), "energy_kcal")
-        self.assertNoMutation(self.ppreview(text=SHOWN.replace("Oatmeal", "Soup")), "name")
+    def test_display_uses_exact_saved_values_not_notes(self):
+        self.edit(energy_kcal=123.456)
+        rc, out, err = self.ppreview(notes="Допущения: 999 ккал, 08:00")
+        self.assertEqual(rc, 0, out + err)
+        disp = json.loads(out)["display_text"]
+        self.assertTrue(disp.startswith(nw._canonical_summary(nw._snapshot_of(
+            self.live_record()))))
+        self.assertIn("123.456 ккал", disp)
+
+    def test_notes_optional_and_validated(self):
+        self.assertEqual(self.ppreview(notes=None)[0], 0)
+        self.assertEqual(self.pdata()[0]["notes_text"], None)
+        self.assertNoMutation(self.ppreview(notes="  \n"), "empty")
+        self.assertNoMutation(self.ppreview(notes="a\x00b"), "control")
 
     def test_non_draft_rejected_at_preview(self):
         self.mutate(state="cancelled")
@@ -294,7 +321,7 @@ class PersonalTests(PersonalMixin):
     # ── replay / duplicate ──
     def test_replay_after_confirmed_is_read_only(self):
         self.assertEqual(self.ppreview()[0], 0)
-        p = self.private_file("c.txt", "Да")
+        p = self.consent_file("c.txt", "Да")
         self.assertEqual(self.pconfirm(path=p)[0], 0)
         snap = self.pfiles()[0].read_bytes()
         calls = self.q.confirm_calls
@@ -363,9 +390,204 @@ class PersonalTests(PersonalMixin):
         self.assertNoMutation(self.pconfirm("Да"), "tampered")
 
     def test_preview_text_file_must_be_private(self):
-        p = self.private_file("open.txt", SHOWN)
+        p = self.private_file("open.txt", NOTES)
         os.chmod(p, 0o644)
-        self.assertNoMutation(self.ppreview(textfile=p), "")
+        self.assertNoMutation(self.ppreview(notesfile=p), "")
+
+    # ── review follow-ups: replay scope, freshness, tamper, contract ──
+    def test_used_consent_file_cannot_confirm_next_meal(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        old = self.consent_file("a.txt", "Да")
+        self.assertEqual(self.pconfirm(path=old)[0], 0)
+        self.mutate(state="draft")           # a new draft/preview for the scope
+        self.assertEqual(self.ppreview()[0], 0)
+        calls = self.q.confirm_calls
+        rc, out, err = self.pconfirm(path=old)
+        self.assertEqual(rc, 1)
+        self.assertIn("already used", out + err)
+        self.assertEqual(self.q.confirm_calls, calls)
+        self.assertEqual(self.live_record()["state"], "draft")
+        self.assertEqual(self.pconfirm("Да")[0], 0)   # same text, NEW fresh file: allowed
+
+    def test_used_consent_file_rejected_in_another_scope(self):
+        self.assertEqual(self.ppreview(scope="personal-a")[0], 0)
+        f = self.consent_file("x.txt", "Да")
+        self.assertEqual(self.pconfirm(path=f, scope="personal-a")[0], 0)
+        self.mutate(state="draft")
+        self.assertEqual(self.ppreview(scope="personal-b")[0], 0)
+        rc, out, err = self.pconfirm(path=f, scope="personal-b")
+        self.assertEqual(rc, 1)
+        self.assertIn("already used", out + err)
+        self.assertEqual(self.q.confirm_calls, 1)           # only the first confirm
+        self.assertEqual(self.live_record()["state"], "draft")
+
+    def test_old_unused_consent_predating_replacement_rejected(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        stale = self.consent_file("stale.txt", "Да")
+        self.edit(energy_kcal=350.0)
+        self.assertEqual(self.ppreview()[0], 0)          # replacement preview
+        rc, out, err = self.pconfirm(path=stale)
+        self.assertEqual(rc, 1)
+        self.assertIn("predates", out + err)
+        self.assertEqual(self.q.confirm_calls, 0)
+        self.assertEqual(self.live_record()["state"], "draft")
+        self.assertEqual(sorted(d["status"] for d in self.pdata()), ["pending", "superseded"])
+        self.assertEqual(self.pconfirm("Да")[0], 0)      # fresh actual file accepted
+
+    def test_consent_older_than_preview_via_mtime(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        old = self.consent_file("old.txt", "Да", age_s=3600)
+        self.assertNoMutation(self.pconfirm(path=old), "predates")
+
+    def test_display_text_and_hash_tamper_fail_closed(self):
+        for field, value in (("display_text", "Записать?"),
+                             ("display_text_sha256", "0" * 64),
+                             ("notes_text", "подменённые допущения")):
+            with self.subTest(field=field):
+                self.setUp_fresh_scope()
+                f = self.pfiles()[0]
+                d = json.loads(f.read_text())
+                d[field] = value
+                f.write_text(json.dumps(d))
+                self.assertNoMutation(self.pconfirm("Да"), "tampered")
+
+    def setUp_fresh_scope(self):
+        for f in self.pfiles() if self.pdir().exists() else []:
+            f.unlink()
+        self.assertEqual(self.ppreview()[0], 0)
+
+    def test_time_or_macro_tamper_in_snapshot_fails_closed(self):
+        for key, value in (("start_time", "2026-01-01T00:00:00Z"), ("fat_g", 1.0)):
+            with self.subTest(key=key):
+                self.setUp_fresh_scope()
+                f = self.pfiles()[0]
+                d = json.loads(f.read_text())
+                d["snapshot"][key] = value
+                f.write_text(json.dumps(d))
+                self.assertNoMutation(self.pconfirm("Да"), "tampered")
+
+    def test_malformed_timestamps_ttl_and_structure_fail_closed_without_crash(self):
+        cases = {
+            "expires_at": "not-a-date",
+            "created_at": None,
+            "preview_id": "short",
+            "created_wall_ns": "x",
+            "confirmer": "",
+            "client_record_version": "1",
+        }
+        for key, value in cases.items():
+            with self.subTest(key=key):
+                self.setUp_fresh_scope()
+                f = self.pfiles()[0]
+                d = json.loads(f.read_text())
+                d[key] = value
+                f.write_text(json.dumps(d))
+                rc, out, err = self.pconfirm("Да")
+                self.assertEqual(rc, 1, out + err)
+                self.assertNotIn("Traceback", err)
+                self.assertEqual(self.q.confirm_calls, 0)
+        # over-max TTL and future creation
+        self.setUp_fresh_scope()
+        f = self.pfiles()[0]
+        d = json.loads(f.read_text())
+        d["expires_at"] = (T0 + timedelta(hours=5)).isoformat()
+        f.write_text(json.dumps(d))
+        self.assertNoMutation(self.pconfirm("Да"), "ttl")
+        self.setUp_fresh_scope()
+        f = self.pfiles()[0]
+        d = json.loads(f.read_text())
+        d["created_at"] = (T0 + timedelta(hours=1)).isoformat()
+        d["expires_at"] = (T0 + timedelta(hours=1, minutes=5)).isoformat()
+        f.write_text(json.dumps(d))
+        self.assertNoMutation(self.pconfirm("Да"), "future")
+
+    def test_foreign_record_in_store_fails_closed(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        junk = self.pdir() / "preview-junk.json"
+        junk.write_text(json.dumps({"schema": 1, "status": "pending"}))
+        os.chmod(junk, 0o600)
+        self.assertNoMutation(self.pconfirm("Да"), "failing closed")
+        self.assertNoMutation(self.ppreview(), "failing closed")
+
+    def test_no_fake_message_id_fields_and_personal_key_names(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        self.assertEqual(self.pconfirm("Да")[0], 0)
+        rec = self.pdata()[0]
+        self.assertIn("consent_file_key", rec)
+        for k in ("reply_message_id", "used_reply_ids", "reply_to_message_id",
+                  "preview_message_id", "chat_id", "user_id"):
+            self.assertNotIn(k, rec)
+
+    def test_released_preview_records_consent_file_keys_not_reply_ids(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        real = nw._run_cli
+        if not hasattr(self.q, "fail_confirm"):
+            def flaky(cli, db, a, stdin_bytes=None):
+                return (1, "", "transient") if a[0] == "confirm" else real(cli, db, a, stdin_bytes)
+            ctx = mock.patch.object(nw, "_run_cli", flaky)
+        else:
+            self.q.fail_confirm = True
+            ctx = contextlib.nullcontext()
+        with ctx:
+            self.assertEqual(self.pconfirm("Да")[0], 1)
+        rec = self.pdata()[0]
+        self.assertEqual(rec["status"], "pending")
+        self.assertEqual(len(rec["used_consent_file_keys"]), 1)
+        self.assertNotIn("used_reply_ids", rec)
+        self.assertNotIn("consent_file_key", rec)
+
+    def test_invalid_helper_success_output_is_uncertain_not_fabricated(self):
+        self.assertEqual(self.ppreview()[0], 0)
+
+        def fake(cli, db, rid, version, name, confirmer, pre_confirm=None, **kw):
+            self.assertIsNone(pre_confirm(self.live_record()))
+            print("not json")
+            return 0
+        with mock.patch.object(nw, "_confirm_with_readback", fake):
+            rc, out, err = self.pconfirm("Да")
+        self.assertEqual(rc, 1)
+        self.assertIn("uncertain", err)
+        self.assertNotIn('"ok": true', out)
+        self.assertEqual(out, "")
+        self.assertEqual(self.pdata()[0]["status"], "consumed")   # no replay
+        self.assertEqual(self.pconfirm("Да")[0], 1)
+
+    def test_helper_success_for_wrong_state_is_uncertain(self):
+        self.assertEqual(self.ppreview()[0], 0)
+
+        def fake(cli, db, rid, version, name, confirmer, pre_confirm=None, **kw):
+            pre_confirm(self.live_record())
+            print(json.dumps({"ok": True, "state": "draft", "client_record_id": rid,
+                              "client_record_version": version}))
+            return 0
+        with mock.patch.object(nw, "_confirm_with_readback", fake):
+            rc, out, err = self.pconfirm("Да")
+        self.assertEqual(rc, 1)
+        self.assertIn("uncertain", err)
+
+    def test_identifiers_are_validated_as_supplied_not_repaired(self):
+        self.assertNoMutation(self.ppreview(scope="personal-a\n"), "--scope")
+        self.assertNoMutation(self.ppreview(scope=" personal-a"), "--scope")
+        dv, dh = self.displayed()
+        self.assertNoMutation(self.ppreview(shash=dh.upper()), "sha-256")
+        self.assertNoMutation(self.ppreview(shash=" " + dh), "sha-256")
+        self.assertNoMutation(self.ppreview(confirmer=" Ravil"), "confirmer")
+        self.assertEqual(self.ppreview()[0], 0)
+        self.assertNoMutation(self.pconfirm("Да", scope="personal-a\n"), "--scope")
+
+    def test_no_new_sql_row_for_replacement_or_correction(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        self.edit(energy_kcal=350.0)
+        self.assertEqual(self.ppreview()[0], 0)
+        self.assertEqual(self.pconfirm("Да")[0], 0)
+        if hasattr(self.q, "confirmed_count"):
+            import sqlite3
+            conn = sqlite3.connect(str(self.q.db))
+            try:
+                self.assertEqual(conn.execute(
+                    "SELECT COUNT(*) FROM nutrition_queue").fetchone()[0], 1)
+            finally:
+                conn.close()
 
     def test_old_commands_unchanged_in_parser(self):
         p = nw.build_parser()
@@ -376,7 +598,7 @@ class PersonalTests(PersonalMixin):
                      ["short-confirm", "--transport-file", "t"],
                      ["personal-preview", "--scope", "s", "--attest-personal-chat", "--id", "x",
                       "--confirmer", "n", "--expected-version", "1",
-                      "--expected-snapshot-hash", "0" * 64, "--preview-text-file", "f"],
+                      "--expected-snapshot-hash", "0" * 64, "--notes-file", "f"],
                      ["personal-confirm", "--scope", "s", "--attest-personal-chat",
                       "--consent-file", "f"]):
             self.assertIsNotNone(p.parse_args(argv).command)
@@ -414,7 +636,7 @@ class TestPersonalRealSqlite(PersonalTests, RealBase):
             if a[0] == "confirm":
                 return 1, "", "transient"
             return real(cli, db, a, stdin_bytes)
-        p = self.private_file("c1.txt", "Да")
+        p = self.consent_file("c1.txt", "Да")
         with mock.patch.object(nw, "_run_cli", flaky):
             self.assertEqual(self.pconfirm(path=p)[0], 1)
         self.assertEqual(self.pdata()[0]["status"], "pending")
@@ -449,7 +671,7 @@ class TestPersonalRealMultiprocess(SqliteMixin, PersonalMixin, MPBase):
 
     def test_concurrent_confirms_exactly_one_winner(self):
         self.assertEqual(self.ppreview()[0], 0)
-        files = [self.private_file(f"mp{i}.txt", "Да") for i in range(5)]
+        files = [self.consent_file(f"mp{i}.txt", "Да") for i in range(5)]
         rcs = self.spawn([self.job(f) for f in files])
         self.assertEqual(sorted(rcs), [0, 1, 1, 1, 1], rcs)
         self.assertEqual(self.q.confirmed_count(), 1)
@@ -460,7 +682,7 @@ class TestPersonalRealMultiprocess(SqliteMixin, PersonalMixin, MPBase):
             if i:
                 self.create_draft()
             self.assertEqual(self.ppreview()[0], 0)
-            tf = self.private_file(f"race{i}.txt", "Да")
+            tf = self.consent_file(f"race{i}.txt", "Да")
             rcs = self.spawn([self.job(tf), lambda: self.q.update(fat_g=50.0) or 0])
             rec = self.q.rec
             if rec["state"] == "confirmed":
@@ -481,7 +703,7 @@ class TestPersonalRealMultiprocess(SqliteMixin, PersonalMixin, MPBase):
                                 scope=self.scope, attest_personal_chat=True,
                                 expected_version=self.displayed()[0],
                                 expected_snapshot_hash=self.displayed()[1],
-                                preview_text_file=str(self.private_file("t.txt", SHOWN)),
+                                notes_file=str(self.private_file("t.txt", NOTES)),
                                 ttl_seconds=900)[0]
         rcs = self.spawn([reg, reg, reg])
         self.assertEqual(rcs, [0, 0, 0])
