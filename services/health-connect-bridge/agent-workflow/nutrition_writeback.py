@@ -22,8 +22,8 @@ Subcommands:
                 readiness and confirms via CLI. No long consent phrase required from
                 the user; all binding is via the preview context.
   personal-preview  Personal-chat scope only (--scope LABEL --attest-personal-chat):
-                store ONE active preview (draft snapshot + wrapper-built canonical
-                summary of saved name/macros/start/end + optional agent notes) BEFORE
+                store ONE active preview (draft snapshot + wrapper-built compact (display_format 2)
+                text of saved name/macros/Berlin time + optional agent notes) BEFORE
                 it is displayed; show exactly the returned display_text. Supersedes
                 the scope's older preview. No queue mutation.
   personal-confirm  Confirm the scope's single active preview from the raw bare reply
@@ -1978,12 +1978,82 @@ def _canonical_summary(snap: dict) -> str:
             f"время {snap['start_time']} → {snap['end_time']} (технический интервал очереди).")
 
 
-def _compose_display(snap: dict, notes: str | None) -> str:
+def _compose_display_legacy(snap: dict, notes: str | None) -> str:
+    """Format of previews saved WITHOUT a display_format field (already shown to users)."""
     parts = [_canonical_summary(snap)]
     if notes:
         parts.append(notes)
     parts.append(_PERSONAL_PROMPT)
     return "\n\n".join(parts)
+
+
+_DISPLAY_FORMAT_COMPACT = 2
+_NOTES_COMPACT_MAX_CHARS = 240
+_RU_MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+              "августа", "сентября", "октября", "ноября", "декабря")
+_DISPLAY_TZ = "Europe/Berlin"
+
+
+def _berlin_range(start_iso: str, end_iso: str) -> str:
+    """'14 октября, 09:30–09:45, Берлин' from the saved instants (raises ValueError)."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(_DISPLAY_TZ)
+    pts = []
+    for label, v in (("start_time", start_iso), ("end_time", end_iso)):
+        dt, err = _parse_ts(v, label)
+        if err:
+            raise ValueError(err)
+        pts.append(dt.astimezone(tz))
+    a, b = pts
+
+    def hm(dt):
+        txt = dt.strftime("%H:%M")
+        # A wall time that occurs twice (autumn DST change) is disambiguated by offset.
+        if dt.replace(fold=0).utcoffset() != dt.replace(fold=1).utcoffset():
+            off = int(dt.utcoffset().total_seconds() // 3600)
+            txt += f" (UTC{off:+d})"
+        return txt
+
+    def day(dt, with_year):
+        return f"{dt.day} {_RU_MONTHS[dt.month - 1]}" + (f" {dt.year}" if with_year else "")
+
+    if a.date() == b.date():
+        return f"{day(a, False)}, {hm(a)}–{hm(b)}, Берлин"
+    with_year = a.year != b.year
+    return f"{day(a, with_year)}, {hm(a)} – {day(b, with_year)}, {hm(b)}, Берлин"
+
+
+def _compose_display_compact(snap: dict, notes: str | None) -> str:
+    lines = [
+        snap["name"],
+        f"≈{_fmt_num(snap['energy_kcal'])} ккал · Б {_fmt_num(snap['protein_g'])} · "
+        f"Ж {_fmt_num(snap['fat_g'])} · У {_fmt_num(snap['carbohydrate_g'])} г",
+    ]
+    if notes:
+        lines.append(notes)
+    lines.append(_berlin_range(snap["start_time"], snap["end_time"]))
+    lines.append("Записать?")
+    return "\n".join(lines)
+
+
+def _compose_display(snap: dict, notes: str | None, fmt=_DISPLAY_FORMAT_COMPACT) -> str:
+    """Compose by saved display format; unknown formats raise (callers fail closed)."""
+    if fmt is None:
+        return _compose_display_legacy(snap, notes)
+    if fmt == _DISPLAY_FORMAT_COMPACT and type(fmt) is int:
+        return _compose_display_compact(snap, notes)
+    raise ValueError(f"unknown display format {fmt!r}")
+
+
+def _validate_notes_compact(notes: str) -> str | None:
+    """Short assumptions only: one line, bounded, rejected (never truncated)."""
+    if not notes.strip():
+        return "notes file is empty (omit --notes-file instead)"
+    if any(ord(c) < 32 for c in notes) or "\x7f" in notes:
+        return "notes must be a single line without control characters"
+    if len(notes) > _NOTES_COMPACT_MAX_CHARS:
+        return f"notes too long ({len(notes)} > {_NOTES_COMPACT_MAX_CHARS} chars); keep assumptions short"
+    return None
 
 
 def _validate_notes(notes: str) -> str | None:
@@ -2017,11 +2087,23 @@ def _personal_record_errors(pv: dict, scope: str) -> list:
         errs.append("preview snapshot does not match its hash (tampered)")
     else:
         notes = pv.get("notes_text")
-        if notes is not None and (not isinstance(notes, str) or _validate_notes(notes)):
+        has_fmt = "display_format" in pv  # absent = legacy preview, validated as before
+        fmt = pv.get("display_format")
+        check_notes = _validate_notes if not has_fmt else _validate_notes_compact
+        try:
+            if has_fmt and not (type(fmt) is int and fmt == _DISPLAY_FORMAT_COMPACT):
+                raise ValueError("unknown display format")
+            expected = (None if notes is not None and (
+                not isinstance(notes, str) or check_notes(notes))
+                else _compose_display(snap, notes, fmt if has_fmt else None))
+        except ValueError:
+            errs.append("preview display format unknown or snapshot times invalid")
+            expected = False
+        if expected is None:
             errs.append("preview notes malformed")
-        else:
+        elif expected is not False:
             disp = pv.get("display_text")
-            if disp != _compose_display(snap, notes):
+            if disp != expected:
                 errs.append("preview display text does not match the saved snapshot (tampered)")
             elif (not _hex64(pv.get("display_text_sha256"))
                   or _sha256_text(disp) != pv["display_text_sha256"]):
@@ -2138,7 +2220,9 @@ def cmd_personal_preview(args: argparse.Namespace) -> int:
     notes = None
     if getattr(args, "notes_file", None):
         notes, _, nerr = _read_private_text(args.notes_file, "notes file", _NOTES_MAX)
-        nerr = nerr or (_validate_notes(notes) if notes is not None else None)
+        if notes is not None and nerr is None:
+            notes = notes.rstrip("\r\n")  # a trailing newline from the editor is not content
+            nerr = _validate_notes_compact(notes)
         if nerr:
             _emit_err({"error": nerr})
             return 1
@@ -2158,7 +2242,11 @@ def cmd_personal_preview(args: argparse.Namespace) -> int:
     from datetime import timedelta
     now = _now()
     preview_id = secrets.token_hex(16)
-    display = _compose_display(snap, notes)
+    try:
+        display = _compose_display(snap, notes, _DISPLAY_FORMAT_COMPACT)
+    except ValueError as exc:
+        _emit_err({"error": f"cannot render preview: {exc}"})
+        return 1
     data = {
         "schema": _PREVIEW_SCHEMA,
         "mode": _PERSONAL_MODE,
@@ -2171,6 +2259,7 @@ def cmd_personal_preview(args: argparse.Namespace) -> int:
         "snapshot": snap,
         "snapshot_hash": _snapshot_hash(snap),
         "notes_text": notes,
+        "display_format": _DISPLAY_FORMAT_COMPACT,
         "display_text": display,
         "display_text_sha256": _sha256_text(display),
         "confirmer": confirmer,
@@ -2515,9 +2604,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_pp.add_argument("--expected-version", required=True, type=int, metavar="N")
     p_pp.add_argument("--expected-snapshot-hash", required=True, metavar="SHA256")
     p_pp.add_argument("--notes-file", default=None, metavar="PATH",
-                      help="Optional 0600 file with agent composition/assumptions notes; "
-                           "the wrapper prepends a canonical summary of the saved "
-                           "name/macros/start/end and returns ONE display_text")
+                      help="Optional 0600 file with ONE short line of assumptions "
+                           "(max 240 chars, rejected if longer); the wrapper composes "
+                           "name/macros/notes/Berlin time and returns ONE display_text")
     p_pp.add_argument("--ttl-seconds", type=int, default=_PREVIEW_DEFAULT_TTL, metavar="N")
 
     p_pc = sub.add_parser("personal-confirm",

@@ -117,10 +117,10 @@ class PersonalTests(PersonalMixin):
         shown = json.loads(out)
         snap = nw._snapshot_of(self.live_record())
         self.assertEqual(shown["display_text"], nw._compose_display(snap, NOTES))
-        # ONE returned display text: wrapper summary of the SAVED values + agent notes
-        for needle in ("Oatmeal", "300 ккал", "белки 10 г", "углеводы 50 г", "жиры 5 г",
-                       snap["start_time"], snap["end_time"], NOTES):
-            self.assertIn(needle, shown["display_text"])
+        # ONE compact text: SAVED values (shown once) + agent notes + Berlin time
+        self.assertEqual(shown["display_text"], "Oatmeal\n≈300 ккал · Б 10 · Ж 5 · У 50 г\n"
+                         + NOTES + "\n" + nw._berlin_range(snap["start_time"], snap["end_time"])
+                         + "\nЗаписать?")
         self.assertEqual(shown["provenance_level"], "agent_conversation_attested")
         rc, out, err = self.pconfirm("Да")
         self.assertEqual(rc, 0, out + err)
@@ -158,8 +158,8 @@ class PersonalTests(PersonalMixin):
         self.assertEqual(rec["notes_text"], NOTES)
         self.assertEqual(rec["display_text_sha256"],
                          hashlib.sha256(rec["display_text"].encode()).hexdigest())
-        self.assertIn(rec["snapshot"]["start_time"], rec["display_text"])
-        self.assertIn(rec["snapshot"]["end_time"], rec["display_text"])
+        self.assertEqual(rec["display_format"], 2)
+        self.assertNotIn(rec["snapshot"]["start_time"], rec["display_text"])
         self.assertIn("created_wall_ns", rec)
         self.assertEqual(rec["snapshot_hash"], self.displayed()[1])
         self.assertIn("description", rec["snapshot"])
@@ -274,15 +274,90 @@ class PersonalTests(PersonalMixin):
         rc, out, err = self.ppreview(notes="Допущения: 999 ккал, 08:00")
         self.assertEqual(rc, 0, out + err)
         disp = json.loads(out)["display_text"]
-        self.assertTrue(disp.startswith(nw._canonical_summary(nw._snapshot_of(
-            self.live_record()))))
-        self.assertIn("123.456 ккал", disp)
+        self.assertTrue(disp.startswith("Oatmeal\n≈123.456 ккал · Б 10 · Ж 5 · У 50 г\n"))
+        self.assertEqual(disp.count("123.456"), 1)
 
     def test_notes_optional_and_validated(self):
         self.assertEqual(self.ppreview(notes=None)[0], 0)
         self.assertEqual(self.pdata()[0]["notes_text"], None)
         self.assertNoMutation(self.ppreview(notes="  \n"), "empty")
         self.assertNoMutation(self.ppreview(notes="a\x00b"), "control")
+
+    # ── compact format v2: notes, labels, versioning ──
+    def test_compact_notes_length_limit_rejects_never_truncates(self):
+        ok = "я" * 240
+        self.assertEqual(self.ppreview(notes=ok)[0], 0)
+        self.assertEqual(self.pdata()[0]["notes_text"], ok)
+        self.assertEqual(self.pdata()[0]["display_text"].count(ok), 1)
+        for f in self.pfiles():
+            f.unlink()
+        self.assertNoMutation(self.ppreview(notes="я" * 241), "too long")
+        self.assertNoMutation(self.ppreview(notes="первая\nвторая"), "single line")
+        self.assertNoMutation(self.ppreview(notes="a\tb"), "single line")
+
+    def test_trailing_newline_of_notes_file_is_not_content(self):
+        self.assertEqual(self.ppreview(notes=NOTES + "\n")[0], 0)
+        self.assertEqual(self.pdata()[0]["notes_text"], NOTES)
+
+    def test_no_technical_or_iso_labels_in_display(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        rec = self.pdata()[0]
+        disp = rec["display_text"]
+        for bad in ("технич", "интервал", "2026-", "T12", "Z", rec["preview_id"],
+                    rec["snapshot_hash"], self.rid()):
+            self.assertNotIn(bad, disp)
+        self.assertEqual(disp.count("Oatmeal"), 1)
+        self.assertEqual(disp.count("300"), 1)
+
+    def test_unknown_or_removed_display_format_fails_closed(self):
+        for label, change in (("three", lambda d: d.update(display_format=3)),
+                              ("string", lambda d: d.update(display_format="2")),
+                              ("bool", lambda d: d.update(display_format=True)),
+                              ("float", lambda d: d.update(display_format=2.0)),
+                              ("null", lambda d: d.update(display_format=None)),
+                              ("removed", lambda d: d.pop("display_format"))):
+            with self.subTest(label=label):
+                self.setUp_fresh_scope()
+                f = self.pfiles()[0]
+                d = json.loads(f.read_text())
+                change(d)
+                f.write_text(json.dumps(d))
+                self.assertNoMutation(self.pconfirm("Да"))
+
+    def test_compact_display_tamper_fails_closed(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        f = self.pfiles()[0]
+        d = json.loads(f.read_text())
+        d["display_text"] = nw._compose_display_legacy(d["snapshot"], d["notes_text"])
+        d["display_text_sha256"] = hashlib.sha256(d["display_text"].encode()).hexdigest()
+        f.write_text(json.dumps(d))
+        self.assertNoMutation(self.pconfirm("Да"), "tampered")
+
+    def test_legacy_personal_preview_without_format_still_confirms(self):
+        """Already-shown legacy previews keep their old text validation (no rerender)."""
+        legacy_notes = "Допущения: порция ~250 г.\nМасло — допущение."  # multi-line was legal
+        self.assertEqual(self.ppreview(notes=legacy_notes.replace("\n", " "))[0], 0)
+        f = self.pfiles()[0]
+        d = json.loads(f.read_text())
+        d.pop("display_format")
+        d["notes_text"] = legacy_notes
+        d["display_text"] = nw._compose_display_legacy(d["snapshot"], legacy_notes)
+        d["display_text_sha256"] = hashlib.sha256(d["display_text"].encode()).hexdigest()
+        f.write_text(json.dumps(d))
+        self.assertIn("технический интервал", d["display_text"])
+        rc, out, err = self.pconfirm("Да")
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(self.live_record()["state"], "confirmed")
+        self.assertEqual(self.pdata()[0]["status"], "consumed")
+        self.assertNotIn("display_format", self.pdata()[0])
+
+    def test_legacy_preview_with_tampered_text_still_fails_closed(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        f = self.pfiles()[0]
+        d = json.loads(f.read_text())
+        d.pop("display_format")  # compact text is not valid under the legacy format
+        f.write_text(json.dumps(d))
+        self.assertNoMutation(self.pconfirm("Да"), "tampered")
 
     def test_non_draft_rejected_at_preview(self):
         self.mutate(state="cancelled")
@@ -604,11 +679,88 @@ class PersonalTests(PersonalMixin):
             self.assertIsNotNone(p.parse_args(argv).command)
 
 
+class DisplayFormatTests(unittest.TestCase):
+    """Pure compact formatter: Berlin time conversion, Russian months, DST."""
+
+    def rng(self, a, b):
+        return nw._berlin_range(a, b)
+
+    def test_expected_compact_text(self):
+        snap = {"name": "Тосты с яйцами и беконом", "energy_kcal": 500, "protein_g": 30,
+                "fat_g": 25.0, "carbohydrate_g": 40,
+                "start_time": "2026-10-14T07:30:00Z", "end_time": "2026-10-14T07:45:00Z"}
+        self.assertEqual(
+            nw._compose_display(snap, "Порции приблизительные; масло — допущение."),
+            "Тосты с яйцами и беконом\n≈500 ккал · Б 30 · Ж 25 · У 40 г\n"
+            "Порции приблизительные; масло — допущение.\n14 октября, 09:30–09:45, Берлин\n"
+            "Записать?")
+        self.assertNotIn("\n\n", nw._compose_display(snap, None))
+
+    def test_utc_and_explicit_offsets(self):
+        self.assertEqual(self.rng("2026-07-01T10:00:00Z", "2026-07-01T10:30:00Z"),
+                         "1 июля, 12:00–12:30, Берлин")
+        self.assertEqual(self.rng("2026-07-01T13:00:00+03:00", "2026-07-01T13:30:00+03:00"),
+                         "1 июля, 12:00–12:30, Берлин")
+        self.assertEqual(self.rng("2026-01-15T09:00:00-05:00", "2026-01-15T09:10:00-05:00"),
+                         "15 января, 15:00–15:10, Берлин")
+
+    def test_day_and_year_crossing(self):
+        self.assertEqual(self.rng("2026-10-24T22:30:00Z", "2026-10-24T22:45:00Z"),
+                         "25 октября, 00:30–00:45, Берлин")
+        self.assertEqual(self.rng("2026-10-24T21:50:00Z", "2026-10-24T22:10:00Z"),
+                         "24 октября, 23:50 – 25 октября, 00:10, Берлин")
+        self.assertEqual(self.rng("2026-12-31T22:50:00Z", "2026-12-31T23:10:00Z"),
+                         "31 декабря 2026, 23:50 – 1 января 2027, 00:10, Берлин")
+
+    def test_all_months_are_russian_genitive(self):
+        names = [self.rng(f"2026-{m:02d}-10T12:00:00Z", f"2026-{m:02d}-10T12:05:00Z")
+                 .split(",")[0] for m in range(1, 13)]
+        self.assertEqual(names, [f"10 {n}" for n in (
+            "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
+            "сентября", "октября", "ноября", "декабря")])
+
+    def test_dst_spring_forward_uses_utc_instants(self):
+        # 2026-03-29 01:00Z is the 02:00 -> 03:00 jump
+        self.assertEqual(self.rng("2026-03-29T00:50:00Z", "2026-03-29T01:10:00Z"),
+                         "29 марта, 01:50–03:10, Берлин")
+
+    def test_dst_fall_back_ambiguous_wall_times_are_disambiguated(self):
+        # 2026-10-25: 02:30 happens twice (00:30Z in CEST, 01:30Z in CET)
+        self.assertEqual(self.rng("2026-10-25T00:30:00Z", "2026-10-25T01:30:00Z"),
+                         "25 октября, 02:30 (UTC+2)–02:30 (UTC+1), Берлин")
+        # unambiguous time on the same night carries no hint
+        self.assertEqual(self.rng("2026-10-24T23:30:00Z", "2026-10-24T23:40:00Z"),
+                         "25 октября, 01:30–01:40, Берлин")
+
+    def test_unparseable_or_naive_times_raise_and_unknown_format_raises(self):
+        for bad in ("nope", "2026-10-14T10:00:00", ""):
+            with self.assertRaises(ValueError):
+                self.rng(bad, "2026-10-14T10:00:00Z")
+        snap = {"name": "x", "energy_kcal": 1, "protein_g": 1, "fat_g": 1,
+                "carbohydrate_g": 1, "start_time": "2026-10-14T10:00:00Z",
+                "end_time": "2026-10-14T10:05:00Z"}
+        for fmt in (3, "2", True, 2.0):
+            with self.assertRaises(ValueError):
+                nw._compose_display(snap, None, fmt)
+
+
 class TestPersonalFake(PersonalTests, Base):
     pass
 
 
 class TestPersonalRealSqlite(PersonalTests, RealBase):
+    def test_compact_preview_confirms_on_real_sqlite(self):
+        rc, out, err = self.ppreview()
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(json.loads(out)["display_text"],
+                         "Oatmeal\n≈300 ккал · Б 10 · Ж 5 · У 50 г\n" + NOTES
+                         + "\n12 октября, 14:00–14:01, Берлин\nЗаписать?")
+        self.assertEqual(self.pdata()[0]["display_format"], 2)
+        rc, out, err = self.pconfirm("Да")
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(self.q.confirmed_count(), 1)
+        self.assertEqual(self.pdata()[0]["status"], "consumed")
+
     def test_confirmed_queue_row_matches_previewed_snapshot(self):
         self.assertEqual(self.ppreview()[0], 0)
         self.assertEqual(self.pconfirm("Да")[0], 0)

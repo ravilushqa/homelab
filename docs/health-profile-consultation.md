@@ -362,12 +362,30 @@ are just not the default personal flow. Group/platform channels must not use thi
    the hash and confirmer, is validated exactly as supplied (nothing is stripped,
    lowercased or repaired). `--attest-personal-chat` is the agent's explicit
    declaration that the scope is a one-to-one chat. The wrapper itself builds a
-   canonical summary from the **saved** record (name, kcal/protein/carbs/fat, exact
-   start and end times) and appends the optional agent notes (0600 file: portion,
-   assumptions) and the fixed question; the notes are advisory only and never
-   substitute for the summary. It saves the snapshot (incl. description), its hash,
-   version, notes, display text and display hash, scope and a finite expiry (default
-   15 min, max 60 min) in `personal-previews/` (0700 dir, 0600 files, flock, atomic
+   compact text from the **saved** record, once, with no IDs, hashes or ISO strings:
+
+   ```
+   Тосты с яйцами и беконом
+   ≈500 ккал · Б 30 · Ж 25 · У 40 г
+   Порции приблизительные; масло — допущение.
+   14 октября, 09:30–09:45, Берлин
+   Записать?
+   ```
+
+   Macros are the exact saved values (safe numeric rendering). The time line converts
+   the saved instants (UTC or explicit offset) to Europe/Berlin with Russian month
+   names; a range crossing midnight shows both dates, crossing a year shows the year,
+   and a wall time that occurs twice on the autumn DST change gets a `(UTC+N)` hint.
+   The display does not claim whether the time was user-supplied or proposed: the
+   agent's optional note (`--notes-file`, ONE line, max 240 chars; longer, multi-line
+   or control-character notes are rejected, never truncated) states an assumption
+   only when the time was not given by the user. The preview saves `display_format: 2`;
+   confirm recomposes and validates with the saved format. Previews without that
+   field (older personal previews) keep the previous text and validation unchanged, so
+   they stay confirmable without re-consent; unknown or tampered formats fail closed.
+   The saved snapshot (incl. description), its hash, version, notes, display text and
+   display hash, scope and a finite expiry (default
+   15 min, max 60 min) live in `personal-previews/` (0700 dir, 0600 files, flock, atomic
    writes, no symlinks). A friendlier rounded rendering may be added by the agent
    outside `display_text`, but consent only covers the returned exact values.
 2. **One slot per scope.** A new preview in the same scope marks the older pending
