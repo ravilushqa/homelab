@@ -353,19 +353,23 @@ Reply, no Telegram message IDs, no receipts and no long phrase. The receipt-boun
 `preview`/`short-confirm` and the long named grammar stay valid and unchanged; they
 are just not the default personal flow. Group/platform channels must not use this mode.
 
-1. **Single active preview.** The agent first stores the preview, then displays
-   *exactly* the stored text:
+1. **Single active preview.** The agent first stores the preview, then shows the
+   user exactly the returned `display_text`:
    `nutrition_writeback.py personal-preview --scope LABEL --attest-personal-chat
    --id ID --confirmer NAME --expected-version V --expected-snapshot-hash H
-   --preview-text-file PATH [--ttl-seconds N]`. `LABEL` is a stable opaque label
-   (e.g. `personal-main`; not a transport/chat ID, must start alphanumeric).
-   `--attest-personal-chat` is the agent's explicit declaration that the scope is a
-   one-to-one chat. `PATH` is a 0600 file with the final shown text; the wrapper
-   requires it to contain the meal name and the four macro values and echoes it back
-   as `display_text`. It saves the snapshot (name, times, macros, description), its
-   hash, version, text hash, scope and a finite expiry (default 15 min, max 60 min)
-   in `personal-previews/` (0700 dir, 0600 files, flock, atomic writes, no symlinks).
-   Times/assumptions in the text are the agent's responsibility (not machine-checked).
+   [--notes-file PATH] [--ttl-seconds N]`. `LABEL` is a stable opaque label
+   (e.g. `personal-main`; not a transport/chat ID, must start alphanumeric) and, like
+   the hash and confirmer, is validated exactly as supplied (nothing is stripped,
+   lowercased or repaired). `--attest-personal-chat` is the agent's explicit
+   declaration that the scope is a one-to-one chat. The wrapper itself builds a
+   canonical summary from the **saved** record (name, kcal/protein/carbs/fat, exact
+   start and end times) and appends the optional agent notes (0600 file: portion,
+   assumptions) and the fixed question; the notes are advisory only and never
+   substitute for the summary. It saves the snapshot (incl. description), its hash,
+   version, notes, display text and display hash, scope and a finite expiry (default
+   15 min, max 60 min) in `personal-previews/` (0700 dir, 0600 files, flock, atomic
+   writes, no symlinks). A friendlier rounded rendering may be added by the agent
+   outside `display_text`, but consent only covers the returned exact values.
 2. **One slot per scope.** A new preview in the same scope marks the older pending
    one `superseded` (its draft is not touched) and needs fresh consent. Expired
    previews are marked `expired`. Several active previews in one scope (store
@@ -378,6 +382,13 @@ are just not the default personal flow. Group/platform channels must not use thi
    Accepted text is only `да`, `запиши`, `да, запиши`, `yes`, `record it`
    (case-insensitive, trailing `.`/`!` and surrounding whitespace ignored). Negation,
    conditionals, corrections, multiple lines and anything longer are rejected.
+   Each consent file is single-use for the **whole store**: a file already claimed for
+   any preview (consumed, revoked, superseded, any scope) is rejected, and a file whose
+   real mtime predates the active preview's creation is rejected as stale. That is a
+   local workflow-freshness check, not a user timestamp; a NEW file with the same text
+   is accepted under agent attestation (the wrapper cannot tell who wrote it).
+   `personal-confirm` re-validates the saved snapshot, display text and hashes, notes,
+   timestamps/TTL and structure; any mismatch or malformed/foreign record fails closed.
 4. **Corrections.** A correction edits the *same* record (new version) and requires a
    new `personal-preview`; the old snapshot can never be confirmed (drift revokes it,
    and restoring the content does not revive it). No new meal is created.
@@ -387,18 +398,23 @@ are just not the default personal flow. Group/platform channels must not use thi
    `--expected-snapshot-hash`, verified inside the queue's own transaction (same as
    `short-confirm`). Replays, duplicate "Да", concurrent confirms and a reused consent
    file are rejected read-only (no queue mutation, no second delivery); an interrupted
-   run stays `consuming` and fails closed. After a CLI refusal on an untouched draft
+   run stays `consuming` and fails closed. If the helper reports success but its output
+   is not a valid confirmed readback, the result is an *uncertain outcome* error (the
+   preview stays `consumed`, nothing is replayed; read the record with `status`) - a
+   success is never synthesized. After a CLI refusal on an untouched draft
    the preview is released, but the consumed consent file cannot be reused.
 6. **Audit.** The raw consent text is stored unchanged (`consent_raw_text`, plus the
    file SHA-256) on the preview record and echoed under `personal_consent`. The
    wrapper invents no user timestamp, author or message ID (`claimed_at` is the
-   wrapper's own clock).
+   wrapper's own clock; the claimed consent file is tracked as an internal
+   `consent_file_key`, not a Telegram id).
 
 **Weaker provenance.** `provenance_level` is `agent_conversation_attested`: weaker
 than the receipt-bound `workflow_attested` path. Nothing links the consent file to a
 Telegram server message or authenticates the sender; the agent's judgement of the
 conversation is the only evidence, and anything able to write as this OS user can
-forge the files. Do not describe it as server-authenticated.
+forge the files or touch their mtime. No author identity is claimed. Do not describe it
+as server-authenticated.
 
 **Queue vs ACK vs UI.** `personal-confirm` success only means *confirmed in the
 server queue*. The phone writes to Health Connect on its next sync; only an ACK from
@@ -408,7 +424,7 @@ not evidence of either.
 
 Example (fake values): `personal-preview --scope personal-main --attest-personal-chat
 --id nutr_example --confirmer Alex --expected-version 1 --expected-snapshot-hash
-<64-hex> --preview-text-file /secure/dir/shown.txt`, later `personal-confirm --scope
+<64-hex> --notes-file /secure/dir/notes.txt`, later `personal-confirm --scope
 personal-main --attest-personal-chat --consent-file /secure/dir/reply.txt`.
 
 Tests: `tests/test_personal_chat_consent.py` (fake queue and real SQLite + isolated
