@@ -21,6 +21,16 @@ Subcommands:
                 draft and checks content hash for drift. Then runs full mutation
                 readiness and confirms via CLI. No long consent phrase required from
                 the user; all binding is via the preview context.
+  personal-preview  Personal-chat scope only (--scope LABEL --attest-personal-chat):
+                store ONE active preview (draft snapshot + wrapper-built compact (display_format 2)
+                text of saved name/macros/Berlin time + optional agent notes) BEFORE
+                it is displayed; show exactly the returned display_text. Supersedes
+                the scope's older preview. No queue mutation.
+  personal-confirm  Confirm the scope's single active preview from the raw bare reply
+                in --consent-file (Да/Запиши; file must be newer than the preview and never
+                previously used). Agent-conversation-attested: no
+                Telegram message ID/receipt/reply linkage (provenance_level
+                "agent_conversation_attested"). Same snapshot CAS + privacy gates.
   status        Show status of one or all entries (readonly).
 
 Short-confirm trust boundary: the preview file and the --transport-file are
@@ -67,6 +77,8 @@ wrong ID, wrong version, or wrong meal name are rejected. No fallback grammar.
 """
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import re
@@ -1720,7 +1732,14 @@ def _finish_preview(d: Path, path: Path, status: str) -> None:
         cur, errs = _load_preview(path)
         if errs or cur is None or cur.get("status") != "consuming":
             return
-        if status == "pending":
+        if status == "pending" and cur.get("mode") == _PERSONAL_MODE:
+            # Personal mode: remember the consumed consent FILE key (not a message id).
+            used = list(cur.get("used_consent_file_keys") or [])
+            if cur.get("consent_file_key") is not None:
+                used.append(cur.pop("consent_file_key"))
+            cur["used_consent_file_keys"] = used
+            cur.pop("claimed_at", None)
+        elif status == "pending":
             # Released after a failed confirm: remember the consumed raw reply so it
             # can never be replayed; a NEW actual reply is required.
             used = list(cur.get("used_reply_ids") or [])
@@ -1731,6 +1750,61 @@ def _finish_preview(d: Path, path: Path, status: str) -> None:
         cur["status"] = status
         cur["finished_at"] = _now().isoformat()
         _write_preview(path, cur, exclusive=False)
+
+
+def _confirm_claimed_preview(cli, db, d, path, pv, snap, rid, version, expires,
+                             claim_fn) -> int:
+    """Shared claim -> CAS confirm -> consume/release/revoke tail for pending previews."""
+    claimed = {"v": False}
+
+    def _pre_confirm(before: dict):
+        live = _snapshot_of(before)
+        if live is None or _snapshot_hash(live) != pv["snapshot_hash"]:
+            _revoke_if_pending(d, path, pv)  # drift kills the consent for good
+            return "record content differs from the previewed content — new preview required"
+        # Expiry is re-checked right before the claim.
+        if _now() > expires:
+            return "preview expired"
+        cerr = claim_fn()
+        if cerr:
+            return cerr
+        claimed["v"] = True
+        return None
+
+    _STAGE["v"] = "pre"
+    rc = _confirm_with_readback(
+        cli, db, rid, version, snap["name"], pv["confirmer"], pre_confirm=_pre_confirm,
+        # The queue verifies this INSIDE its confirm transaction (before any mutation).
+        extra_confirm_args=["--expected-snapshot-hash", pv["snapshot_hash"]],
+    )
+    if not claimed["v"] and rc != 0 and _STAGE["v"] == "pre":
+        # Rejected before the claim: if the draft drifted (state/version/content),
+        # this preview is stale and must not revive if the content is restored.
+        rec, _ = _read_record(cli, db, rid)
+        live = _snapshot_of(rec) if rec else None
+        if rec and (rec.get("state") != "draft"
+                    or rec.get("client_record_version") != version
+                    or live is None or _snapshot_hash(live) != pv["snapshot_hash"]):
+            _revoke_if_pending(d, path, pv)
+    if claimed["v"]:
+        if rc == 0:
+            _finish_preview(d, path, "consumed")
+        elif _STAGE["v"] == "confirm":
+            # CLI refused/failed: release only if the draft is verifiably untouched.
+            rec, _ = _read_record(cli, db, rid)
+            live = _snapshot_of(rec) if rec else None
+            if (rec and rec.get("state") == "draft"
+                    and rec.get("client_record_version") == version
+                    and live is not None
+                    and _snapshot_hash(live) == pv["snapshot_hash"]):
+                # Verifiably untouched (same version AND same content): safe to release.
+                _finish_preview(d, path, "pending")
+            else:
+                # Changed content/version/state: authorization is revoked for good.
+                _finish_preview(d, path, "revoked")
+        # Any other outcome (crash, post-readback failure) stays "consuming":
+        # fail closed — a fresh preview and reply are required.
+    return rc
 
 
 def cmd_short_confirm(args: argparse.Namespace) -> int:
@@ -1819,56 +1893,572 @@ def cmd_short_confirm(args: argparse.Namespace) -> int:
         _emit_err({"error": "mutation readiness check failed", "details": readiness_errs})
         return 1
 
-    claimed = {"v": False}
+    return _confirm_claimed_preview(
+        cli, db, d, path, pv, snap, rid, version, expires,
+        lambda: _claim_preview(d, path, transport, pv))
 
-    def _pre_confirm(before: dict):
-        live = _snapshot_of(before)
-        if live is None or _snapshot_hash(live) != pv["snapshot_hash"]:
-            _revoke_if_pending(d, path, pv)  # drift kills the consent for good
-            return "record content differs from the previewed content — new preview required"
-        # Expiry is re-checked right before the claim.
-        if _now() > expires:
-            return "preview expired"
-        cerr = _claim_preview(d, path, transport, pv)
-        if cerr:
-            return cerr
-        claimed["v"] = True
-        return None
 
-    _STAGE["v"] = "pre"
-    rc = _confirm_with_readback(
-        cli, db, rid, version, snap["name"], pv["confirmer"], pre_confirm=_pre_confirm,
-        # The queue verifies this INSIDE its confirm transaction (before any mutation).
-        extra_confirm_args=["--expected-snapshot-hash", pv["snapshot_hash"]],
-    )
-    if not claimed["v"] and rc != 0 and _STAGE["v"] == "pre":
-        # Rejected before the claim: if the draft drifted (state/version/content),
-        # this preview is stale and must not revive if the content is restored.
-        rec, _ = _read_record(cli, db, rid)
-        live = _snapshot_of(rec) if rec else None
-        if rec and (rec.get("state") != "draft"
-                    or rec.get("client_record_version") != version
-                    or live is None or _snapshot_hash(live) != pv["snapshot_hash"]):
-            _revoke_if_pending(d, path, pv)
-    if claimed["v"]:
-        if rc == 0:
-            _finish_preview(d, path, "consumed")
-        elif _STAGE["v"] == "confirm":
-            # CLI refused/failed: release only if the draft is verifiably untouched.
-            rec, _ = _read_record(cli, db, rid)
-            live = _snapshot_of(rec) if rec else None
-            if (rec and rec.get("state") == "draft"
-                    and rec.get("client_record_version") == version
-                    and live is not None
-                    and _snapshot_hash(live) == pv["snapshot_hash"]):
-                # Verifiably untouched (same version AND same content): safe to release.
-                _finish_preview(d, path, "pending")
+# ── Personal-chat short consent (agent-conversation-attested) ────────────────
+#
+# Weaker provenance than receipt-bound short consent: there is NO Telegram
+# message ID, receipt or server-side linkage. The agent stores ONE active preview
+# per declared personal scope (an opaque label for a one-to-one chat), displays
+# exactly the stored text, and later hands the wrapper the user's raw reply via a
+# private consent file after deciding from the conversation that it is an
+# unambiguous yes to that preview. The wrapper only (a) accepts a bare whitelisted
+# affirmative, (b) selects the single active preview of the scope, and (c) enforces
+# version + full-snapshot CAS in the queue transaction. It cannot prove who wrote
+# the file; results carry provenance_level "agent_conversation_attested".
+
+_PERSONAL_DIRNAME = "personal-previews"
+_PERSONAL_MODE = "personal_chat_scope"
+_PERSONAL_PROVENANCE = "agent_conversation_attested"
+_SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
+_CONSENT_FILE_MAX = 256
+_NOTES_MAX = 2048
+_PERSONAL_PROMPT = "Записать или поправишь?"
+
+
+def _personal_dir(isolation_root: Path | None, create: bool) -> tuple:
+    base = isolation_root if isolation_root is not None else _PROD_BASE
+    d = base / _PERSONAL_DIRNAME
+    if _has_symlink_ancestor(d):
+        return None, [f"{_PERSONAL_DIRNAME} path must not have a symlink in any ancestor"]
+    if not d.exists():
+        if not create:
+            return d, []
+        if not base.is_dir():
+            return None, [f"preview base directory missing: {base}"]
+        try:
+            d.mkdir(mode=0o700)
+            os.chmod(d, 0o700)
+        except OSError as exc:
+            return None, [f"cannot create personal-preview directory: {exc}"]
+    errs = _check_private_dir(d, "personal-preview directory")
+    return (None, errs) if errs else (d, [])
+
+
+def _personal_scope_args(args) -> tuple:
+    scope = getattr(args, "scope", None)
+    if not isinstance(scope, str) or _SCOPE_RE.fullmatch(scope) is None:
+        return None, "--scope must be an opaque label of 1-64 chars [A-Za-z0-9._:-]"
+    if not getattr(args, "attest_personal_chat", False):
+        return None, ("--attest-personal-chat is required: declares this scope is a "
+                      "private one-to-one chat (not a group/platform channel)")
+    return scope, None
+
+
+def _read_private_text(path_arg, label: str, max_bytes: int) -> tuple:
+    """Read a 0600 regular file as exact UTF-8 text (unchanged). Returns (text, st, err)."""
+    p = Path(path_arg)
+    errs = _check_regular_file_secure(p, label, need_mode=0o600)
+    if errs:
+        return None, None, errs[0]
+    try:
+        st = p.stat()
+        if st.st_size > max_bytes:
+            return None, None, f"{label} too large"
+        raw = p.read_bytes()
+        return raw.decode("utf-8"), st, None
+    except (OSError, UnicodeDecodeError):
+        return None, None, f"{label} unreadable"
+
+
+def _fmt_num(v: float) -> str:
+    """Exact, round-trip numeric rendering (no rounding of stored values)."""
+    return str(int(v)) if v == int(v) else repr(float(v))
+
+
+def _canonical_summary(snap: dict) -> str:
+    """Wrapper-produced summary of the ACTUAL saved name, macros and start/end times."""
+    return (f"{snap['name']}: {_fmt_num(snap['energy_kcal'])} ккал, "
+            f"белки {_fmt_num(snap['protein_g'])} г, "
+            f"углеводы {_fmt_num(snap['carbohydrate_g'])} г, "
+            f"жиры {_fmt_num(snap['fat_g'])} г; "
+            f"время {snap['start_time']} → {snap['end_time']} (технический интервал очереди).")
+
+
+def _compose_display_legacy(snap: dict, notes: str | None) -> str:
+    """Format of previews saved WITHOUT a display_format field (already shown to users)."""
+    parts = [_canonical_summary(snap)]
+    if notes:
+        parts.append(notes)
+    parts.append(_PERSONAL_PROMPT)
+    return "\n\n".join(parts)
+
+
+_DISPLAY_FORMAT_COMPACT = 2
+_NOTES_COMPACT_MAX_CHARS = 240
+_RU_MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+              "августа", "сентября", "октября", "ноября", "декабря")
+_DISPLAY_TZ = "Europe/Berlin"
+
+
+def _berlin_range(start_iso: str, end_iso: str) -> str:
+    """'14 октября, 09:30–09:45, Берлин' from the saved instants (raises ValueError)."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(_DISPLAY_TZ)
+    pts = []
+    for label, v in (("start_time", start_iso), ("end_time", end_iso)):
+        dt, err = _parse_ts(v, label)
+        if err:
+            raise ValueError(err)
+        pts.append(dt.astimezone(tz))
+    a, b = pts
+
+    def hm(dt):
+        txt = dt.strftime("%H:%M")
+        # A wall time that occurs twice (autumn DST change) is disambiguated by offset.
+        if dt.replace(fold=0).utcoffset() != dt.replace(fold=1).utcoffset():
+            off = int(dt.utcoffset().total_seconds() // 3600)
+            txt += f" (UTC{off:+d})"
+        return txt
+
+    def day(dt, with_year):
+        return f"{dt.day} {_RU_MONTHS[dt.month - 1]}" + (f" {dt.year}" if with_year else "")
+
+    if a.date() == b.date():
+        return f"{day(a, False)}, {hm(a)}–{hm(b)}, Берлин"
+    with_year = a.year != b.year
+    return f"{day(a, with_year)}, {hm(a)} – {day(b, with_year)}, {hm(b)}, Берлин"
+
+
+def _compose_display_compact(snap: dict, notes: str | None) -> str:
+    lines = [
+        snap["name"],
+        f"≈{_fmt_num(snap['energy_kcal'])} ккал · Б {_fmt_num(snap['protein_g'])} · "
+        f"Ж {_fmt_num(snap['fat_g'])} · У {_fmt_num(snap['carbohydrate_g'])} г",
+    ]
+    if notes:
+        lines.append(notes)
+    lines.append(_berlin_range(snap["start_time"], snap["end_time"]))
+    lines.append("Записать?")
+    return "\n".join(lines)
+
+
+def _compose_display(snap: dict, notes: str | None, fmt=_DISPLAY_FORMAT_COMPACT) -> str:
+    """Compose by saved display format; unknown formats raise (callers fail closed)."""
+    if fmt is None:
+        return _compose_display_legacy(snap, notes)
+    if fmt == _DISPLAY_FORMAT_COMPACT and type(fmt) is int:
+        return _compose_display_compact(snap, notes)
+    raise ValueError(f"unknown display format {fmt!r}")
+
+
+def _validate_notes_compact(notes: str) -> str | None:
+    """Short assumptions only: one line, bounded, rejected (never truncated)."""
+    if not notes.strip():
+        return "notes file is empty (omit --notes-file instead)"
+    if any(ord(c) < 32 for c in notes) or "\x7f" in notes:
+        return "notes must be a single line without control characters"
+    if len(notes) > _NOTES_COMPACT_MAX_CHARS:
+        return f"notes too long ({len(notes)} > {_NOTES_COMPACT_MAX_CHARS} chars); keep assumptions short"
+    return None
+
+
+def _validate_notes(notes: str) -> str | None:
+    if not notes.strip():
+        return "notes file is empty (omit --notes-file instead)"
+    if any(ord(c) < 32 and c not in "\n\t" for c in notes) or "\x7f" in notes:
+        return "notes contain control characters"
+    return None
+
+
+def _hex64(v) -> bool:
+    return isinstance(v, str) and re.fullmatch(r"[0-9a-f]{64}", v) is not None
+
+
+def _personal_record_errors(pv: dict, scope: str) -> list:
+    """Structural + integrity validation of a stored personal preview. Never raises."""
+    errs = []
+    if pv.get("mode") != _PERSONAL_MODE or pv.get("personal_chat_attested") is not True:
+        errs.append("preview is not a personal-chat preview")
+    if pv.get("provenance_level") != _PERSONAL_PROVENANCE:
+        errs.append("preview has unexpected provenance level")
+    if pv.get("scope") != scope:
+        errs.append("preview scope mismatch")
+    pid = pv.get("preview_id")
+    if not isinstance(pid, str) or re.fullmatch(r"[0-9a-f]{32}", pid) is None:
+        errs.append("preview id malformed")
+    snap = pv.get("snapshot")
+    if not isinstance(snap, dict) or _snapshot_of(snap) != snap:
+        errs.append("preview snapshot malformed")
+    elif not _hex64(pv.get("snapshot_hash")) or _snapshot_hash(snap) != pv["snapshot_hash"]:
+        errs.append("preview snapshot does not match its hash (tampered)")
+    else:
+        notes = pv.get("notes_text")
+        has_fmt = "display_format" in pv  # absent = legacy preview, validated as before
+        fmt = pv.get("display_format")
+        check_notes = _validate_notes if not has_fmt else _validate_notes_compact
+        try:
+            if has_fmt and not (type(fmt) is int and fmt == _DISPLAY_FORMAT_COMPACT):
+                raise ValueError("unknown display format")
+            expected = (None if notes is not None and (
+                not isinstance(notes, str) or check_notes(notes))
+                else _compose_display(snap, notes, fmt if has_fmt else None))
+        except ValueError:
+            errs.append("preview display format unknown or snapshot times invalid")
+            expected = False
+        if expected is None:
+            errs.append("preview notes malformed")
+        elif expected is not False:
+            disp = pv.get("display_text")
+            if disp != expected:
+                errs.append("preview display text does not match the saved snapshot (tampered)")
+            elif (not _hex64(pv.get("display_text_sha256"))
+                  or _sha256_text(disp) != pv["display_text_sha256"]):
+                errs.append("preview display text hash mismatch (tampered)")
+    if not isinstance(pv.get("confirmer"), str) or not pv["confirmer"]:
+        errs.append("preview has no confirmer")
+    rid, version = pv.get("client_record_id"), pv.get("client_record_version")
+    if (not isinstance(rid, str) or not rid or isinstance(version, bool)
+            or not isinstance(version, int) or version < 1):
+        errs.append("preview has invalid record binding")
+    created, e1 = _parse_ts(pv.get("created_at"), "created_at")
+    expires, e2 = _parse_ts(pv.get("expires_at"), "expires_at")
+    if e1 or e2:
+        errs.append("preview timestamps invalid")
+    else:
+        ttl = (expires - created).total_seconds()
+        if not (0 < ttl <= _PREVIEW_MAX_TTL):
+            errs.append("preview lifetime is not within the finite maximum TTL")
+        if (created - _now()).total_seconds() > _PREVIEW_CLOCK_SKEW:
+            errs.append("preview creation time is in the future")
+    wall = pv.get("created_wall_ns")
+    if isinstance(wall, bool) or not isinstance(wall, int) or wall <= 0:
+        errs.append("preview has no workflow freshness marker")
+    return errs
+
+
+def _sha256_text(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _verify_draft_live(cli, db, rid, exp_version, exp_hash) -> tuple:
+    rec, rerr = _read_record(cli, db, rid)
+    if rerr:
+        return None, None, rerr
+    if rec.get("state") != "draft":
+        return None, None, "record is not in draft state"
+    v = rec.get("client_record_version")
+    if isinstance(v, bool) or not isinstance(v, int):
+        return None, None, "record has no integer version"
+    if v != exp_version:
+        return None, None, "record version differs from the displayed preview version"
+    sn = _snapshot_of(rec)
+    if sn is None:
+        return None, None, "record is missing name/time/macro fields"
+    if _snapshot_hash(sn) != exp_hash:
+        return None, None, "record content differs from the displayed preview content"
+    return v, sn, None
+
+
+def _scope_records(d: Path, scope: str) -> list:
+    return [(p, data) for p, data in _iter_previews(d)
+            if data is not None and data.get("scope") == scope
+            and data.get("mode") == _PERSONAL_MODE]
+
+
+def _is_expired(data: dict) -> bool:
+    exp, err = _parse_ts(data.get("expires_at"), "expires_at")
+    return bool(err) or exp is None or _now() > exp
+
+
+def _personal_store_errors(d: Path) -> list:
+    """Fail closed on unreadable entries AND on loadable entries that are not
+    well-formed personal-mode records (they would otherwise be invisible)."""
+    if _unreadable_previews(d):
+        return ["personal-preview store has unreadable/insecure entries; failing closed"]
+    for _, data in _iter_previews(d):
+        if (data is None or data.get("mode") != _PERSONAL_MODE
+                or not isinstance(data.get("scope"), str)
+                or not isinstance(data.get("status"), str)):
+            return ["personal-preview store has foreign/malformed records; failing closed"]
+    return []
+
+
+def _used_consent_keys(d: Path) -> set:
+    """Consent-file keys ever claimed, across EVERY record (any scope/status)."""
+    keys = set()
+    for _, data in _iter_previews(d):
+        if data is None:
+            continue
+        if isinstance(data.get("consent_file_key"), str):
+            keys.add(data["consent_file_key"])
+        used = data.get("used_consent_file_keys")
+        if isinstance(used, list):
+            keys.update(k for k in used if isinstance(k, str))
+    return keys
+
+
+def cmd_personal_preview(args: argparse.Namespace) -> int:
+    """Store ONE active personal-chat preview (snapshot + canonical display). No queue mutation."""
+    cli, db, isolation_root = _resolve(args)
+    if cli is None:
+        return 1
+    scope, serr = _personal_scope_args(args)
+    if serr:
+        _emit_err({"error": serr})
+        return 1
+    confirmer = args.confirmer
+    if not isinstance(confirmer, str) or not confirmer or confirmer != confirmer.strip():
+        _emit_err({"error": "--confirmer must be a non-empty name without surrounding whitespace"})
+        return 1
+    ttl = args.ttl_seconds
+    if not (1 <= ttl <= _PREVIEW_MAX_TTL):
+        _emit_err({"error": f"--ttl-seconds must be between 1 and {_PREVIEW_MAX_TTL}"})
+        return 1
+    exp_version = args.expected_version
+    exp_hash = args.expected_snapshot_hash
+    if isinstance(exp_version, bool) or not isinstance(exp_version, int) or exp_version < 1:
+        _emit_err({"error": "--expected-version must be a positive integer"})
+        return 1
+    if not _hex64(exp_hash):
+        _emit_err({"error": "--expected-snapshot-hash must be a 64-char lowercase hex SHA-256"})
+        return 1
+    notes = None
+    if getattr(args, "notes_file", None):
+        notes, _, nerr = _read_private_text(args.notes_file, "notes file", _NOTES_MAX)
+        if notes is not None and nerr is None:
+            notes = notes.rstrip("\r\n")  # a trailing newline from the editor is not content
+            nerr = _validate_notes_compact(notes)
+        if nerr:
+            _emit_err({"error": nerr})
+            return 1
+
+    version, snap, verr = _verify_draft_live(cli, db, args.id, exp_version, exp_hash)
+    if verr:
+        _emit_err({"error": verr})
+        return 1
+
+    d, derrs = _personal_dir(isolation_root, create=True)
+    if derrs:
+        _emit_err({"error": "personal-preview store insecure", "details": derrs})
+        return 1
+
+    import secrets
+    import time
+    from datetime import timedelta
+    now = _now()
+    preview_id = secrets.token_hex(16)
+    try:
+        display = _compose_display(snap, notes, _DISPLAY_FORMAT_COMPACT)
+    except ValueError as exc:
+        _emit_err({"error": f"cannot render preview: {exc}"})
+        return 1
+    data = {
+        "schema": _PREVIEW_SCHEMA,
+        "mode": _PERSONAL_MODE,
+        "preview_id": preview_id,
+        "status": "pending",
+        "scope": scope,
+        "personal_chat_attested": True,
+        "client_record_id": args.id,
+        "client_record_version": version,
+        "snapshot": snap,
+        "snapshot_hash": _snapshot_hash(snap),
+        "notes_text": notes,
+        "display_format": _DISPLAY_FORMAT_COMPACT,
+        "display_text": display,
+        "display_text_sha256": _sha256_text(display),
+        "confirmer": confirmer,
+        "created_at": now.isoformat(),
+        "expires_at": (now + timedelta(seconds=ttl)).isoformat(),
+        # Local workflow freshness marker (real wall clock, ns). NOT a user timestamp.
+        "created_wall_ns": time.time_ns(),
+        "provenance_level": _PERSONAL_PROVENANCE,
+    }
+    with _PreviewLock(d):
+        serrs = _personal_store_errors(d)
+        if serrs:
+            _emit_err({"error": serrs[0]})
+            return 1
+        _, _, verr = _verify_draft_live(cli, db, args.id, exp_version, exp_hash)
+        if verr:
+            _emit_err({"error": verr})
+            return 1
+        active = []
+        for p, other in _scope_records(d, scope):
+            if other.get("status") != "pending":
+                continue
+            if _is_expired(other):
+                other["status"] = "expired"
+                other["finished_at"] = now.isoformat()
+                _write_preview(p, other, exclusive=False)
             else:
-                # Changed content/version/state: authorization is revoked for good.
-                _finish_preview(d, path, "revoked")
-        # Any other outcome (crash, post-readback failure) stays "consuming":
-        # fail closed — a fresh preview and reply are required.
-    return rc
+                active.append((p, other))
+        if len(active) > 1:
+            _emit_err({"error": "ambiguous: several active previews exist for this scope"})
+            return 1
+        # Replacement: the older preview is superseded (its draft is NOT touched);
+        # fresh real consent is required for the new one.
+        for p, other in active:
+            other["status"] = "superseded"
+            other["superseded_by"] = preview_id
+            other["finished_at"] = now.isoformat()
+            _write_preview(p, other, exclusive=False)
+        data["created_wall_ns"] = time.time_ns()
+        _write_preview(d / f"preview-{preview_id}.json", data, exclusive=True)
+
+    print(json.dumps({
+        "ok": True,
+        "action": "personal-preview",
+        "preview_id": preview_id,
+        "scope": scope,
+        "client_record_id": args.id,
+        "client_record_version": version,
+        "snapshot_hash": data["snapshot_hash"],
+        "expires_at": data["expires_at"],
+        "provenance_level": _PERSONAL_PROVENANCE,
+        "superseded_previews": len(active),
+        "display_text": display,
+    }, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _claim_personal(d: Path, path: Path, scope: str, consent: dict, expect: dict):
+    """pending -> consuming under the lock, re-verifying everything that selected it."""
+    with _PreviewLock(d):
+        serrs = _personal_store_errors(d)
+        if serrs:
+            return serrs[0]
+        pending = [p for p, data in _scope_records(d, scope) if data.get("status") == "pending"]
+        if pending != [path]:
+            return "ambiguous or changed preview set for this scope"
+        cur, errs = _load_preview(path)
+        if errs or cur is None:
+            return "pending preview unreadable at claim"
+        if cur.get("status") != "pending":
+            return f"preview already {cur.get('status')} (replay rejected)"
+        if cur != expect:
+            return "preview changed during confirm"
+        if consent["key"] in _used_consent_keys(d):
+            return "this consent file was already used (replay rejected)"
+        if _is_expired(cur):
+            return "preview expired"
+        cur["status"] = "consuming"
+        cur["claimed_at"] = _now().isoformat()  # wrapper clock; NOT a user timestamp
+        cur["consent_file_key"] = consent["key"]
+        cur["consent_raw_text"] = consent["raw_text"]
+        cur["consent_file_sha256"] = consent["sha256"]
+        _write_preview(path, cur, exclusive=False)
+    return None
+
+
+def cmd_personal_confirm(args: argparse.Namespace) -> int:
+    cli, db, isolation_root = _resolve(args)
+    if cli is None:
+        return 1
+    is_isolation = bool(args.cli)
+    scope, serr = _personal_scope_args(args)
+    if serr:
+        _emit_err({"error": serr})
+        return 1
+
+    raw, st, cerr = _read_private_text(args.consent_file, "consent file", _CONSENT_FILE_MAX)
+    if cerr:
+        _emit_err({"error": "consent file rejected", "details": [cerr]})
+        return 1
+    reply_errs = _validate_short_reply(raw)
+    if reply_errs:
+        _emit_err({"error": "short reply rejected", "reasons": reply_errs})
+        return 1
+    sha = _sha256_text(raw)
+    consent = {
+        "raw_text": raw, "sha256": sha,
+        # Internal claim key of this consent FILE (not a transport message id).
+        "key": "consentfile:" + _sha256_text(
+            f"{st.st_dev}:{st.st_ino}:{st.st_mtime_ns}:{st.st_size}:{sha}"),
+    }
+
+    d, derrs = _personal_dir(isolation_root, create=False)
+    if derrs:
+        _emit_err({"error": "personal-preview store insecure", "details": derrs})
+        return 1
+    if not d.is_dir():
+        _emit_err({"error": "no active preview for this scope"})
+        return 1
+    serrs = _personal_store_errors(d)
+    if serrs:
+        _emit_err({"error": serrs[0]})
+        return 1
+
+    # A consent file that was ever claimed (any scope/status) can never be reused.
+    if consent["key"] in _used_consent_keys(d):
+        _emit_err({"error": "this consent file was already used (replay rejected)"})
+        return 1
+
+    records = _scope_records(d, scope)
+    pending = [(p, x) for p, x in records if x.get("status") == "pending"]
+    if not pending:
+        if any(x.get("status") == "consumed" for _, x in records):
+            _emit_err({"error": "latest preview already confirmed; no active preview "
+                                "(replay rejected)"})
+        else:
+            _emit_err({"error": "no active preview for this scope"})
+        return 1
+    live = [(p, x) for p, x in pending if not _is_expired(x)]
+    if not live:
+        _emit_err({"error": "preview expired"})
+        return 1
+    if len(live) > 1:
+        _emit_err({"error": "ambiguous: several active previews exist for this scope"})
+        return 1
+    path, pv = live[0]
+
+    errs = _personal_record_errors(pv, scope)
+    if not errs:
+        # Local workflow freshness: a consent file older than this preview cannot be
+        # a reply to it. Real file mtime vs the preview's creation marker; this is
+        # NOT a user timestamp and is only as trustworthy as the local filesystem.
+        if st.st_mtime_ns < pv["created_wall_ns"]:
+            errs.append("consent file predates this preview (stale consent)")
+    if errs:
+        _emit_err({"error": "personal consent rejected", "reasons": errs})
+        return 1
+    snap, rid, version = pv["snapshot"], pv["client_record_id"], pv["client_record_version"]
+    expires, _ = _parse_ts(pv["expires_at"], "expires_at")
+
+    readiness_errs = _check_mutation_readiness(args, is_isolation, isolation_root)
+    if readiness_errs:
+        _emit_err({"error": "mutation readiness check failed", "details": readiness_errs})
+        return 1
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = _confirm_claimed_preview(
+            cli, db, d, path, pv, snap, rid, version, expires,
+            lambda: _claim_personal(d, path, scope, consent, pv))
+    out = buf.getvalue()
+    if rc != 0:
+        sys.stdout.write(out)
+        return rc
+    # rc == 0: the preview is already marked consumed (no replay possible). The helper
+    # output must be a genuine confirmed readback; anything else is an uncertain
+    # outcome that is reported, never papered over with a synthetic success.
+    try:
+        res = json.loads(out)
+    except ValueError:
+        res = None
+    if (not isinstance(res, dict) or res.get("ok") is not True
+            or res.get("state") != "confirmed" or res.get("client_record_id") != rid
+            or res.get("client_record_version") != version):
+        _emit_err({"error": "uncertain outcome: confirm helper returned an invalid success "
+                            "result; read the record back (status) before any further action",
+                   "preview_id": pv["preview_id"], "client_record_id": rid,
+                   "preview_state": "consumed (no replay)"})
+        return 1
+    res["action"] = "personal-confirm"
+    res["provenance_level"] = _PERSONAL_PROVENANCE
+    res["personal_consent"] = {
+        "scope": scope, "preview_id": pv["preview_id"],
+        "raw_text": raw, "file_sha256": sha,
+        "note": "agent-attested from conversation; no Telegram linkage; "
+                "no author identity is claimed",
+    }
+    print(json.dumps(res, indent=2, ensure_ascii=False))
+    return 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -1999,6 +2589,32 @@ def build_parser() -> argparse.ArgumentParser:
                       help="0600 JSON of the raw user reply: sender_id, chat_id, "
                            "thread_id, message_id, timestamp, reply_to_message_id, text")
 
+    # personal-preview / personal-confirm (agent-attested personal-chat scope)
+    def _personal_flags(sp):
+        sp.add_argument("--scope", required=True, metavar="LABEL",
+                        help="Opaque stable label of ONE personal (one-to-one) chat")
+        sp.add_argument("--attest-personal-chat", action="store_true",
+                        help="Declare the scope is a private one-to-one chat")
+
+    p_pp = sub.add_parser("personal-preview",
+                          help="Store the one active personal-chat preview (before display)")
+    _personal_flags(p_pp)
+    p_pp.add_argument("--id", required=True, metavar="ID", help="draft client_record_id")
+    p_pp.add_argument("--confirmer", required=True, metavar="NAME")
+    p_pp.add_argument("--expected-version", required=True, type=int, metavar="N")
+    p_pp.add_argument("--expected-snapshot-hash", required=True, metavar="SHA256")
+    p_pp.add_argument("--notes-file", default=None, metavar="PATH",
+                      help="Optional 0600 file with ONE short line of assumptions "
+                           "(max 240 chars, rejected if longer); the wrapper composes "
+                           "name/macros/notes/Berlin time and returns ONE display_text")
+    p_pp.add_argument("--ttl-seconds", type=int, default=_PREVIEW_DEFAULT_TTL, metavar="N")
+
+    p_pc = sub.add_parser("personal-confirm",
+                          help="Confirm the scope's active preview from the raw bare reply")
+    _personal_flags(p_pc)
+    p_pc.add_argument("--consent-file", required=True, metavar="PATH",
+                      help="0600 file with the user's raw reply text (e.g. 'Да')")
+
     # status
     p_s = sub.add_parser("status", help="Show entry status (readonly)")
     p_s.add_argument("id", nargs="?", default=None, metavar="ID",
@@ -2013,7 +2629,9 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     dispatch = {"draft": cmd_draft, "confirm": cmd_confirm, "preview": cmd_preview,
-                "short-confirm": cmd_short_confirm, "status": cmd_status}
+                "short-confirm": cmd_short_confirm, "status": cmd_status,
+                "personal-preview": cmd_personal_preview,
+                "personal-confirm": cmd_personal_confirm}
     fn = dispatch.get(args.command)
     if fn is None:
         parser.print_help()
