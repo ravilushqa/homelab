@@ -1,6 +1,6 @@
 services:
   free-games-claimer:
-    image: ghcr.io/p-adamiec/free-games-claimer-remaster:v1.11
+    image: ghcr.io/p-adamiec/free-games-claimer-remaster:v1.16
     container_name: fgc-remaster
     restart: unless-stopped
     tty: true
