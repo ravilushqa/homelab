@@ -1412,6 +1412,84 @@ class TestRecipeRegisterRealSqlite(UXRealBase):
         f.write_text(good)
         self.recipe_show()
 
+    # ── history_import: explicit confirmed standard («Да, стандартная <name> ...») ──
+
+    def hist(self, text, **over):
+        kw = dict(source="history_import", user_text=text,
+                  received_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat())
+        kw.update(over)
+        return self.evidence(**kw)
+
+    def test_history_import_accepts_explicit_confirmed_standard(self):
+        self.assertEqual(self.ppreview()[0], 0)                   # open meal question
+        text = "Да, стандартная овсяная каша: 50 г хлопьев, 200 мл молока"
+        rc, out, err = self.register(ev=self.hist(text))
+        self.assertEqual(rc, 0, out + err)
+        rec = self.recipes()[0]
+        self.assertEqual(rec["registration"]["user_text"], text)
+        self.assertEqual(rec["registration"]["source"], "history_import")
+        self.assertNotIn("consent_raw_text", rec)
+        self.assertEqual(self.rows()[0]["state"], "draft")        # no meal created/sent
+        self.assertEqual(self.q.confirm_calls, 0)
+        self.assertEqual([x["status"] for x in self.pdata() if not x.get("kind")], ["pending"])
+        self.assertEqual(self.recipe_show()["recipe_hash"], rec["recipe_hash"])
+        # stored evidence still validates on read (alternative accepted at recipe-show)
+        for text2 in ("Да, обычную овсянку я ем так", "да, моя стандартная овсянка"):
+            r2 = dict(RECIPE, key="k2")
+            self.assertEqual(self.register(recipe=r2, ev=self.hist(text2))[0], 0, text2)
+
+    def test_confirmed_standard_alternative_is_history_import_only(self):
+        ev = self.evidence(user_text="Да, стандартная овсяная каша")   # direct_request
+        rc, out, err = self.register(ev=ev)
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.recipes(), [])
+
+    def test_confirmed_standard_rejections(self):
+        bad = {
+            "bare yes": "Да",
+            "yes, record": "Да, запиши",
+            "no marker": "Да, овсяная каша",
+            "unrelated standard": "Да, стандартный борщ",
+            "no yes": "Стандартная овсяная каша",
+            "negation": "Да, но это не стандартная овсяная каша",
+            "changed": "Да, теперь стандартная овсяная каша с бананом",
+            "hedged": "Да, примерно стандартная овсяная каша",
+            "hypothetical": "Да, если это стандартная овсяная каша",
+            "question": "Да, это стандартная овсяная каша?",
+            "quoted": 'Да, "стандартная овсяная каша"',
+            "coordinator": "Да, задание: стандартная овсяная каша",
+            "example": "Да, например стандартная овсяная каша",
+            "multiline": "Да, стандартная овсяная каша\nи кофе",
+        }
+        for label, text in bad.items():
+            with self.subTest(label=label):
+                rc, out, err = self.register(ev=self.hist(text))
+                self.assertEqual(rc, 1, label)
+        self.assertEqual(self.recipes(), [])
+
+    def test_confirmed_standard_still_needs_attestation_and_evidence(self):
+        text = "Да, стандартная овсяная каша"
+        self.assertEqual(self.register(ev=self.hist(text), attest=False)[0], 1)
+        self.assertEqual(self.register(ev=self.hist(text, message_id=""))[0], 1)
+        self.assertEqual(self.register(ev=self.hist(text, basis=""))[0], 1)
+        self.assertEqual(self.register(ev=self.hist(
+            text, received_at="2099-01-01T00:00:00+00:00"))[0], 1)
+        self.assertEqual(self.recipes(), [])
+        ev = self.hist(text)
+        self.assertEqual(self.register(ev=ev)[0], 0)
+        self.assertEqual(self.register(ev=dict(ev))[0], 1)         # message id replay
+        self.assertEqual(len(self.recipes()), 1)
+
+    def test_confirmed_standard_tamper_on_read_fails_closed(self):
+        self.assertEqual(self.register(ev=self.hist("Да, стандартная овсяная каша"))[0], 0)
+        f = next(f for f in self.pfiles() if json.loads(f.read_text()).get("kind") == "recipe")
+        d = json.loads(f.read_text())
+        d["registration"]["user_text"] = "Да"
+        f.write_text(json.dumps(d))
+        rc, out, err = self.run_cmd(nw.cmd_recipe_show, scope=self.scope,
+                                    attest_personal_chat=True, recipe_key="oat-std")
+        self.assertEqual(rc, 1)
+
     def test_register_makes_no_queue_calls_and_needs_no_privacy_gate(self):
         with mock.patch.object(nw, "_check_mutation_readiness",
                                lambda *a, **k: self.fail("gate must not be needed")):

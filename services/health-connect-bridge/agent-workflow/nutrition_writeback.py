@@ -2915,7 +2915,9 @@ def _recipe_record_errors(rec: dict, scope: str) -> list:
         reg = rec.get("registration")
         if isinstance(reg, dict):
             if (set(reg) != _REGISTRATION_FIELDS or not isinstance(reg.get("user_text"), str)
-                    or _save_request_errors(reg["user_text"])
+                    or _registration_text_errors(
+                        reg.get("source"), reg["user_text"],
+                        r.get("aliases") if isinstance(r.get("aliases"), list) else [])
                     or not isinstance(rec.get("registration_evidence_key"), str)
                     or not _hex64(rec["registration_evidence_key"][-64:])):
                 errs.append("recipe registration evidence malformed")
@@ -3393,6 +3395,53 @@ def _save_request_errors(text) -> list:
     return []
 
 
+_STANDARD_MARKER_RE = _words_re([r"стандарт\w*", r"обычн\w*", r"дефолтн\w*", r"по умолчанию"])
+_YES_START_RE = re.compile(rf"^да(?![{_LW}])")
+_CHANGE_RE = _words_re([r"но", r"а", r"вместо", r"теперь", r"изменил\w*", r"поменял\w*", r"друг\w*",
+                        r"нов\w*", r"или", r"примерно", r"около", r"приблизительно", r"без",
+                        r"больше", r"меньше", r"еще", r"иногда", r"обычно"])
+
+
+def _confirmed_standard_errors(text, aliases) -> list:
+    """history_import ONLY: is this verbatim user text an explicit affirmative
+    confirmation of THIS recipe as the user's standard («Да, стандартная <name> ...»)?
+    Conservative; a bare yes, an unrelated standard, a changed/hedged assertion, a
+    question, a quote or an example/assignment is refused. Returns reasons."""
+    if not isinstance(text, str):
+        return ["user_text is not text"]
+    t = text.strip()
+    if not t or len(t) > _SAVE_TEXT_MAX_CHARS:
+        return [f"user_text empty or longer than {_SAVE_TEXT_MAX_CHARS} chars"]
+    if "\n" in t or "\r" in t or any(ord(c) < 32 or ord(c) == 0x7f for c in t):
+        return ["user_text must be a single line"]
+    if any(c in _REQ_BAD_CHARS for c in t):
+        return ["user_text contains a question mark, quotes or brackets"]
+    norm = " " + _norm_text(t) + " "
+    if not _YES_START_RE.match(norm.strip()):
+        return ["user_text is not an explicit affirmative («Да, ...») confirmation"]
+    for rx, reason in ((_REQ_CHECKS[0][0], "user_text contains a negation"),
+                       (_SAVE_HYPO_RE, "user_text is hypothetical"),
+                       (_CHANGE_RE, "user_text changes or hedges the recipe"),
+                       (_REQ_CHECKS[2][0], "user_text looks like an example/assignment")):
+        if rx.search(norm):
+            return [reason]
+    if not _STANDARD_MARKER_RE.search(norm):
+        return ["user_text does not call the recipe the user's standard/default"]
+    if not any(re.search(rf"(?<![{_LW}]){re.escape(a)}(?![{_LW}])", norm) for a in aliases):
+        return ["user_text does not name this recipe"]
+    return []
+
+
+def _registration_text_errors(source, text, aliases) -> list:
+    """direct_request: explicit save intent. history_import: save intent OR an
+    explicit confirmed-standard reply for this recipe."""
+    errs = _save_request_errors(text)
+    if errs and source == "history_import":
+        if not _confirmed_standard_errors(text, aliases):
+            return []
+    return errs
+
+
 def cmd_recipe_register(args: argparse.Namespace) -> int:
     """Register an already user-confirmed recipe from audited evidence (no new yes)."""
     import hashlib
@@ -3451,7 +3500,7 @@ def cmd_recipe_register(args: argparse.Namespace) -> int:
             _emit_err({"error": "direct_request evidence is not fresh; a saved recipe from an "
                                 "older message must use source history_import"})
             return 1
-    reasons = _save_request_errors(ev["user_text"])
+    reasons = _registration_text_errors(ev["source"], ev["user_text"], canon["aliases"])
     if reasons:
         _emit_err({"error": "evidence is not a clear user request to save the recipe; "
                             "use recipe-preview and ask the user", "reasons": reasons})

@@ -547,6 +547,16 @@ with quantities, `per_portion` four macros, `macro_basis: "label"`). `evidence.j
  "basis": "<short note: where the label values came from, e.g. private saved label photos>"}
 ```
 
+For `source: history_import` ONLY, an explicit confirmed-standard reply is accepted
+instead of a save verb: a verbatim single-line, non-quoted, non-negated, non-hypothetical
+text that starts with «Да», calls the recipe the user's standard/default (стандартн…,
+обычн…, по умолчанию) and names THIS recipe (its name or a listed alias), e.g.
+«Да, стандартная <name>, <quantities>». A bare «Да», an unrelated standard, a changed or
+hedged assertion («теперь», «но», «примерно», «без», …), a question, a quote or
+example/assignment wording is refused. `direct_request` always needs explicit save intent;
+there is no blanket yes authorization, and `--attest-user-confirmed-recipe` plus the
+real ids/time/basis stay mandatory.
+
 Checks: the recipe passes the same canonical validation as `recipe-preview` (estimated or
 unlabeled recipes are refused → log such meals through `personal-preview`); `user_text`
 must contain an explicit save verb (запомни / сохрани / зафиксируй …) and be free of
