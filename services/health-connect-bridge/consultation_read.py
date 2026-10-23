@@ -96,6 +96,11 @@ _NOTICES = [
         "Only 'confirmed' entries are queued for phone delivery."
     ),
     (
+        "queue_day_report lists pending (draft, confirmed), done (acked) and excluded "
+        "(cancelled, unknown state, unusable time) queue records with reasons. It has no "
+        "totals; drafts are never part of a day's intake."
+    ),
+    (
         "Records with source_key containing _no_metadata:true cannot be attributed "
         "to any specific device or application."
     ),
@@ -946,6 +951,112 @@ def _query_queue_for_day(
     return by_state
 
 
+# ── Day report: pending / done / excluded with reasons ────────────────────────
+
+# Canonical user-facing status texts. MUST stay identical to the agent wrapper
+# (agent-workflow/nutrition_writeback.py _STATUS_TEXT etc.); a test checks this.
+_STATUS_TEXT = {
+    "draft": "Черновик — ждёт подтверждения",
+    "confirmed": "Принято — ожидает синхронизации",
+    "acked": "Телефон подтвердил запись в Health Connect",
+}
+_NOT_WRITTEN_TEXT = "Не записано: {reason}"
+_UNKNOWN_STATUS_TEXT = "Статус неизвестен — не считать записанным"
+_CANCELLED_REASON = "отменено"
+_CANCELLED_DELIVERY_POSSIBLE_TEXT = ("Отменено, но телефон уже мог получить запись — "
+                                     "проверьте Health Connect на телефоне")
+_QUEUE_REPORT_SCAN_LIMIT = 1000
+
+
+def _user_status_text(state: Any, delivery_possible: Any) -> dict:
+    """Canonical status; unknown state fails closed (no delivery claim)."""
+    dp = not (delivery_possible is False
+              or (type(delivery_possible) is int and delivery_possible == 0))
+    if isinstance(state, str) and state in _STATUS_TEXT:
+        return {"code": state, "text": _STATUS_TEXT[state], "known": True}
+    if state == "cancelled":
+        if dp:
+            return {"code": "cancelled_delivery_possible",
+                    "text": _CANCELLED_DELIVERY_POSSIBLE_TEXT, "known": True}
+        return {"code": "cancelled", "known": True,
+                "text": _NOT_WRITTEN_TEXT.format(reason=_CANCELLED_REASON)}
+    return {"code": "unknown", "text": _UNKNOWN_STATUS_TEXT, "known": False}
+
+
+def _queue_day_report(conn: sqlite3.Connection, date_str: str) -> dict:
+    """
+    Bounded, read-only day report of nutrition_queue rows (Europe/Berlin day).
+
+    pending  = draft (unapproved) + confirmed (waiting for phone sync/ACK)
+    done     = acked (phone-reported)
+    excluded = cancelled, unknown state, or unusable/naive start_time (day unknown),
+               each with a reason.
+    Only timezone-aware start_time values are placed on a day (naive values are
+    excluded, never interpreted in the host timezone). No totals are produced:
+    drafts are never intake, and queue rows are never summed with ingest.
+    """
+    start_s, end_s = _day_utc_epoch_bounds(date_str)
+    rows = conn.execute(
+        "SELECT * FROM nutrition_queue ORDER BY id DESC LIMIT ?",
+        (_QUEUE_REPORT_SCAN_LIMIT + 1,),
+    ).fetchall()
+    truncated = len(rows) > _QUEUE_REPORT_SCAN_LIMIT
+    rows = rows[:_QUEUE_REPORT_SCAN_LIMIT]
+    pending: list = []
+    done: list = []
+    excluded: list = []
+    for row in rows:
+        status = _user_status_text(row["state"], row["delivery_possible"])
+        base = {
+            "client_record_id": row["client_record_id"],
+            "client_record_version": row["client_record_version"],
+            "state": row["state"],
+            "name": row["name"],
+            "start_time": row["start_time"],
+            "user_status": status,
+        }
+        raw_start = row["start_time"]
+        epoch, err = (_iso_to_epoch_strict(raw_start) if isinstance(raw_start, str)
+                      else (None, "start_time is not text"))
+        if err:
+            excluded.append(dict(base, day_known=False,
+                                 reason=f"unusable start_time: {err}"))
+            continue
+        if not (start_s <= epoch < end_s):
+            continue
+        item = dict(base, **{f: row[f] for f in
+                             ("energy_kcal", "protein_g", "carbohydrate_g", "fat_g")})
+        state = row["state"]
+        if state == "draft":
+            pending.append(dict(item, reason="draft: unapproved, not in any intake"))
+        elif state == "confirmed":
+            pending.append(dict(item, reason="confirmed: waiting for phone sync/ACK"))
+        elif state == "acked":
+            done.append(item)
+        elif state == "cancelled":
+            excluded.append(dict(item, day_known=True, reason="cancelled" + (
+                "; phone may have fetched it before cancellation"
+                if status["code"] == "cancelled_delivery_possible" else "")))
+        else:
+            excluded.append(dict(item, day_known=True, reason="unknown state"))
+    return {
+        "date": date_str,
+        "timezone": _BERLIN_TZ_NAME,
+        "scan_limit": _QUEUE_REPORT_SCAN_LIMIT,
+        "scanned": len(rows),
+        "possibly_incomplete": truncated,
+        "counts": {"pending": len(pending), "done": len(done), "excluded": len(excluded)},
+        "pending": pending,
+        "done": done,
+        "excluded": excluded,
+        "totals": None,
+        "note": (
+            "Queue records only; never sum with date_nutrition_ingest. Drafts and "
+            "other non-acked records are not part of any daily intake."
+        ),
+    }
+
+
 # ── Run ────────────────────────────────────────────────────────────────────────
 
 def run(
@@ -978,6 +1089,7 @@ def run(
     date_nutrition_ingest: list = []
     date_exercise: list = []
     queue_by_state: dict = {}
+    queue_day_report: Optional[dict] = None
 
     # Keep health_conn open through the nutrition query so the correlation
     # function can search health_records by expl_id.  Both connections are
@@ -1009,6 +1121,7 @@ def run(
             queue_by_state = _query_queue_for_day(
                 nutrition_conn, date_str, health_conn
             )
+            queue_day_report = _queue_day_report(nutrition_conn, date_str)
         except FileNotFoundError as exc:
             errors["nutrition_db"] = {"error": "not_found", "detail": str(exc)}
         except RuntimeError as exc:
@@ -1034,6 +1147,7 @@ def run(
         "date_nutrition_ingest": date_nutrition_ingest,
         "date_exercise": date_exercise,
         "queue_by_state": queue_by_state,
+        "queue_day_report": queue_day_report,
     }
 
     if errors:

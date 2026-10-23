@@ -17,6 +17,7 @@ in read-only mode and emits a JSON summary:
 | `date_nutrition_ingest` | `health.sqlite3` | Raw nutrition records received from Health Connect for the query date |
 | `date_exercise` | `health.sqlite3` | Raw exercise records received for the query date |
 | `queue_by_state` | `nutrition.sqlite3` | AI-estimated meal entries grouped by state; each entry includes a `correlation` field |
+| `queue_day_report` | `nutrition.sqlite3` | Pending / done / excluded queue records of the day with reasons and canonical `user_status`; no totals |
 
 **Ingest and queue are never summed.**  Records in `date_nutrition_ingest`
 were already read from Health Connect.  Records in `queue_by_state` represent
@@ -384,13 +385,17 @@ are just not the default personal flow. Group/platform channels must not use thi
    field (older personal previews) keep the previous text and validation unchanged, so
    they stay confirmable without re-consent; unknown or tampered formats fail closed.
    The saved snapshot (incl. description), its hash, version, notes, display text and
-   display hash, scope and a finite expiry (default
-   15 min, max 60 min) live in `personal-previews/` (0700 dir, 0600 files, flock, atomic
+   display hash, scope and a stored `expires_at` (default 15 min, max 60 min; kept for
+   audit and structure validation, see *Late consent* below) live in
+   `personal-previews/` (0700 dir, 0600 files, flock, atomic
    writes, no symlinks). A friendlier rounded rendering may be added by the agent
    outside `display_text`, but consent only covers the returned exact values.
 2. **One slot per scope.** A new preview in the same scope marks the older pending
-   one `superseded` (its draft is not touched) and needs fresh consent. Expired
-   previews are marked `expired`. Several active previews in one scope (store
+   one `superseded` (its draft is not touched) and needs fresh consent — whether or
+   not the older one is past its stored `expires_at`. The slot is shared with recipe
+   previews and is closed by a `personal-log-known` fast log (see below): at most one
+   yes/no question is open per scope. Previews an older wrapper already marked
+   `expired` stay unconfirmable. Several active previews in one scope (store
    corruption) fail closed for both commands. Other scopes are never affected.
 3. **Bare yes.** When the user replies, the agent decides from the conversation
    whether the message is an unambiguous yes to *that* shown preview. If ambiguous
@@ -426,6 +431,166 @@ are just not the default personal flow. Group/platform channels must not use thi
    wrapper invents no user timestamp, author or message ID (`claimed_at` is the
    wrapper's own clock; the claimed consent file is tracked as an internal
    `consent_file_key`, not a Telegram id).
+7. **Late consent (no time-only expiry).** A personal preview is no longer rejected
+   *only* because its stored `expires_at` has passed. `personal-confirm` accepts a late
+   bare yes only if **all** of these still hold: the preview is the scope's single
+   `pending` question (never superseded, revoked, consuming, consumed); same scope and
+   `--attest-personal-chat`; same record id, version, full snapshot hash (name, times,
+   four macros, description), display text and display hash (re-validated); the
+   consent file is a fresh 0600 file whose real mtime is after the preview was created
+   and that was never used for anything in the store; privacy/token/receiver gates
+   pass; the queue confirm passes version + `--expected-snapshot-hash` CAS and the
+   post-confirm readback. The preview is never renewed or recreated: `expires_at` and
+   `created_at` stay untouched, and the record gains `late_consent` (bool) and
+   `original_expires_at`; both are echoed under `personal_consent`. Any change to the
+   meal still needs a fresh preview and a new actual yes. The receipt-bound
+   `preview`/`short-confirm` expiry is **unchanged** (still enforced).
+
+#### User-facing statuses (canonical)
+
+Every `status` readback (single id and list), `personal-confirm` /
+`personal-log-known` result and both day reports carry `user_status`
+`{code, text, known}`. Use exactly these texts:
+
+| Queue state | `text` |
+| --- | --- |
+| `draft` | Черновик — ждёт подтверждения |
+| `confirmed` | Принято — ожидает синхронизации |
+| `acked` | Телефон подтвердил запись в Health Connect |
+| `cancelled` (never fetched) | Не записано: отменено |
+| `cancelled` after a possible phone fetch | Отменено, но телефон уже мог получить запись — проверьте Health Connect на телефоне |
+| failed command | Не записано: `<reason>` |
+| any other / malformed state | Статус неизвестен — не считать записанным (`known: false`) |
+
+`status <id>` exits 1 for an unknown state. Failures of `personal-confirm` /
+`personal-log-known` get `user_status` on their JSON error line: `failed`
+("Не записано: …") when nothing was written, `replay` ("Повтор — ничего нового не
+записано…") for reused files/already-confirmed previews, and `unknown` whenever the
+queue *may* already hold the record (invalid helper output, failure after the confirm
+step, timeouts). A draft that was edited after a possible delivery adds the note that
+the previous version may already be on the phone and phone-side replacement is **not
+guaranteed** (the protocol's version handling on the phone is not verified here).
+
+#### Day report (read-only)
+
+`nutrition-writeback day-report [--date YYYY-MM-DD]` (default: today in
+Europe/Berlin) lists the queue rows whose `start_time` falls on that Berlin calendar
+day (DST-aware, half-open midnight-to-midnight): `pending` (draft = unapproved,
+confirmed = waiting for phone sync/ACK), `done` (acked) and `excluded` (cancelled —
+with a "phone may have fetched it" note when applicable — unknown state, unusable or
+timezone-less `start_time` with `day_known: false`), each with a `reason` and
+`user_status`. It has **no totals** (`"totals": null`): drafts are never intake, and
+queue rows are never summed with ingest. It reads the queue CLI's bounded list (the
+CLI's most recent 200 rows) and sets `possibly_incomplete` when the queue holds more.
+`consultation_read.py` adds the same classification as `queue_day_report` (own read-only
+connection, newest 1000 rows, `possibly_incomplete` flag); `queue_by_state` and
+`date_nutrition_ingest` are unchanged and still separate.
+
+#### Known-recipe registry (`recipe-preview` / `recipe-confirm` / `recipe-show`)
+
+A known recipe is a user-confirmed, immutable template in the personal scope, stored
+in the same private `personal-previews/` store as `kind: "recipe"` records:
+
+1. The agent writes a 0600 JSON file and runs `recipe-preview --scope LABEL
+   --attest-personal-chat --recipe-file PATH`:
+   `{"key": "oat-std", "name": "...", "aliases": ["..."], "ingredients": [{"item":
+   "...", "quantity": "50 г"}], "per_portion": {"energy_kcal": N, "protein_g": N,
+   "carbohydrate_g": N, "fat_g": N}, "macro_basis": "label"}`. Exactly these fields;
+   every quantity contains a number; macros within the queue bounds and plausible
+   (energy within max(30 kcal, 25 %) of 4/4/9 kcal per g); `macro_basis` must be
+   `label` (no estimates); duplicate JSON keys/NaN rejected. Aliases are the words the
+   user uses for the meal (inflected forms must be listed explicitly, e.g. «овсянку»);
+   2-60 letters/digits, not filler/date/command words. The wrapper returns one
+   `display_text` (name, each ingredient with quantity, the four macros "по
+   этикеткам", "Сохранить рецепт?"); show exactly that.
+2. After the user's bare yes: `recipe-confirm --scope LABEL --attest-personal-chat
+   --consent-file PATH` (same bare-affirmative grammar, freshness and store-wide
+   single-use rules as `personal-confirm`). The recipe becomes `active` with an integer
+   `version` (monotonic per key) and `recipe_hash` (SHA-256 of the canonical recipe); a
+   previous active version of the key becomes `retired`. Changing a recipe = a new
+   version through the same two steps.
+3. **Saving a recipe never logs a meal**: no queue call is made (so the privacy gates
+   are not needed for these two commands). `recipe-show --scope LABEL
+   --attest-personal-chat --recipe-key KEY` is read-only and returns the active
+   recipe plus the exact `draft_template` (name, four macros, description
+   `Известный рецепт vN: <ingredients with quantities>`).
+
+#### Known-recipe text log fast path (`personal-log-known`)
+
+For a **personal chat only**, when the user's own direct text message asks to log a
+*known* recipe at a time they state explicitly, no preview and no extra yes are
+needed; the request itself is the consent. Every other case (photo, new or estimated
+meal, unknown recipe, assumed/approximate time, portions, corrections, mixed meals)
+uses `personal-preview` + a fresh yes. There is **no** "correction + записывай"
+shortcut.
+
+1. The agent writes the user's raw message to a fresh 0600 request file **when it
+   arrives**, then creates the draft with `draft` from `recipe-show`'s
+   `draft_template` plus `start_time` (the stated Berlin time as UTC/offset ISO) and
+   `end_time = start_time + 60 s`, then runs:
+
+   ```
+   nutrition-writeback <production privacy flags> personal-log-known \
+       --scope LABEL --attest-personal-chat --attest-direct-user-request \
+       --attest-user-time --request-file /PRIVATE/req.txt \
+       --time-evidence-file /PRIVATE/time.json \
+       --recipe-key KEY --recipe-version N --recipe-hash H \
+       --id ID --expected-version 1 --expected-snapshot-hash S --confirmer NAME
+   ```
+
+   `time.json` (0600) = `{"time_phrase": "<the user's words for the time, verbatim>",
+   "local_date": "YYYY-MM-DD", "local_time": "HH:MM"}` (Europe/Berlin). The flags are
+   internal wrapper arguments, never something the user types.
+2. The recognizer is a small whitelist, not NLP. Accepted: one line ≤ 300 chars that
+   **starts** with «запиши(те)», «залогируй(те)» or «добавь / внеси / занеси в
+   дневник (питания)» (optional leading «пожалуйста»), names the recipe (name or alias)
+   exactly once, contains exactly one explicit clock time («в 8:30», «8:30 вечера», «в 8
+   утра», «в 2 дня», «в 13») and at most one date («сегодня», «вчера», «позавчера»,
+   «12.10», «12 октября [2026]»; default = the Berlin day the request file was written),
+   and otherwise only filler words (мой/мою/обычную, на завтрак/обед/ужин/перекус, по
+   рецепту, в дневник, пожалуйста). Rejected (→ preview path): negations,
+   questions/«?», hypotheticals/conditionals («если», «можешь», «бы», «наверное»),
+   quotes/brackets/«>», example/assignment/test/«пользователь» wording, photos,
+   estimates/quantities/units, approximate or vague times («около», «утром», «часов
+   в», «в 8» without утра/вечера, «8.30»), more than one time or date, future dates,
+   dates older than 7 days, a meal time more than 1 h after the request, DST-ambiguous
+   or non-existent local times, corrections/portions/mixed meals («и», «с», «без»,
+   «половину», «вместо», «поправь», …), multi-line text, a message that only asks to
+   save a recipe. No mandatory user phrasing beyond a direct log instruction.
+3. The wrapper then requires: request file 0600, owned, no symlink/hardlink, ≤ 2 KiB,
+   real mtime within the last 30 min, never used before in the store (any kind/scope);
+   the recipe `active` in this scope with exactly `--recipe-version`/`--recipe-hash`;
+   the agent's time evidence equal to the wrapper's own resolution and its phrase a
+   verbatim part of the request; the live draft at `--expected-version 1` (a fresh,
+   never-edited draft), exact `--expected-snapshot-hash`, name/four macros/description
+   equal to the recipe, start = the stated time, end = start + 60 s, never fetched,
+   created no earlier than 2 min before the request file; no other confirmed/acked queue
+   row and no known-log record with the same recipe and start time (duplicate guard);
+   the draft not already bound to another request. Then the same privacy → token →
+   receiver gates, a claim under the store lock (re-checking replay, binding, duplicate
+   and the recipe record; closes any open preview question of the scope), and the queue
+   confirm with version + `--expected-snapshot-hash` CAS and readback.
+4. Result: compact `ack_text` (`<name> — <Berlin time>` + the canonical status, e.g.
+   «Принято — ожидает синхронизации»), `user_status`, and a `known_log` audit (raw
+   request text, file SHA-256, recipe key/version/hash, time phrase/date/time;
+   `provenance_level: agent_conversation_attested`). A known-log record is `consuming`
+   → `consumed`; a refused queue confirm on a verifiably untouched draft → `failed`
+   (the request file stays used; a new request or the preview path is required); any
+   uncertain outcome stays `consuming` and is reported as unknown status.
+5. **Corrections** go through the existing queue `edit` of the **same** record (new
+   version, back to `draft`, same row), then `personal-preview` + a fresh actual yes.
+   The fast path refuses every version other than 1, so neither the old request nor a
+   new direct request can confirm a corrected version. If the record may already have
+   reached the phone, do not promise that the phone replaces it.
+
+**Trust boundary (fast path).** Like personal consent this is
+`agent_conversation_attested`: the wrapper cannot prove who wrote the request file,
+that it is the user's direct message, or that no photo was attached — the agent
+attests that with `--attest-direct-user-request` / `--attest-user-time`. What the
+wrapper does enforce is the whitelist grammar above, that the stated time is in the
+user's words and matches the draft exactly, that the draft is exactly the confirmed
+recipe, single use of each request file, one request → one record/version, and the
+same privacy gates and queue CAS as every other confirm.
 
 **Weaker provenance.** `provenance_level` is `agent_conversation_attested`: weaker
 than the receipt-bound `workflow_attested` path. Nothing links the consent file to a
@@ -436,8 +601,9 @@ as server-authenticated.
 
 **Queue vs ACK vs UI.** `personal-confirm` success only means *confirmed in the
 server queue*. The phone writes to Health Connect on its next sync; only an ACK from
-the phone means it was written. Say "отправлено в очередь Health Connect" after
-confirm; claim a client-confirmed write only after an ACK. Any UI/chat display is
+the phone means it was written. After confirm use the canonical `user_status.text`
+(«Принято — ожидает синхронизации»); claim a client-confirmed write («Телефон
+подтвердил запись в Health Connect») only after an ACK. Any UI/chat display is
 not evidence of either.
 
 Example (fake values): `personal-preview --scope personal-main --attest-personal-chat
@@ -446,7 +612,56 @@ Example (fake values): `personal-preview --scope personal-main --attest-personal
 personal-main --attest-personal-chat --consent-file /secure/dir/reply.txt`.
 
 Tests: `tests/test_personal_chat_consent.py` (fake queue and real SQLite + isolated
-CLI + multiprocess; synthetic fixtures, not a real user's consent).
+CLI + multiprocess; synthetic fixtures, not a real user's consent) and
+`tests/test_nutrition_consent_ux.py` (statuses, day reports, late consent, recipe
+registry, fast path: real SQLite + isolated CLI, multiprocess races, real
+`/usr/bin/python3 -I` wrapper processes for read-only commands; synthetic fixtures).
+
+Run (from `services/health-connect-bridge`, so `tests` is the import root; temp dirs
+are private 0700 dirs under `~/.hermes/profiles/health/cache/scratch`, no network,
+no production files):
+
+```bash
+cd services/health-connect-bridge
+/usr/bin/python3 -m unittest tests.test_nutrition_consent_ux tests.test_personal_chat_consent \
+    tests.test_short_preview_consent tests.test_short_consent_sqlite \
+    tests.test_skill_isolation_root tests.test_consultation_read
+```
+
+#### Installation file set (consent UX; not performed here)
+
+Only two files change; `nutrition_queue.py` / `nutrition_cli.py` are unchanged and the
+installed CLI already supports `confirm --expected-snapshot-hash`.
+
+| Source (repo) | Installed to |
+| --- | --- |
+| `services/health-connect-bridge/agent-workflow/nutrition_writeback.py` | `~/.hermes/profiles/health/workspace/health-connect-bridge/bin/nutrition-writeback` (0700) |
+| `services/health-connect-bridge/consultation_read.py` | `~/.hermes/profiles/health/scripts/consultation_read.py` (0700) |
+
+`services/health-connect-bridge/agent-workflow/consent-ux.sha256` holds the SHA-256 of
+both sources (`sha256sum -c` from the repo root). Verify the copies afterwards with
+`sha256sum` against the same values. The new stores reuse the existing private
+`personal-previews/` directory; existing pending/consumed records stay valid (meal
+previews have no `kind` field). The health skill text is **not** updated here; until it
+is, the agent will not use `recipe-*` / `personal-log-known` / `day-report`.
+
+#### Risks and limitations (consent UX)
+
+- Late consent removes the time limit for an unchanged, still-open personal preview:
+  a yes given long after the preview still confirms it if the agent attests it answers
+  that preview. Mitigation: one open question per scope, and any new preview, recipe
+  preview or fast log closes it.
+- The fast-path recognizer is intentionally narrow (Russian only, explicit
+  verb-first, whitelist leftovers) and rejects many harmless phrasings; those fall
+  back to the preview path. Aliases must be listed in every inflected form the user
+  uses. It is not language understanding and does not detect sarcasm or context.
+- Request/consent freshness and single use rely on local file metadata (mtime,
+  inode); anything able to write as this OS user can forge them
+  (`agent_conversation_attested`, no server authentication, no author identity).
+- The day report reads only the most recent rows the queue CLI lists (200) and flags
+  `possibly_incomplete`; it never computes totals.
+- Nothing here proves a phone write: `confirmed` is server-side only, `acked` is
+  phone-reported; phone-side replacement of corrected versions is not verified.
 
 ### Complete workflow: photo to Health Connect
 

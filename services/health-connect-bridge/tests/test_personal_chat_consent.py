@@ -226,21 +226,50 @@ class PersonalTests(PersonalMixin):
         st = {d["scope"]: d["status"] for d in self.pdata()}
         self.assertEqual(st, {"personal-a": "pending", "personal-b": "pending"})
 
-    def test_expiry(self):
+    def test_no_time_only_expiry_late_unchanged_consent_confirms_and_is_audited(self):
         self.assertEqual(self.ppreview(ttl=60)[0], 0)
-        self.now = T0 + timedelta(seconds=61)
-        self.assertNoMutation(self.pconfirm("Да"), "expired")
+        stored = self.pdata()[0]
+        self.now = T0 + timedelta(hours=6)  # long after the stored expires_at
+        rc, out, err = self.pconfirm("Да")
+        self.assertEqual(rc, 0, out + err)
+        res = json.loads(out)
+        self.assertIs(res["personal_consent"]["late_consent"], True)
+        self.assertEqual(res["personal_consent"]["original_expires_at"], stored["expires_at"])
+        rec = self.pdata()[0]
+        self.assertEqual(rec["status"], "consumed")
+        self.assertIs(rec["late_consent"], True)
+        self.assertEqual(rec["original_expires_at"], stored["expires_at"])
+        self.assertEqual(rec["expires_at"], stored["expires_at"])      # never renewed
+        self.assertEqual(rec["created_at"], stored["created_at"])
+        self.assertEqual(len(self.pfiles()), 1)                        # never recreated
+
+    def test_fresh_consent_is_not_flagged_late(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        rc, out, err = self.pconfirm("Да")
+        self.assertEqual(rc, 0, out + err)
+        self.assertIs(json.loads(out)["personal_consent"]["late_consent"], False)
+        self.assertIs(self.pdata()[0]["late_consent"], False)
 
     def test_ttl_bounds(self):
         self.assertNoMutation(self.ppreview(ttl=0), "ttl")
         self.assertNoMutation(self.ppreview(ttl=99999), "ttl")
 
-    def test_expired_preview_replaced_without_ambiguity(self):
+    def test_late_preview_is_superseded_not_expired_by_a_new_one(self):
         self.assertEqual(self.ppreview(ttl=60)[0], 0)
         self.now = T0 + timedelta(seconds=120)
         self.assertEqual(self.ppreview()[0], 0)
-        self.assertEqual(sorted(d["status"] for d in self.pdata()), ["expired", "pending"])
+        self.assertEqual(sorted(d["status"] for d in self.pdata()), ["pending", "superseded"])
         self.assertEqual(self.pconfirm("Да")[0], 0)
+
+    def test_previously_marked_expired_preview_stays_unconfirmable(self):
+        """Compat: a preview an older wrapper already moved to 'expired' never revives."""
+        self.assertEqual(self.ppreview(ttl=60)[0], 0)
+        f = self.pfiles()[0]
+        d = json.loads(f.read_text())
+        d["status"] = "expired"
+        f.write_text(json.dumps(d))
+        self.now = T0 + timedelta(hours=1)
+        self.assertNoMutation(self.pconfirm("Да"), "no active preview")
 
     # ── corrections / drift ──
     def test_correction_invalidates_old_snapshot(self):
