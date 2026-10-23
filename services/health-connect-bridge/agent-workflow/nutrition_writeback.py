@@ -37,6 +37,9 @@ Subcommands:
                 Personal-scope known-recipe registry: a user-confirmed recipe
                 (quantities + four label-based macros) is stored immutable
                 (version + hash). Saving a recipe never logs a meal.
+  recipe-register  Register an ALREADY user-confirmed recipe from private evidence of
+                the user's real explicit save request (current message or history);
+                no second yes, never logs a meal, does not touch the open question.
   personal-log-known  Personal-chat fast path for ONE fresh draft built from an
                 active known recipe at an unambiguous user-supplied time: binds the
                 user's raw direct request file (single-use) to the exact draft
@@ -2211,7 +2214,7 @@ def _used_consent_keys(d: Path) -> set:
     for _, data in _iter_previews(d):
         if data is None:
             continue
-        for k in ("consent_file_key", "request_file_key"):
+        for k in ("consent_file_key", "request_file_key", "registration_evidence_key"):
             if isinstance(data.get(k), str):
                 keys.add(data[k])
         used = data.get("used_consent_file_keys")
@@ -2699,6 +2702,47 @@ def _day_report(entries: list, date_str: str) -> dict:
             "totals": None, "note": _DAY_REPORT_NOTE}
 
 
+_DAY_REPORT_LIMIT = 200
+# Same selection as consultation_read._DAY_ROWS_SQL (a test keeps them identical).
+_DAY_ROWS_SQL = """
+SELECT * FROM nutrition_queue
+WHERE (
+    (start_time LIKE '%Z' OR start_time GLOB '*[+-][0-9][0-9]:[0-9][0-9]')
+    AND CAST(strftime('%s', start_time) AS INTEGER) >= ?
+    AND CAST(strftime('%s', start_time) AS INTEGER) < ?
+) OR (
+    NOT (start_time LIKE '%Z' OR start_time GLOB '*[+-][0-9][0-9]:[0-9][0-9]')
+    AND substr(start_time, 1, 10) = ?
+)
+ORDER BY CAST(strftime('%s', start_time) AS INTEGER), id
+LIMIT ?
+"""
+
+
+def _query_day_rows(db: Path, date_str: str) -> tuple:
+    """Rows of one Berlin day via a read-only (mode=ro, query_only) parameterised
+    query on the queue DB; the DB is never written or created. Returns
+    (rows, possibly_incomplete, error)."""
+    import sqlite3
+    errs = _check_regular_file_secure(db, "nutrition DB")
+    if errs:
+        return None, None, errs[0]
+    start, end = _berlin_day_bounds(date_str)
+    try:
+        conn = sqlite3.connect(db.absolute().as_uri() + "?mode=ro", uri=True, timeout=10)
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA query_only = ON")
+            rows = [dict(r) for r in conn.execute(
+                _DAY_ROWS_SQL, (int(start.timestamp()), int(end.timestamp()), date_str,
+                                _DAY_REPORT_LIMIT + 1)).fetchall()]
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None, None, "cannot read the nutrition queue database read-only"
+    return rows[:_DAY_REPORT_LIMIT], len(rows) > _DAY_REPORT_LIMIT, None
+
+
 def cmd_day_report(args: argparse.Namespace) -> int:
     cli, db, _ = _resolve(args)
     if cli is None:
@@ -2710,24 +2754,14 @@ def cmd_day_report(args: argparse.Namespace) -> int:
     except ValueError as exc:
         _emit_err({"error": str(exc)})
         return 1
-    rc, out, err = _run_cli(cli, db, ["status"])
-    if rc != 0:
-        sys.stderr.write(err if err else json.dumps({"error": "status failed"}) + "\n")
+    rows, incomplete, qerr = _query_day_rows(db, date_str)
+    if qerr:
+        _emit_err({"error": qerr})
         return 1
-    try:
-        parsed = json.loads(out)
-    except ValueError:
-        parsed = None
-    entries = parsed.get("entries") if isinstance(parsed, dict) else None
-    stats = parsed.get("stats") if isinstance(parsed, dict) else None
-    if not isinstance(entries, list) or not isinstance(stats, dict):
-        _emit_err({"error": "invalid JSON from CLI status"})
-        return 1
-    report = _day_report(entries, date_str)
-    total = sum(v for v in stats.values() if type(v) is int)
-    # Bounded: the queue CLI lists at most its own limit of most recent rows.
-    report["scanned"] = len(entries)
-    report["possibly_incomplete"] = total > len(entries)
+    report = _day_report(rows, date_str)
+    report["limit"] = _DAY_REPORT_LIMIT
+    report["returned"] = len(rows)
+    report["possibly_incomplete"] = incomplete
     print(json.dumps(report, indent=2, ensure_ascii=False))
     return 0
 
@@ -2877,6 +2911,16 @@ def _recipe_record_errors(rec: dict, scope: str) -> list:
     wall = rec.get("created_wall_ns")
     if isinstance(wall, bool) or not isinstance(wall, int) or wall <= 0:
         errs.append("recipe record has no workflow freshness marker")
+    if rec.get("status") == "active":
+        reg = rec.get("registration")
+        if isinstance(reg, dict):
+            if (set(reg) != _REGISTRATION_FIELDS or not isinstance(reg.get("user_text"), str)
+                    or _save_request_errors(reg["user_text"])
+                    or not isinstance(rec.get("registration_evidence_key"), str)
+                    or not _hex64(rec["registration_evidence_key"][-64:])):
+                errs.append("recipe registration evidence malformed")
+        elif not isinstance(rec.get("consent_file_key"), str):
+            errs.append("active recipe has neither user consent nor registration evidence")
     return errs
 
 
@@ -3122,6 +3166,7 @@ _REQUEST_MAX_BYTES = 2048
 _REQUEST_MAX_CHARS = 300
 _REQUEST_MAX_AGE_S = 1800
 _REQUEST_FUTURE_SKEW_S = 60
+_RECEIVED_TO_FILE_MAX_S = 600
 _DRAFT_BEFORE_REQUEST_SKEW_S = 120
 _MEAL_AFTER_REQUEST_MAX_S = 3600
 _MEAL_PAST_MAX_DAYS = 7
@@ -3297,6 +3342,174 @@ def _parse_log_request(raw: str, aliases, request_dt) -> tuple:
             "start_utc": start}, None
 
 
+# ── Recipe registration of an ALREADY user-confirmed recipe (recipe-register) ──
+#
+# When the user has already explicitly asked to save/remember a standard recipe
+# (a clear «запомни ...» message now, or an earlier explicit confirmation found in
+# the real conversation history), no second yes is requested. The agent hands the
+# wrapper the recipe plus private evidence of that real user message; the wrapper
+# validates the recipe (same canonical form as recipe-preview), checks the quoted
+# text is a clear, non-negated, non-hypothetical, non-quoted save request, stores
+# the recipe as a new immutable version and audits the evidence. This never logs a
+# meal and never touches the scope's open yes/no question. The evidence is
+# agent-attested (provenance agent_conversation_attested); the wrapper cannot
+# verify that session/message ids or text are real.
+
+_EVIDENCE_MAX_BYTES = 4096
+_SAVE_TEXT_MAX_CHARS = 600
+_EVIDENCE_SOURCES = ("direct_request", "history_import")
+_EVIDENCE_FIELDS = frozenset({"source", "session_id", "message_id", "user_text",
+                              "received_at", "basis"})
+_REGISTRATION_FIELDS = frozenset({"source", "session_id", "message_id", "user_text",
+                                  "received_at", "basis", "evidence_file_sha256"})
+_SAVE_VERB_RE = re.compile(rf"(?<![{_LW}])(?:запомни\w*|запомн\w*|сохрани\w*|сохранить|"
+                           rf"зафиксир\w*)(?![{_LW}])")
+_SAVE_HYPO_RE = _words_re([r"если", r"бы", r"б", r"мож\w*", r"смож\w*", r"мог\w*", r"наверн\w*",
+                           r"допустим", r"представ\w*", r"вдруг", r"ли", r"хоч\w*", r"хотел\w*",
+                           r"давай\w*", r"возможно", r"потом", r"позже"])
+
+
+def _save_request_errors(text) -> list:
+    """Is this verbatim user text a clear, direct request to save/remember a recipe?
+    Whitelist-style and conservative; returns reasons (empty = accepted)."""
+    if not isinstance(text, str):
+        return ["user_text is not text"]
+    t = text.strip()
+    if not t or len(t) > _SAVE_TEXT_MAX_CHARS:
+        return [f"user_text empty or longer than {_SAVE_TEXT_MAX_CHARS} chars"]
+    if "\n" in t or "\r" in t or any(ord(c) < 32 or ord(c) == 0x7f for c in t):
+        return ["user_text must be a single line"]
+    if any(c in _REQ_BAD_CHARS for c in t):
+        return ["user_text contains a question mark, quotes or brackets"]
+    norm = _norm_text(t)
+    if not _SAVE_VERB_RE.search(norm):
+        return ["user_text is not an explicit save request (запомни / сохрани ...)"]
+    for rx, reason in ((_REQ_CHECKS[0][0], "user_text contains a negation"),
+                       (_SAVE_HYPO_RE, "user_text is hypothetical, not a direct save request"),
+                       (_REQ_CHECKS[2][0], "user_text looks like an example/assignment, "
+                                           "not the user's own message")):
+        if rx.search(" " + norm + " "):
+            return [reason]
+    return []
+
+
+def cmd_recipe_register(args: argparse.Namespace) -> int:
+    """Register an already user-confirmed recipe from audited evidence (no new yes)."""
+    import hashlib
+    import secrets
+    import time
+    cli, db, isolation_root = _resolve(args)
+    if cli is None:
+        return 1
+    scope, serr = _personal_scope_args(args)
+    if serr:
+        _emit_err({"error": serr})
+        return 1
+    if not getattr(args, "attest_user_confirmed_recipe", False):
+        _emit_err({"error": "--attest-user-confirmed-recipe is required: declares the evidence "
+                            "is the user's real, explicit request to save THIS recipe (not an "
+                            "assignment, example or quoted text) and that the recipe values "
+                            "are the user's confirmed label values"})
+        return 1
+    raw, _, _, jerr = _load_private_json(args.recipe_file, "recipe file", _RECIPE_MAX_BYTES)
+    if jerr:
+        _emit_err({"error": jerr})
+        return 1
+    canon, cerr = _canonical_recipe(raw)
+    if cerr:
+        _emit_err({"error": "recipe rejected (estimated or unlabeled recipes cannot be "
+                            "registered; log such meals through personal-preview)",
+                   "reasons": [cerr]})
+        return 1
+    ev, ev_text, ev_st, everr = _load_private_json(args.evidence_file, "evidence file",
+                                                   _EVIDENCE_MAX_BYTES)
+    if everr:
+        _emit_err({"error": everr})
+        return 1
+    if not isinstance(ev, dict) or set(ev) != _EVIDENCE_FIELDS:
+        _emit_err({"error": f"evidence must have exactly the fields {sorted(_EVIDENCE_FIELDS)}"})
+        return 1
+    if ev["source"] not in _EVIDENCE_SOURCES:
+        _emit_err({"error": f"evidence source must be one of {list(_EVIDENCE_SOURCES)}"})
+        return 1
+    for f, n in (("session_id", 128), ("message_id", 128), ("basis", 300)):
+        e = _plain_text_error(ev[f], f"evidence {f}", n)
+        if e:
+            _emit_err({"error": e})
+            return 1
+    received, terr = _parse_ts(ev["received_at"], "evidence received_at")
+    if terr:
+        _emit_err({"error": terr})
+        return 1
+    now_s = time.time_ns() / 1e9
+    if received.timestamp() > now_s + _REQUEST_FUTURE_SKEW_S:
+        _emit_err({"error": "evidence received_at is in the future"})
+        return 1
+    if ev["source"] == "direct_request":
+        if now_s - received.timestamp() > _REQUEST_MAX_AGE_S or \
+                abs(now_s - ev_st.st_mtime_ns / 1e9) > _REQUEST_MAX_AGE_S:
+            _emit_err({"error": "direct_request evidence is not fresh; a saved recipe from an "
+                                "older message must use source history_import"})
+            return 1
+    reasons = _save_request_errors(ev["user_text"])
+    if reasons:
+        _emit_err({"error": "evidence is not a clear user request to save the recipe; "
+                            "use recipe-preview and ask the user", "reasons": reasons})
+        return 1
+    ev_key = "registrationevidence:" + _sha256_text(f"{ev['session_id']}\0{ev['message_id']}")
+    d, derrs = _personal_dir(isolation_root, create=True)
+    if derrs:
+        _emit_err({"error": "personal-preview store insecure", "details": derrs})
+        return 1
+    now = _now()
+    rec_id = secrets.token_hex(16)
+    with _PreviewLock(d):
+        serrs = _personal_store_errors(d)
+        if serrs:
+            _emit_err({"error": serrs[0]})
+            return 1
+        if ev_key in _used_consent_keys(d):
+            _emit_err({"error": "this evidence message was already used (replay rejected)"})
+            return 1
+        versions = [x["recipe"].get("version") for _, x in _scope_records(d, scope, _KIND_RECIPE)
+                    if isinstance(x.get("recipe"), dict) and x["recipe"].get("key") == canon["key"]]
+        recipe = dict(canon, version=max([v for v in versions if type(v) is int], default=0) + 1)
+        display = _recipe_display(recipe)
+        data = {
+            "schema": _PREVIEW_SCHEMA, "mode": _PERSONAL_MODE, "kind": _KIND_RECIPE,
+            "preview_id": rec_id, "status": "active", "scope": scope,
+            "personal_chat_attested": True, "recipe": recipe,
+            "recipe_hash": _snapshot_hash(recipe),
+            "display_text": display, "display_text_sha256": _sha256_text(display),
+            "created_at": now.isoformat(), "activated_at": now.isoformat(),
+            "created_wall_ns": time.time_ns(), "provenance_level": _PERSONAL_PROVENANCE,
+            "registration": {
+                "source": ev["source"], "session_id": ev["session_id"],
+                "message_id": ev["message_id"], "user_text": ev["user_text"],
+                "received_at": received.isoformat(), "basis": ev["basis"],
+                "evidence_file_sha256": hashlib.sha256(ev_text.encode("utf-8")).hexdigest(),
+            },
+            "registration_evidence_key": ev_key,
+        }
+        retired = 0
+        for p, other in _active_recipes(d, scope, canon["key"]):
+            other["status"] = "retired"
+            other["retired_by"] = rec_id
+            other["finished_at"] = now.isoformat()
+            _write_preview(p, other, exclusive=False)
+            retired += 1
+        _write_preview(d / f"preview-{rec_id}.json", data, exclusive=True)
+    print(json.dumps({
+        "ok": True, "action": "recipe-register", "scope": scope,
+        "recipe_key": recipe["key"], "recipe_version": recipe["version"],
+        "recipe_hash": data["recipe_hash"], "retired_versions": retired,
+        "evidence_source": ev["source"], "provenance_level": _PERSONAL_PROVENANCE,
+        "note": "Recipe saved from the user's already explicit request. Nothing was logged; "
+                "no meal was sent to the queue; no question was asked or closed.",
+    }, indent=2, ensure_ascii=False))
+    return 0
+
+
 def _known_log_records(d: Path, scope: str | None = None) -> list:
     return [(p, x) for p, x in _iter_previews(d)
             if x is not None and x.get("kind") == _KIND_KNOWN_LOG
@@ -3378,7 +3591,28 @@ def _personal_log_known_impl(args: argparse.Namespace) -> int:
     req_sha = _sha256_text(raw)
     req_key = "requestfile:" + _sha256_text(
         f"{st.st_dev}:{st.st_ino}:{st.st_mtime_ns}:{st.st_size}:{req_sha}")
-    request_dt = datetime.fromtimestamp(st.st_mtime_ns / 1e9, tz=timezone.utc)
+    # The file's mtime is ONLY a freshness check. The day a relative date ("сегодня")
+    # refers to comes from the received-at time the agent attests from the real
+    # conversation metadata; it is never derived from when the file was written.
+    request_dt, terr = _parse_ts(getattr(args, "request_received_at", None),
+                                 "--request-received-at")
+    if terr:
+        _emit_err({"error": terr + " (the time the user's message was actually received, "
+                                   "from conversation metadata; never invent it)"})
+        return 1
+    recv_age_s = now_ns / 1e9 - request_dt.timestamp()
+    file_lag_s = (st.st_mtime_ns - request_dt.timestamp() * 1e9) / 1e9
+    if recv_age_s < -_REQUEST_FUTURE_SKEW_S:
+        _emit_err({"error": "--request-received-at is in the future"})
+        return 1
+    if recv_age_s > _REQUEST_MAX_AGE_S:
+        _emit_err({"error": "--request-received-at is too old for the fast path "
+                            f"(more than {_REQUEST_MAX_AGE_S // 60} min); use a preview"})
+        return 1
+    if file_lag_s < -_REQUEST_FUTURE_SKEW_S or file_lag_s > _RECEIVED_TO_FILE_MAX_S:
+        _emit_err({"error": "--request-received-at is inconsistent with the request file "
+                            "(file must be written shortly after the message was received)"})
+        return 1
 
     d, derrs = _personal_dir(isolation_root, create=False)
     if derrs:
@@ -3508,6 +3742,7 @@ def _personal_log_known_impl(args: argparse.Namespace) -> int:
         "recipe_key": recipe["key"], "recipe_version": recipe["version"],
         "recipe_hash": rv["recipe_hash"],
         "request_raw_text": raw, "request_file_sha256": req_sha, "request_file_key": req_key,
+        "request_received_at": request_dt.isoformat(),
         "time_evidence": {"time_phrase": ev["time_phrase"], "local_date": info["local_date"],
                           "local_time": info["local_time"]},
         "confirmer": confirmer, "provenance_level": _PERSONAL_PROVENANCE,
@@ -3594,6 +3829,7 @@ def _personal_log_known_impl(args: argparse.Namespace) -> int:
             "log_id": log_id, "scope": scope, "recipe_key": recipe["key"],
             "recipe_version": recipe["version"], "recipe_hash": rv["recipe_hash"],
             "request_raw_text": raw, "request_file_sha256": req_sha,
+            "request_received_at": request_dt.isoformat(),
             "time_phrase": ev["time_phrase"], "local_date": info["local_date"],
             "local_time": info["local_time"],
             "note": "agent-attested direct user request; no Telegram linkage; "
@@ -3737,6 +3973,17 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Activate the pending recipe from the user's raw bare yes")
     _personal_flags(p_rc)
     p_rc.add_argument("--consent-file", required=True, metavar="PATH")
+    p_rg = sub.add_parser("recipe-register",
+                          help="Register an ALREADY user-confirmed recipe from audited "
+                               "evidence (no new yes; never logs a meal)")
+    _personal_flags(p_rg)
+    p_rg.add_argument("--attest-user-confirmed-recipe", action="store_true",
+                      help="Evidence is the user's real explicit request to save this recipe")
+    p_rg.add_argument("--recipe-file", required=True, metavar="PATH")
+    p_rg.add_argument("--evidence-file", required=True, metavar="PATH",
+                      help="0600 JSON: source (direct_request|history_import), session_id, "
+                           "message_id, user_text (verbatim), received_at (ISO with offset), "
+                           "basis")
     p_rs = sub.add_parser("recipe-show", help="Show an active known recipe (readonly)")
     _personal_flags(p_rs)
     p_rs.add_argument("--recipe-key", required=True, metavar="KEY")
@@ -3752,6 +3999,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="The meal time was stated by the user, not assumed")
     p_lk.add_argument("--request-file", required=True, metavar="PATH",
                       help="0600 file with the user's raw request text (single-use)")
+    p_lk.add_argument("--request-received-at", required=True, metavar="ISO8601",
+                      help="When the user's message was actually received (with UTC offset), "
+                           "from real conversation metadata; NOT the file write time")
     p_lk.add_argument("--time-evidence-file", required=True, metavar="PATH",
                       help="0600 JSON {time_phrase, local_date, local_time} (Europe/Berlin)")
     p_lk.add_argument("--recipe-key", required=True, metavar="KEY")
@@ -3786,7 +4036,7 @@ def main() -> None:
                 "personal-preview": cmd_personal_preview,
                 "personal-confirm": cmd_personal_confirm,
                 "recipe-preview": cmd_recipe_preview, "recipe-confirm": cmd_recipe_confirm,
-                "recipe-show": cmd_recipe_show,
+                "recipe-show": cmd_recipe_show, "recipe-register": cmd_recipe_register,
                 "personal-log-known": cmd_personal_log_known,
                 "day-report": cmd_day_report}
     fn = dispatch.get(args.command)

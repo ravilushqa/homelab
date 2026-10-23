@@ -29,6 +29,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -639,15 +640,25 @@ class TestInventoryAgeFields(unittest.TestCase):
         )
         conn = _open_ro(db_path)
         try:
-            inv = _build_inventory(conn)
+            # Freeze the module clock at the fixture's "today" (2026-10-11 12:00Z);
+            # production age semantics (now - timestamp) are unchanged.
+            frozen = datetime(2026, 10, 11, 12, 0, 0, tzinfo=timezone.utc)
+
+            class _FrozenDatetime(datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return frozen if tz is None else frozen.astimezone(tz)
+
+            with unittest.mock.patch.object(_mod, "datetime", _FrozenDatetime):
+                inv = _build_inventory(conn)
         finally:
             conn.close()
         self.assertEqual(len(inv), 1)
         entry = inv[0]
         record_age = entry["latest_record_age_hours"]
         transport_age = entry["transport_age_hours"]
+        self.assertEqual(transport_age, 4.0)
         self.assertIsNotNone(record_age)
-        self.assertIsNotNone(transport_age)
         # Record is from Jan 2026; today is Oct 2026 — must be much older than transport
         self.assertGreater(
             record_age, transport_age + 100,

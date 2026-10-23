@@ -965,7 +965,7 @@ _UNKNOWN_STATUS_TEXT = "Статус неизвестен — не считат�
 _CANCELLED_REASON = "отменено"
 _CANCELLED_DELIVERY_POSSIBLE_TEXT = ("Отменено, но телефон уже мог получить запись — "
                                      "проверьте Health Connect на телефоне")
-_QUEUE_REPORT_SCAN_LIMIT = 1000
+_QUEUE_REPORT_LIMIT = 200
 
 
 def _user_status_text(state: Any, delivery_possible: Any) -> dict:
@@ -983,25 +983,47 @@ def _user_status_text(state: Any, delivery_possible: Any) -> dict:
     return {"code": "unknown", "text": _UNKNOWN_STATUS_TEXT, "known": False}
 
 
+# Parameterised, read-only selection of the requested Berlin day. start_time is
+# text; timezone-aware values (Z or +/-HH:MM) are compared by epoch via strftime
+# (offsets honoured), anything else only if its literal date prefix is the
+# requested date (so a naive same-day value is reported as unusable, never
+# silently placed on a day). All other rows - including malformed rows of other
+# days - are never read into the report.
+_DAY_ROWS_SQL = """
+SELECT * FROM nutrition_queue
+WHERE (
+    (start_time LIKE '%Z' OR start_time GLOB '*[+-][0-9][0-9]:[0-9][0-9]')
+    AND CAST(strftime('%s', start_time) AS INTEGER) >= ?
+    AND CAST(strftime('%s', start_time) AS INTEGER) < ?
+) OR (
+    NOT (start_time LIKE '%Z' OR start_time GLOB '*[+-][0-9][0-9]:[0-9][0-9]')
+    AND substr(start_time, 1, 10) = ?
+)
+ORDER BY CAST(strftime('%s', start_time) AS INTEGER), id
+LIMIT ?
+"""
+
+
 def _queue_day_report(conn: sqlite3.Connection, date_str: str) -> dict:
     """
     Bounded, read-only day report of nutrition_queue rows (Europe/Berlin day).
 
+    Only the requested day's rows are selected (SQL, LIMIT+1), so an old day is
+    found regardless of how many newer rows exist; possibly_incomplete is exact.
+
     pending  = draft (unapproved) + confirmed (waiting for phone sync/ACK)
     done     = acked (phone-reported)
-    excluded = cancelled, unknown state, or unusable/naive start_time (day unknown),
-               each with a reason.
-    Only timezone-aware start_time values are placed on a day (naive values are
-    excluded, never interpreted in the host timezone). No totals are produced:
-    drafts are never intake, and queue rows are never summed with ingest.
+    excluded = cancelled, unknown state, or unusable (e.g. naive) start_time whose
+               literal date is the requested date (day_known False), with reasons.
+    No totals: drafts are never intake, and queue rows are never summed with ingest.
     """
     start_s, end_s = _day_utc_epoch_bounds(date_str)
     rows = conn.execute(
-        "SELECT * FROM nutrition_queue ORDER BY id DESC LIMIT ?",
-        (_QUEUE_REPORT_SCAN_LIMIT + 1,),
+        _DAY_ROWS_SQL,
+        (int(start_s), int(end_s), date_str, _QUEUE_REPORT_LIMIT + 1),
     ).fetchall()
-    truncated = len(rows) > _QUEUE_REPORT_SCAN_LIMIT
-    rows = rows[:_QUEUE_REPORT_SCAN_LIMIT]
+    truncated = len(rows) > _QUEUE_REPORT_LIMIT
+    rows = rows[:_QUEUE_REPORT_LIMIT]
     pending: list = []
     done: list = []
     excluded: list = []
@@ -1042,8 +1064,8 @@ def _queue_day_report(conn: sqlite3.Connection, date_str: str) -> dict:
     return {
         "date": date_str,
         "timezone": _BERLIN_TZ_NAME,
-        "scan_limit": _QUEUE_REPORT_SCAN_LIMIT,
-        "scanned": len(rows),
+        "limit": _QUEUE_REPORT_LIMIT,
+        "returned": len(rows),
         "possibly_incomplete": truncated,
         "counts": {"pending": len(pending), "done": len(done), "excluded": len(excluded)},
         "pending": pending,

@@ -480,11 +480,17 @@ confirmed = waiting for phone sync/ACK), `done` (acked) and `excluded` (cancelle
 with a "phone may have fetched it" note when applicable — unknown state, unusable or
 timezone-less `start_time` with `day_known: false`), each with a `reason` and
 `user_status`. It has **no totals** (`"totals": null`): drafts are never intake, and
-queue rows are never summed with ingest. It reads the queue CLI's bounded list (the
-CLI's most recent 200 rows) and sets `possibly_incomplete` when the queue holds more.
-`consultation_read.py` adds the same classification as `queue_day_report` (own read-only
-connection, newest 1000 rows, `possibly_incomplete` flag); `queue_by_state` and
-`date_nutrition_ingest` are unchanged and still separate.
+queue rows are never summed with ingest. It queries only the requested day with a
+parameterised SQL statement on a `mode=ro` + `PRAGMA query_only` connection (the DB
+is never written or created; no migration), `LIMIT 200+1`, so an old day is found
+however long the history is; `possibly_incomplete` is true only when the day itself
+has more than 200 rows (`limit`, `returned` are reported). Timezone-aware
+`start_time` values are placed by instant (offsets and fractions honoured); a value
+that is not timezone-aware is listed under `excluded` (`day_known: false`) only if its
+literal date prefix is the requested date; malformed rows of other days are not
+counted. `consultation_read.py` adds the same classification and SQL as
+`queue_day_report`; `queue_by_state` and `date_nutrition_ingest` are unchanged and
+still separate.
 
 #### Known-recipe registry (`recipe-preview` / `recipe-confirm` / `recipe-show`)
 
@@ -510,10 +516,57 @@ in the same private `personal-previews/` store as `kind: "recipe"` records:
    previous active version of the key becomes `retired`. Changing a recipe = a new
    version through the same two steps.
 3. **Saving a recipe never logs a meal**: no queue call is made (so the privacy gates
-   are not needed for these two commands). `recipe-show --scope LABEL
+   are not needed for these commands). `recipe-show --scope LABEL
    --attest-personal-chat --recipe-key KEY` is read-only and returns the active
    recipe plus the exact `draft_template` (name, four macros, description
    `Известный рецепт vN: <ingredients with quantities>`).
+
+##### `recipe-register`: an ALREADY user-confirmed recipe (no second yes)
+
+If the user has already explicitly asked to save/remember a standard recipe — a
+clear «запомни …» message now, or an earlier explicit confirmation found in the real
+conversation history — do **not** ask again and do not use `recipe-preview` (that would
+also take over the scope's open yes/no question). Use:
+
+```
+nutrition-writeback recipe-register --scope LABEL --attest-personal-chat \
+    --attest-user-confirmed-recipe --recipe-file /PRIVATE/recipe.json \
+    --evidence-file /PRIVATE/evidence.json
+```
+
+`recipe.json` is the same schema as `recipe-preview` (key, name, aliases, ingredients
+with quantities, `per_portion` four macros, `macro_basis: "label"`). `evidence.json`
+(0600, ≤ 4 KiB, exactly these keys, duplicate keys rejected):
+
+```
+{"source": "direct_request" | "history_import",
+ "session_id": "<real conversation/session id>",
+ "message_id": "<real id of the user's message>",
+ "user_text": "<the user's message, verbatim, one line, ≤ 600 chars>",
+ "received_at": "<ISO-8601 with UTC offset: when that message was received>",
+ "basis": "<short note: where the label values came from, e.g. private saved label photos>"}
+```
+
+Checks: the recipe passes the same canonical validation as `recipe-preview` (estimated or
+unlabeled recipes are refused → log such meals through `personal-preview`); `user_text`
+must contain an explicit save verb (запомни / сохрани / зафиксируй …) and be free of
+negation, questions, hypotheticals («можешь», «если», «бы», …), quotes/brackets and
+example/assignment wording («задание», «пользователь», «например», …); `received_at`
+is not in the future, and for `direct_request` the message and the evidence file are
+fresh (≤ 30 min) — an older message must be `history_import`; each (session_id,
+message_id) pair is single-use store-wide. On success a new immutable recipe version
+(integer `version`, `recipe_hash` over the full canonical recipe) becomes `active` and the
+previous version of the key is `retired`; the record keeps the evidence (source, ids,
+verbatim text, received_at, basis, SHA-256 of the evidence file) and no consent text — no
+yes is fabricated. It does not touch the queue, the privacy gates or any open preview
+question. The evidence is agent-attested (`agent_conversation_attested`): the wrapper
+cannot verify that the ids or text are real. The import route is for recipes the user
+really confirmed; never invent evidence or recipe values.
+
+Migration of an existing confirmed standard = one `recipe-register` per recipe key with
+`source: history_import`, the real prior message's ids/text/time and the private label
+evidence in `basis`; then `recipe-show --recipe-key KEY` to read `recipe_version` /
+`recipe_hash` for the fast path.
 
 #### Known-recipe text log fast path (`personal-log-known`)
 
@@ -533,10 +586,20 @@ shortcut.
    nutrition-writeback <production privacy flags> personal-log-known \
        --scope LABEL --attest-personal-chat --attest-direct-user-request \
        --attest-user-time --request-file /PRIVATE/req.txt \
+       --request-received-at 2026-10-14T11:58:03+02:00 \
        --time-evidence-file /PRIVATE/time.json \
        --recipe-key KEY --recipe-version N --recipe-hash H \
        --id ID --expected-version 1 --expected-snapshot-hash S --confirmer NAME
    ```
+
+   `--request-received-at` is the time the user's message was actually received, taken
+   from the real conversation metadata (never invented, never the file write time). It
+   decides which day «сегодня»/«вчера»/the default day mean, so a message received at
+   23:58 and written to the file at 00:01 is still «сегодня». It is required, must be
+   timezone-aware, not in the future, not older than 30 min, and consistent with the
+   request file (file written no earlier than 60 s before and no later than 10 min after
+   the receipt); the file's mtime is used only as a freshness check. The value is stored
+   in the audit record (`request_received_at`).
 
    `time.json` (0600) = `{"time_phrase": "<the user's words for the time, verbatim>",
    "local_date": "YYYY-MM-DD", "local_time": "HH:MM"}` (Europe/Berlin). The flags are
@@ -546,7 +609,7 @@ shortcut.
    дневник (питания)» (optional leading «пожалуйста»), names the recipe (name or alias)
    exactly once, contains exactly one explicit clock time («в 8:30», «8:30 вечера», «в 8
    утра», «в 2 дня», «в 13») and at most one date («сегодня», «вчера», «позавчера»,
-   «12.10», «12 октября [2026]»; default = the Berlin day the request file was written),
+   «12.10», «12 октября [2026]»; default = the Berlin day of `--request-received-at`),
    and otherwise only filler words (мой/мою/обычную, на завтрак/обед/ужин/перекус, по
    рецепту, в дневник, пожалуйста). Rejected (→ preview path): negations,
    questions/«?», hypotheticals/conditionals («если», «можешь», «бы», «наверное»),

@@ -309,9 +309,13 @@ class UXMixin(PersonalMixin):
 
     def log_known_args(self, request_text, phrase, local_date, local_time, recipe=None,
                        rid=None, version=1, shash=None, request_path=None, scope=None,
-                       attest_req=True, attest_time=True, evidence=None):
-        """All files are written HERE (in the parent), never inside spawned jobs."""
+                       attest_req=True, attest_time=True, evidence=None,
+                       received_at="DEFAULT"):
+        """All files are written HERE (in the parent), never inside spawned jobs.
+        received_at: "DEFAULT" = 20 s ago (real clock), None = omitted, else verbatim."""
         recipe = recipe or self.recipe_show()
+        if received_at == "DEFAULT":
+            received_at = (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat()
         self.tf_n += 1
         rp = request_path or self.private_file(f"req{self.tf_n}.txt", request_text)
         ev = self.private_file(f"ev{self.tf_n}.json", json.dumps(
@@ -322,7 +326,7 @@ class UXMixin(PersonalMixin):
         return dict(
             scope=scope or self.scope, attest_personal_chat=True,
             attest_direct_user_request=attest_req, attest_user_time=attest_time,
-            request_file=str(rp), time_evidence_file=str(ev),
+            request_file=str(rp), time_evidence_file=str(ev), request_received_at=received_at,
             recipe_key=recipe["recipe_key"], recipe_version=recipe["recipe_version"],
             recipe_hash=recipe["recipe_hash"], id=rid or self.q.rid,
             expected_version=version, expected_snapshot_hash=shash or dh, confirmer="Ravil")
@@ -499,6 +503,7 @@ class TestReadOnlyCommandsRealSubprocess(UXRealBase):
         rc, out, err = self.run_wrapper(
             "personal-log-known", "--scope", "personal-a", "--attest-personal-chat",
             "--attest-direct-user-request", "--attest-user-time", "--request-file", str(req),
+            "--request-received-at", datetime.now(timezone.utc).isoformat(),
             "--time-evidence-file", str(ev), "--recipe-key", "oat-std", "--recipe-version", "1",
             "--recipe-hash", "0" * 64, "--id", self.q.rid, "--expected-version", "1",
             "--expected-snapshot-hash", "0" * 64, "--confirmer", "Ravil")
@@ -1045,6 +1050,373 @@ class TestKnownLogMultiprocess(SqliteMixin, UXMixin, MPBase):
         self.assertEqual(self.q.confirmed_count(), 1)
         self.assertEqual(len([x for x in self.kinds("known_log")
                               if x["status"] == "consumed"]), 1)
+
+
+# ── bounded day query: old days survive a long history ──────────────────────
+
+class TestDayQueryBoundedRealSqlite(UXRealBase):
+    def setUp(self):
+        super().setUp()
+        self.raw_sql("DELETE FROM nutrition_queue")
+
+    def bulk(self, n, start_iso, state="acked", prefix="n", name="Bulk"):
+        conn = sqlite3.connect(str(self.q.db), timeout=30)
+        try:
+            conn.executemany(
+                "INSERT INTO nutrition_queue (client_record_id, client_record_version, state, "
+                "name, start_time, end_time, energy_kcal, protein_g, carbohydrate_g, fat_g, "
+                "description, delivery_possible, created_at, updated_at) "
+                "VALUES (?,1,?,?,?,?,1,1,1,1,'[AI estimate]',0,'2026-10-20T00:00:00Z',"
+                "'2026-10-20T00:00:00Z')",
+                [(f"{prefix}{i}", state, name, start_iso, start_iso) for i in range(n)])
+            conn.commit()
+        finally:
+            conn.close()
+
+    def old_draft(self):
+        res = self.create_draft(dict(PAYLOAD, name="OldDraft",
+                                     start_time="2026-09-01T07:00:00Z",
+                                     end_time="2026-09-01T07:01:00Z"))
+        return res["client_record_id"]
+
+    def reports(self, date):
+        rc, out, err = self.run_cmd(nw.cmd_day_report, date=date)
+        self.assertEqual(rc, 0, out + err)
+        w = json.loads(out)
+        c = cr.run(self.root / "none.sqlite3", self.q.db, date)["queue_day_report"]
+        return w, c
+
+    def test_old_day_found_with_over_1000_newer_rows(self):
+        rid = self.old_draft()
+        self.bulk(1200, "2026-10-20T08:00:00Z")
+        for rep in self.reports("2026-09-01"):
+            self.assertEqual([e["client_record_id"] for e in rep["pending"]], [rid])
+            self.assertEqual(rep["counts"], {"pending": 1, "done": 0, "excluded": 0})
+            self.assertFalse(rep["possibly_incomplete"])
+            self.assertEqual(rep["returned"], 1)
+        # the newer day is bounded and says so, exactly
+        for rep in self.reports("2026-10-20"):
+            self.assertEqual(rep["returned"], 200)
+            self.assertTrue(rep["possibly_incomplete"])
+            self.assertEqual(rep["counts"]["done"], 200)
+
+    def test_exactly_limit_rows_is_not_flagged_incomplete(self):
+        self.bulk(200, "2026-10-20T08:00:00Z")
+        for rep in self.reports("2026-10-20"):
+            self.assertEqual(rep["returned"], 200)
+            self.assertFalse(rep["possibly_incomplete"])
+        self.bulk(1, "2026-10-20T09:00:00Z", prefix="x")
+        for rep in self.reports("2026-10-20"):
+            self.assertTrue(rep["possibly_incomplete"])
+
+    def test_unrelated_malformed_rows_not_counted_in_requested_day(self):
+        self.bulk(3, "2026-10-19T08:00:00", state="draft", prefix="naive-other-day")
+        self.bulk(2, "garbage", state="weird", prefix="junk")
+        self.bulk(1, "2026-10-20T08:00:00", state="draft", prefix="naive-same-day")
+        for rep in self.reports("2026-10-20"):
+            self.assertEqual(rep["counts"], {"pending": 0, "done": 0, "excluded": 1})
+            self.assertEqual(rep["excluded"][0]["day_known"], False)
+            self.assertEqual(rep["excluded"][0]["client_record_id"], "naive-same-day0")
+        for rep in self.reports("2026-10-18"):
+            self.assertEqual(rep["counts"], {"pending": 0, "done": 0, "excluded": 0})
+
+    def test_offsets_and_fractions_use_instants_at_berlin_boundaries(self):
+        self.bulk(1, "2026-10-12T00:00:00+02:00", prefix="a")        # = 22:00Z, 12th (Berlin)
+        self.bulk(1, "2026-10-11T23:59:59.900+02:00", prefix="b")    # 11th
+        self.bulk(1, "2026-10-12T23:00:00+00:00", prefix="c")        # = 01:00 on the 13th
+        self.bulk(1, "2026-10-12T21:30:00-05:00", prefix="d")        # = 04:30 on the 13th
+        self.bulk(1, "2026-10-12T21:59:59.999Z", prefix="e")         # last ms of the 12th
+        ids = lambda rep: sorted(e["client_record_id"] for e in rep["done"])
+        w, c = self.reports("2026-10-12")
+        self.assertEqual(ids(w), ids(c))
+        self.assertEqual(ids(w), ["a0", "e0"])
+        w, c = self.reports("2026-10-13")
+        self.assertEqual(ids(w), ["c0", "d0"])
+        self.assertEqual(ids(c), ["c0", "d0"])
+
+    def test_wrapper_query_is_read_only_and_never_creates_a_db(self):
+        self.bulk(2, "2026-10-12T08:00:00Z")
+        before = self.rows()
+        self.reports("2026-10-12")
+        self.assertEqual(self.rows(), before)
+        with mock.patch.object(nw, "_resolve",
+                               lambda a: (self.q.shim, self.root / "absent.db", self.root)):
+            rc, out, err = self.run_cmd(nw.cmd_day_report, date="2026-10-12")
+        self.assertEqual(rc, 1)
+        self.assertFalse((self.root / "absent.db").exists())
+
+    def test_wrapper_and_consultation_use_the_same_selection_sql(self):
+        self.assertEqual(" ".join(nw._DAY_ROWS_SQL.split()), " ".join(cr._DAY_ROWS_SQL.split()))
+        self.assertEqual(nw._DAY_REPORT_LIMIT, cr._QUEUE_REPORT_LIMIT)
+
+
+# ── request received-at (relative dates) ────────────────────────────────────
+
+class TestReceivedAtRealSqlite(UXRealBase):
+    def setUp(self):
+        super().setUp()
+        self.raw_sql("DELETE FROM nutrition_queue")
+        self.save_recipe()
+
+    def at(self, local_dt):
+        return int(local_dt.timestamp() * 1e9)
+
+    def fake_clock_log(self, fake_now, text, phrase, ld, lt, received):
+        """Run the fast path with a fake REAL wall clock (file mtime and the freshness
+        reference both set to fake_now); the DB draft keeps its real created_at."""
+        rp = self.private_file("fake-req.txt", text)
+        os.utime(rp, ns=(self.at(fake_now),) * 2)
+        kw = self.log_known_args(text, phrase, ld, lt, request_path=rp,
+                                 received_at=received.isoformat())
+        with mock.patch("time.time_ns", return_value=self.at(fake_now)):
+            return self.run_cmd(nw.cmd_personal_log_known, **kw)
+
+    def test_today_just_before_midnight_uses_received_day_not_file_write_day(self):
+        d = datetime.now(BERLIN).date() - timedelta(days=2)
+        received = datetime(d.year, d.month, d.day, 23, 58, tzinfo=BERLIN)
+        written = received + timedelta(minutes=3)                    # 00:01 next day
+        text = "Запиши овсянку сегодня в 23:50"
+        # a draft for the day the FILE was written (wrong day) must be refused ...
+        self.known_draft(d + timedelta(days=1), 23, 50)
+        rc, out, err = self.fake_clock_log(written, text, "в 23:50", (d + timedelta(days=1)
+                                                                       ).isoformat(), "23:50",
+                                           received)
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.q.rec["state"], "draft")
+        # ... and the draft for the day the user's message was received is accepted
+        self.known_draft(d, 23, 50)
+        rc, out, err = self.fake_clock_log(written, text, "в 23:50", d.isoformat(), "23:50",
+                                           received)
+        self.assertEqual(rc, 0, out + err)
+        lg = self.kinds("known_log")[0]
+        self.assertEqual(lg["request_received_at"], received.astimezone(timezone.utc).isoformat())
+        self.assertEqual(lg["time_evidence"]["local_date"], d.isoformat())
+        self.assertEqual(json.loads(out)["known_log"]["request_received_at"],
+                         lg["request_received_at"])
+
+    def test_dst_day_received_after_the_spring_jump(self):
+        received = datetime(2026, 3, 29, 3, 10, tzinfo=BERLIN)       # CEST, after 02:00->03:00
+        written = received + timedelta(minutes=2)
+        self.known_draft(received.date(), 3, 5)
+        rc, out, err = self.fake_clock_log(written, "Запиши овсянку сегодня в 3:05 ночи",
+                                           "в 3:05 ночи", "2026-03-29", "03:05", received)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(self.q.rec["start_time"], "2026-03-29T01:05:00Z")
+
+    def test_missing_malformed_future_old_and_inconsistent_receipt_rejected(self):
+        now = datetime.now(timezone.utc)
+        iso = lambda dt: dt.isoformat()
+        cases = {
+            "missing": (None, 0),
+            "naive": ("2026-10-14T10:00:00", 0),
+            "garbage": ("yesterday", 0),
+            "future": (iso(now + timedelta(minutes=10)), 0),
+            "too old": (iso(now - timedelta(minutes=40)), 0),
+            "file written long after receipt": (iso(now - timedelta(minutes=20)), 0),
+            "file written before receipt": (iso(now - timedelta(seconds=10)), -300),
+        }
+        for i, (label, (recv, file_age_s)) in enumerate(cases.items()):
+            with self.subTest(label=label):
+                # distinct meal time per case (the duplicate guard is exercised elsewhere)
+                rp, text, phrase, ld, lt = self.fresh_log_case(7, 10 + i)
+                logged = len(self.kinds("known_log"))
+                t = time.time_ns() + int(file_age_s * 1e9)
+                os.utime(rp, ns=(t, t))
+                rc, out, err = self.go(rp, text, phrase, ld, lt, received_at=recv)
+                self.assertEqual(rc, 1, label)
+                self.assertEqual(self.q.rec["state"], "draft")
+                self.assertEqual(len(self.kinds("known_log")), logged)
+                os.utime(rp)  # file untouched/unused: a correct receipt now works
+                rc, out, err = self.go(rp, text, phrase, ld, lt)
+                self.assertEqual(rc, 0, f"{label}: {out}{err}")
+
+    def go(self, rp, text, phrase, ld, lt, **kw):
+        return self.log_known(text, phrase, ld, lt, request_path=rp, **kw)
+
+    def test_file_mtime_is_not_reported_as_the_message_timestamp(self):
+        rp, text, phrase, ld, lt = self.fresh_log_case()
+        recv = (datetime.now(timezone.utc) - timedelta(seconds=45)).isoformat()
+        rc, out, err = self.go(rp, text, phrase, ld, lt, received_at=recv)
+        self.assertEqual(rc, 0, out + err)
+        lg = self.kinds("known_log")[0]
+        self.assertEqual(lg["request_received_at"], recv)
+        self.assertNotIn("mtime", json.dumps(lg))
+
+
+# ── recipe-register: already user-confirmed recipes, no second yes ──────────
+
+class TestRecipeRegisterRealSqlite(UXRealBase):
+    def setUp(self):
+        super().setUp()
+        self.n = 0
+
+    def evidence(self, **over):
+        self.n += 1
+        ev = {"source": "direct_request", "session_id": "sess-synthetic",
+              "message_id": f"msg-{self.n}",
+              "user_text": "Запомни мою обычную овсянку как стандартный рецепт",
+              "received_at": (datetime.now(timezone.utc) - timedelta(seconds=15)).isoformat(),
+              "basis": "synthetic label values saved privately"}
+        ev.update(over)
+        return ev
+
+    def register(self, recipe=None, ev=None, attest=True, scope=None, ev_mode=0o600,
+                 raw_ev=None):
+        self.tf_n += 1
+        rf = self.private_file(f"reg-r{self.tf_n}.json", json.dumps(recipe or RECIPE))
+        ef = self.private_file(f"reg-e{self.tf_n}.json",
+                               raw_ev if raw_ev is not None else json.dumps(ev or self.evidence(),
+                                                                            ensure_ascii=False))
+        os.chmod(ef, ev_mode)
+        return self.run_cmd(nw.cmd_recipe_register, scope=scope or self.scope,
+                            attest_personal_chat=True, attest_user_confirmed_recipe=attest,
+                            recipe_file=str(rf), evidence_file=str(ef))
+
+    def recipes(self):
+        return self.kinds("recipe")
+
+    def test_clear_save_registers_only_the_recipe_without_a_yes(self):
+        rows_before = self.rows()
+        self.assertEqual(self.ppreview()[0], 0)               # an open MEAL question
+        rc, out, err = self.register()
+        self.assertEqual(rc, 0, out + err)
+        res = json.loads(out)
+        self.assertEqual((res["recipe_version"], res["evidence_source"]), (1, "direct_request"))
+        self.assertEqual(self.rows(), rows_before)
+        self.assertEqual(self.q.confirm_calls, 0)
+        rec = self.recipes()[0]
+        self.assertEqual(rec["status"], "active")
+        self.assertEqual(rec["recipe_hash"], res["recipe_hash"])
+        self.assertEqual(rec["registration"]["session_id"], "sess-synthetic")
+        self.assertEqual(rec["registration"]["message_id"], "msg-1")
+        self.assertIn("Запомни", rec["registration"]["user_text"])
+        self.assertNotIn("consent_raw_text", rec)               # no fabricated yes
+        self.assertEqual(rec["provenance_level"], "agent_conversation_attested")
+        # the open meal question is untouched and still answerable
+        meal = [x for x in self.pdata() if not x.get("kind")]
+        self.assertEqual(meal[0]["status"], "pending")
+        self.assertEqual(self.pconfirm("Да")[0], 0)
+        self.assertEqual(self.recipe_show()["recipe_hash"], res["recipe_hash"])
+
+    def test_history_import_of_an_older_confirmation_needs_no_new_question(self):
+        ev = self.evidence(source="history_import", message_id="hist-77",
+                           user_text="Да, сохрани это как мой стандарт овсянки",
+                           received_at=(datetime.now(timezone.utc)
+                                        - timedelta(days=5)).isoformat())
+        rc, out, err = self.register(ev=ev)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(self.recipes()[0]["registration"]["source"], "history_import")
+        self.assertEqual([x for x in self.pdata() if x.get("status") == "pending"], [])
+        # the imported recipe is immediately usable by the fast path
+        rp, text, phrase, ld, lt = self.fresh_log_case()
+        rc, out, err = self.log_known(text, phrase, ld, lt, request_path=rp)
+        self.assertEqual(rc, 0, out + err)
+
+    def test_stale_direct_request_must_be_imported_as_history(self):
+        ev = self.evidence(received_at=(datetime.now(timezone.utc)
+                                        - timedelta(hours=2)).isoformat())
+        rc, out, err = self.register(ev=ev)
+        self.assertEqual(rc, 1)
+        self.assertIn("history_import", err)
+        self.assertEqual(self.recipes(), [])
+
+    def test_new_version_retires_old_and_replay_is_rejected(self):
+        self.assertEqual(self.register()[0], 0)
+        ev2 = self.evidence(user_text="Запомни: теперь в овсянке 60 г хлопьев")
+        r2 = dict(RECIPE, ingredients=[{"item": "овсяные хлопья", "quantity": "60 г"},
+                                       {"item": "молоко 1.5%", "quantity": "200 мл"}])
+        rc, out, err = self.register(recipe=r2, ev=ev2)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(json.loads(out)["recipe_version"], 2)
+        self.assertEqual(sorted(r["status"] for r in self.recipes()), ["active", "retired"])
+        # same session/message again (any recipe) is a replay
+        rc, out, err = self.register(ev=dict(ev2))
+        self.assertEqual(rc, 1)
+        self.assertIn("replay", err)
+        rc, out, err = self.register(recipe=dict(RECIPE, key="other"), ev=dict(ev2))
+        self.assertEqual(rc, 1)
+        self.assertEqual(len(self.recipes()), 2)
+        # a registration message id cannot be reused as a meal consent source either
+        self.assertIn("registrationevidence:", json.dumps(self.recipes()))
+
+    def test_unclear_quoted_negative_or_assigned_texts_rejected(self):
+        bad = {
+            "negation": "Не запоминай эту овсянку",
+            "question": "Запомнить овсянку как рецепт?",
+            "hypothetical": "Можешь запомнить овсянку как рецепт",
+            "hypothetical2": "Если что, запомни овсянку",
+            "quoted": 'Он написал "запомни овсянку"',
+            "quoted2": "Запомни «овсянку»",
+            "coordinator assignment": "Задание от координатора: запомни рецепт овсянки",
+            "user wording": "Пользователь просит: запомни овсянку",
+            "example": "Например: запомни овсянку",
+            "no save verb": "Моя овсянка — 50 г хлопьев и 200 мл молока",
+            "log request is not a save": "Запиши овсянку в 8:30",
+            "multiline": "Запомни овсянку\nи кофе",
+            "empty": "   ",
+            "long": "Запомни овсянку " + "очень " * 120,
+        }
+        for label, text in bad.items():
+            with self.subTest(label=label):
+                rc, out, err = self.register(ev=self.evidence(user_text=text))
+                self.assertEqual(rc, 1, label)
+        self.assertEqual(self.recipes(), [])
+
+    def test_estimated_or_malformed_recipe_falls_back_and_writes_nothing(self):
+        for label, r in {
+                "estimated": dict(RECIPE, macro_basis="estimate"),
+                "no quantity": dict(RECIPE, ingredients=[{"item": "хлопья", "quantity": "много"}]),
+                "implausible": dict(RECIPE, per_portion=dict(RECIPE["per_portion"],
+                                                             energy_kcal=900))}.items():
+            with self.subTest(label=label):
+                rc, out, err = self.register(recipe=r)
+                self.assertEqual(rc, 1)
+                self.assertIn("personal-preview", err) if label == "estimated" else None
+        self.assertEqual(self.recipes(), [])
+
+    def test_attestation_scope_evidence_shape_and_file_security_required(self):
+        self.assertEqual(self.register(attest=False)[0], 1)
+        rc, out, err = self.run_cmd(nw.cmd_recipe_register, scope="has space",
+                                    attest_personal_chat=True, attest_user_confirmed_recipe=True,
+                                    recipe_file="x", evidence_file="y")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.register(ev=self.evidence(source="coordinator"))[0], 1)
+        self.assertEqual(self.register(ev=dict(self.evidence(), extra="x"))[0], 1)
+        ev = self.evidence()
+        del ev["basis"]
+        self.assertEqual(self.register(ev=ev)[0], 1)
+        self.assertEqual(self.register(ev=self.evidence(session_id=""))[0], 1)
+        self.assertEqual(self.register(ev=self.evidence(
+            received_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()))[0], 1)
+        self.assertEqual(self.register(ev=self.evidence(received_at="2026-10-12T10:00:00"))[0], 1)
+        self.assertEqual(self.register(ev_mode=0o644)[0], 1)
+        self.assertEqual(self.register(raw_ev='{"source": "a", "source": "b"}')[0], 1)
+        self.assertEqual(self.recipes(), [])
+        self.assertEqual(self.register()[0], 0)
+
+    def test_registered_recipe_tamper_fails_closed(self):
+        self.assertEqual(self.register()[0], 0)
+        f = next(f for f in self.pfiles() if json.loads(f.read_text()).get("kind") == "recipe")
+        good = f.read_text()
+        for label, mut in (
+                ("negated text", lambda d: d["registration"].update(user_text="Не запоминай")),
+                ("evidence dropped", lambda d: d.pop("registration")),
+                ("extra field", lambda d: d["registration"].update(x=1))):
+            with self.subTest(label=label):
+                d = json.loads(good)
+                mut(d)
+                f.write_text(json.dumps(d))
+                rc, out, err = self.run_cmd(nw.cmd_recipe_show, scope=self.scope,
+                                            attest_personal_chat=True, recipe_key="oat-std")
+                self.assertEqual(rc, 1)
+        f.write_text(good)
+        self.recipe_show()
+
+    def test_register_makes_no_queue_calls_and_needs_no_privacy_gate(self):
+        with mock.patch.object(nw, "_check_mutation_readiness",
+                               lambda *a, **k: self.fail("gate must not be needed")):
+            self.assertEqual(self.register()[0], 0)
+        self.assertEqual(self.q.confirm_calls, 0)
 
 
 if __name__ == "__main__":
