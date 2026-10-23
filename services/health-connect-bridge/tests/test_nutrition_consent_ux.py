@@ -1497,5 +1497,94 @@ class TestRecipeRegisterRealSqlite(UXRealBase):
         self.assertEqual(self.q.confirm_calls, 0)
 
 
+# ── natural personal-meal affirmatives (Отправляй / Записывай / Подтверждаю) ──
+
+NATURAL = ("Отправляй", "Записывай", "Подтверждаю", "Да, отправляй", "да записывай!",
+           "  Да, подтверждаю.\n", "ОТПРАВЛЯЙ")
+
+
+class TestNaturalAffirmativesRealSqlite(UXRealBase):
+    def test_fresh_unchanged_natural_affirmatives_confirm_with_raw_audit(self):
+        for i, text in enumerate(NATURAL):
+            with self.subTest(text=text):
+                for f in self.pfiles():
+                    f.unlink()
+                self.create_draft()
+                self.assertEqual(self.ppreview()[0], 0)
+                rc, out, err = self.pconfirm(text)
+                self.assertEqual(rc, 0, out + err)
+                self.assertEqual(self.q.rec["state"], "confirmed")
+                self.assertEqual(self.pdata()[0]["consent_raw_text"], text)   # unnormalized
+                self.assertEqual(json.loads(out)["personal_consent"]["raw_text"], text)
+        self.assertEqual(self.q.confirmed_count(), len(NATURAL))
+
+    def test_late_unchanged_natural_affirmative_confirms(self):
+        self.assertEqual(self.ppreview(ttl=60)[0], 0)
+        self.now = T0 + timedelta(hours=4)
+        rc, out, err = self.pconfirm("Отправляй")
+        self.assertEqual(rc, 0, out + err)
+        self.assertIs(json.loads(out)["personal_consent"]["late_consent"], True)
+
+    def test_correction_condition_negative_or_other_intent_rejected(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        for t in ("Отправляй, но поправь белки", "Отправляй если верно", "Не отправляй",
+                  "Не записывай", "Отправляй потом", "Записывай 350 ккал", "Подтверждаю?",
+                  "Запомни и отправляй", "запомни", "Отправляй и записывай", "Отправляйте",
+                  "Да, отправляй кофе", "Отправляй\nДа", "Подтверждаю не", "отправь"):
+            with self.subTest(text=t):
+                self.assertNoMutation(self.pconfirm(t))
+        self.assertEqual(self.pdata()[0]["status"], "pending")
+
+    def test_correction_then_natural_affirmative_needs_new_preview(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        self.edit(energy_kcal=350.0)
+        rc, out, err = self.pconfirm("Отправляй")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.q.rec["state"], "draft")
+        self.assertEqual(self.pdata()[0]["status"], "revoked")
+        self.assertEqual(self.ppreview()[0], 0)
+        self.assertEqual(self.pconfirm("Отправляй")[0], 0)        # fresh preview + fresh reply
+        self.assertEqual(self.q.rec["client_record_version"], 2)
+
+    def test_no_preview_no_mutation(self):
+        self.assertNoMutation(self.pconfirm("Отправляй"), "no active preview")
+        self.assertEqual(self.rows()[0]["state"], "draft")
+
+    def test_existing_personal_guards_still_apply_to_natural_phrases(self):
+        self.assertEqual(self.ppreview()[0], 0)
+        self.assertNoMutation(self.pconfirm("Отправляй", scope="personal-b"), "no active")
+        self.assertNoMutation(self.pconfirm("Отправляй", mode=0o644))
+        self.assertNoMutation(self.pconfirm(path=self.consent_file("old.txt", "Отправляй",
+                                                                   age_s=3600)), "predates")
+        p = self.consent_file("once.txt", "Записывай")
+        self.assertEqual(self.pconfirm(path=p)[0], 0)
+        rc, out, err = self.pconfirm(path=p)
+        self.assertEqual((rc, self.q.confirmed_count()), (1, 1))
+        self.assertEqual(self.pconfirm("Отправляй")[0], 1)         # already confirmed
+
+    def test_grammar_not_widened_elsewhere(self):
+        words = ("Отправляй", "Записывай", "Подтверждаю", "Да, отправляй")
+        for t in words:
+            self.assertTrue(nw._validate_short_reply(t))                    # legacy refuses
+            self.assertEqual(nw._validate_short_reply(t, nw._PERSONAL_MEAL_AFFIRMATIVES), [])
+        self.assertFalse(set(nw._SHORT_AFFIRMATIVES) & set(nw._PERSONAL_MEAL_AFFIRMATIVES))
+        # receipt-bound short-confirm
+        self.assertEqual(self.preview(ttl=900)[0], 0)
+        for i, t in enumerate(words):
+            self.assertRejected(self.reply(t, mid=f"rr{i}"), "affirmative")
+        # recipe-confirm
+        rf = self.private_file("rr.json", json.dumps(RECIPE))
+        self.assertEqual(self.run_cmd(nw.cmd_recipe_preview, scope=self.scope,
+                                      attest_personal_chat=True, recipe_file=str(rf))[0], 0)
+        rc, out, err = self.run_cmd(nw.cmd_recipe_confirm, scope=self.scope,
+                                    attest_personal_chat=True,
+                                    consent_file=str(self.consent_file("rc.txt", "Отправляй")))
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.kinds("recipe")[0]["status"], "pending")
+        # known-recipe request grammar
+        info, err = nw._parse_log_request("Отправляй овсянку в 8:30", ALIASES, REQ_DT)
+        self.assertIsNone(info)
+
+
 if __name__ == "__main__":
     unittest.main()

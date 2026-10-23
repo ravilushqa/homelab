@@ -1675,7 +1675,17 @@ def _load_transport(path_arg) -> tuple:
     return out, []
 
 
-def _validate_short_reply(text: str) -> list:
+# Natural affirmatives accepted ONLY by personal-confirm (a reply to the shown personal
+# meal preview). Not part of the receipt-bound short-confirm, recipe-confirm or the
+# known-recipe request grammar.
+_PERSONAL_MEAL_AFFIRMATIVES = frozenset({
+    "отправляй", "записывай", "подтверждаю",
+    "да, отправляй", "да отправляй", "да, записывай", "да записывай", "да, подтверждаю",
+    "да подтверждаю",
+})
+
+
+def _validate_short_reply(text: str, extra=frozenset()) -> list:
     if len(text) > _SHORT_MAX_LEN:
         return ["short reply too long; only a bare affirmative is accepted"]
     t = text.strip()
@@ -1686,7 +1696,7 @@ def _validate_short_reply(text: str) -> list:
     if _CONDITIONAL_RE.search(t):
         return ["reply is conditional — unconditional affirmative required"]
     norm = " ".join(t.casefold().rstrip(".!").split())
-    if norm not in _SHORT_AFFIRMATIVES:
+    if norm not in _SHORT_AFFIRMATIVES and norm not in extra:
         return ["reply is not a recognised short affirmative"]
     return []
 
@@ -2386,7 +2396,7 @@ def _personal_confirm_impl(args: argparse.Namespace) -> int:
     if cerr:
         _emit_err({"error": "consent file rejected", "details": [cerr]})
         return 1
-    reply_errs = _validate_short_reply(raw)
+    reply_errs = _validate_short_reply(raw, _PERSONAL_MEAL_AFFIRMATIVES)
     if reply_errs:
         _emit_err({"error": "short reply rejected", "reasons": reply_errs})
         return 1

@@ -403,7 +403,12 @@ are just not the default personal flow. Group/platform channels must not use thi
    If unambiguous, it writes the user's actual raw text to a fresh 0600 file and runs
    `personal-confirm --scope LABEL --attest-personal-chat --consent-file PATH`.
    Accepted text is only `да`, `запиши`, `да, запиши`, `yes`, `record it`
-   (case-insensitive, trailing `.`/`!` and surrounding whitespace ignored). Negation,
+   (case-insensitive, trailing `.`/`!` and surrounding whitespace ignored).
+   `personal-confirm` (the shown personal meal preview ONLY) additionally accepts the
+   natural `отправляй`, `записывай`, `подтверждаю`, `да, отправляй`, `да, записывай`,
+   `да, подтверждаю` (comma optional; same normalization for matching, raw text stored
+   unchanged). Every other command keeps its grammar: receipt-bound `short-confirm`,
+   `recipe-confirm` and the known-recipe request recognizer do not accept these words. Negation,
    conditionals, corrections, multiple lines and anything longer are rejected.
    Each consent file is single-use for the **whole store**: a file already claimed for
    any preview (consumed, revoked, superseded, any scope) is rejected, and a file whose
