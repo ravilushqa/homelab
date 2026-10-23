@@ -346,6 +346,108 @@ user consent, and is reachable only after the checks above.
 4. Decide whether to build a gateway-signed reply record for server-authenticated
    provenance before treating short consent as more than workflow-attested.
 
+### Personal-chat short consent (`personal-preview` / `personal-confirm`)
+
+For a **private one-to-one chat only** the workflow may use a lighter flow with no
+Reply, no Telegram message IDs, no receipts and no long phrase. The receipt-bound
+`preview`/`short-confirm` and the long named grammar stay valid and unchanged; they
+are just not the default personal flow. Group/platform channels must not use this mode.
+
+1. **Single active preview.** The agent first stores the preview, then shows the
+   user exactly the returned `display_text`:
+   `nutrition_writeback.py personal-preview --scope LABEL --attest-personal-chat
+   --id ID --confirmer NAME --expected-version V --expected-snapshot-hash H
+   [--notes-file PATH] [--ttl-seconds N]`. `LABEL` is a stable opaque label
+   (e.g. `personal-main`; not a transport/chat ID, must start alphanumeric) and, like
+   the hash and confirmer, is validated exactly as supplied (nothing is stripped,
+   lowercased or repaired). `--attest-personal-chat` is the agent's explicit
+   declaration that the scope is a one-to-one chat. The wrapper itself builds a
+   compact text from the **saved** record, once, with no IDs, hashes or ISO strings:
+
+   ```
+   Тосты с яйцами и беконом
+   ≈500 ккал · Б 30 · Ж 25 · У 40 г
+   Порции приблизительные; масло — допущение.
+   14 октября, 09:30–09:45, Берлин
+   Записать?
+   ```
+
+   Macros are the exact saved values (safe numeric rendering). The time line converts
+   the saved instants (UTC or explicit offset) to Europe/Berlin with Russian month
+   names; a range crossing midnight shows both dates, crossing a year shows the year,
+   and a wall time that occurs twice on the autumn DST change gets a `(UTC+N)` hint.
+   The display does not claim whether the time was user-supplied or proposed: the
+   agent's optional note (`--notes-file`, ONE line, max 240 chars; longer, multi-line
+   or control-character notes are rejected, never truncated) states an assumption
+   only when the time was not given by the user. The preview saves `display_format: 2`;
+   confirm recomposes and validates with the saved format. Previews without that
+   field (older personal previews) keep the previous text and validation unchanged, so
+   they stay confirmable without re-consent; unknown or tampered formats fail closed.
+   The saved snapshot (incl. description), its hash, version, notes, display text and
+   display hash, scope and a finite expiry (default
+   15 min, max 60 min) live in `personal-previews/` (0700 dir, 0600 files, flock, atomic
+   writes, no symlinks). A friendlier rounded rendering may be added by the agent
+   outside `display_text`, but consent only covers the returned exact values.
+2. **One slot per scope.** A new preview in the same scope marks the older pending
+   one `superseded` (its draft is not touched) and needs fresh consent. Expired
+   previews are marked `expired`. Several active previews in one scope (store
+   corruption) fail closed for both commands. Other scopes are never affected.
+3. **Bare yes.** When the user replies, the agent decides from the conversation
+   whether the message is an unambiguous yes to *that* shown preview. If ambiguous
+   (e.g. "да, но поправь", "ок наверное") it asks again and does not call confirm.
+   If unambiguous, it writes the user's actual raw text to a fresh 0600 file and runs
+   `personal-confirm --scope LABEL --attest-personal-chat --consent-file PATH`.
+   Accepted text is only `да`, `запиши`, `да, запиши`, `yes`, `record it`
+   (case-insensitive, trailing `.`/`!` and surrounding whitespace ignored). Negation,
+   conditionals, corrections, multiple lines and anything longer are rejected.
+   Each consent file is single-use for the **whole store**: a file already claimed for
+   any preview (consumed, revoked, superseded, any scope) is rejected, and a file whose
+   real mtime predates the active preview's creation is rejected as stale. That is a
+   local workflow-freshness check, not a user timestamp; a NEW file with the same text
+   is accepted under agent attestation (the wrapper cannot tell who wrote it).
+   `personal-confirm` re-validates the saved snapshot, display text and hashes, notes,
+   timestamps/TTL and structure; any mismatch or malformed/foreign record fails closed.
+4. **Corrections.** A correction edits the *same* record (new version) and requires a
+   new `personal-preview`; the old snapshot can never be confirmed (drift revokes it,
+   and restoring the content does not revive it). No new meal is created.
+5. **Snapshot CAS / dedup.** `personal-confirm` runs the same privacy/token/receiver
+   readiness gates as long consent, claims the preview `pending -> consuming` under
+   the lock, then calls the queue confirm with the version and
+   `--expected-snapshot-hash`, verified inside the queue's own transaction (same as
+   `short-confirm`). Replays, duplicate "Да", concurrent confirms and a reused consent
+   file are rejected read-only (no queue mutation, no second delivery); an interrupted
+   run stays `consuming` and fails closed. If the helper reports success but its output
+   is not a valid confirmed readback, the result is an *uncertain outcome* error (the
+   preview stays `consumed`, nothing is replayed; read the record with `status`) - a
+   success is never synthesized. After a CLI refusal on an untouched draft
+   the preview is released, but the consumed consent file cannot be reused.
+6. **Audit.** The raw consent text is stored unchanged (`consent_raw_text`, plus the
+   file SHA-256) on the preview record and echoed under `personal_consent`. The
+   wrapper invents no user timestamp, author or message ID (`claimed_at` is the
+   wrapper's own clock; the claimed consent file is tracked as an internal
+   `consent_file_key`, not a Telegram id).
+
+**Weaker provenance.** `provenance_level` is `agent_conversation_attested`: weaker
+than the receipt-bound `workflow_attested` path. Nothing links the consent file to a
+Telegram server message or authenticates the sender; the agent's judgement of the
+conversation is the only evidence, and anything able to write as this OS user can
+forge the files or touch their mtime. No author identity is claimed. Do not describe it
+as server-authenticated.
+
+**Queue vs ACK vs UI.** `personal-confirm` success only means *confirmed in the
+server queue*. The phone writes to Health Connect on its next sync; only an ACK from
+the phone means it was written. Say "отправлено в очередь Health Connect" after
+confirm; claim a client-confirmed write only after an ACK. Any UI/chat display is
+not evidence of either.
+
+Example (fake values): `personal-preview --scope personal-main --attest-personal-chat
+--id nutr_example --confirmer Alex --expected-version 1 --expected-snapshot-hash
+<64-hex> --notes-file /secure/dir/notes.txt`, later `personal-confirm --scope
+personal-main --attest-personal-chat --consent-file /secure/dir/reply.txt`.
+
+Tests: `tests/test_personal_chat_consent.py` (fake queue and real SQLite + isolated
+CLI + multiprocess; synthetic fixtures, not a real user's consent).
+
 ### Complete workflow: photo to Health Connect
 
 The full order for a new meal entry is:
