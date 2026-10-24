@@ -43,13 +43,17 @@ network: get the container IP on `traefik_default` (`docker inspect`) and use
 3. In Pocket ID create an OIDC client `audiobookshelf` with callback URLs
    `https://audiobooks.ravil.space/auth/openid/callback` and
    `https://audiobooks.ravil.space/auth/openid/mobile-redirect`.
-4. Log in as root, then **Settings → Authentication**:
+4. Log in as root. In **Settings → Users** rename `root` to your Pocket ID username: Pocket ID
+   sends it as `preferred_username`, and that is what username matching compares. Then
+   **Settings → Authentication**:
    - Enable **OpenID Connect**: issuer `https://pocketid.ravil.space` → **Auto-populate**,
      client ID/secret from step 3, allowed mobile redirect URI `audiobookshelf://oauth`,
-     *Match existing users by* `username` (so Pocket ID user `root`, or whichever user you map,
-     keeps admin), auto-register as needed.
-   - Log in once through OIDC in a private window to confirm it works.
-   - Disable **Username/Password**. `GET /status` now returns `"authMethods":["openid"]` and the
+     *Match existing users by* `username`. Leave *Group claim* empty unless Pocket ID sends
+     `groups` with `admin`/`user`/`guest`; a configured claim that is missing denies the login.
+   - Keep **Username/Password** enabled and log in once through OIDC in a private window. A
+     plain `Unauthorized` means no user matched or the claims were rejected; the reason is in
+     `docker logs <container> 2>&1 | grep OidcAuth`.
+   - Only then disable **Username/Password**. `GET /status` now returns `"authMethods":["openid"]` and the
      container turns healthy within ~30s; Traefik picks up the route.
 5. Create the library (UI or `POST /api/libraries`):
    `{"name":"Audiobooks","mediaType":"book","folders":[{"fullPath":"/audiobooks"}],"settings":{"disableWatcher":true,"autoScanCronExpression":"0 * * * *"}}`.
