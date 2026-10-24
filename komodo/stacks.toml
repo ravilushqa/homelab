@@ -217,6 +217,30 @@ SPOTIFY_CLIENT_ID = [[SPOTIFY_CLIENT_ID]]
 SPOTIFY_CLIENT_SECRET = [[SPOTIFY_CLIENT_SECRET]]
 """
 
+# Tracks the feature branch until a merge is explicitly approved — see komodo/stacks/audiobookshelf/README.md
+[[stack]]
+name = "audiobookshelf"
+description = "Audiobook server — read-only SMB library at /mnt/audiobooks, native auth"
+tags = ["media"]
+deploy = true
+auto_update = false
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "feat/audiobookshelf-smb"
+run_directory = "komodo/stacks/audiobookshelf"
+# Read-only check: refuse to deploy unless the exact CIFS share is mounted and readable
+# (create_host_path: false alone still accepts an empty, unmounted /mnt/audiobooks)
+pre_deploy.shell_mode = true
+pre_deploy.command = '''
+expected='//192.168.1.2/proxmox[/audiobooks]'
+actual=$(findmnt -rn -M /mnt/audiobooks -t cifs -o SOURCE)
+if [ -z "$actual" ]; then echo "pre_deploy: /mnt/audiobooks is not mounted as CIFS (expected $expected)" >&2; exit 1; fi
+if [ "$actual" != "$expected" ]; then echo "pre_deploy: /mnt/audiobooks source is '$actual', expected $expected" >&2; exit 1; fi
+if ! ls -A /mnt/audiobooks/ >/dev/null; then echo "pre_deploy: /mnt/audiobooks is not readable/traversable" >&2; exit 1; fi
+echo "pre_deploy: /mnt/audiobooks mounted from $actual and readable"
+'''
+
 # ─── Productivity ────────────────────────────────────────────────
 
 [[stack]]
