@@ -4,38 +4,65 @@ Audiobook server at **https://audiobooks.ravil.space**. It runs on the Komodo ho
 (192.168.1.166, LXC 122) and reads a read-only SMB library.
 
 - Image: `ghcr.io/advplyr/audiobookshelf:2.37.2` (pinned; bump manually)
-- Auth: native Audiobookshelf login. There is **no** Traefik `oidc-auth` middleware, because the
-  mobile apps can't complete a browser OIDC redirect in front of the API.
+- Auth: Audiobookshelf's **native OIDC** against Pocket ID; password login is disabled. There is
+  no Traefik `oidc-auth` middleware, because the mobile apps can't pass a browser redirect in front
+  of the API. Native OIDC works in the apps (`audiobookshelf://oauth` mobile redirect).
 - State: named volumes `config` (SQLite DB) and `metadata` (covers, cache, item metadata). These
   live on local LXC disk. Never put them on SMB, because SQLite over CIFS corrupts.
 - Media: host `/mnt/audiobooks` (existing read-only CIFS bind on the LXC) → `/audiobooks:ro`.
-  Compose uses `create_host_path: false`. That only makes the container fail when the
-  `/mnt/audiobooks` **path does not exist**, and stops Docker from creating it. If the directory
-  exists but the CIFS share is **not mounted**, Compose binds the empty directory and
-  Audiobookshelf sees an empty library.
-- Mount guard: the Komodo resource has a `pre_deploy` command (`shell_mode = true`, runs in the
-  run directory) that aborts the deploy unless the share is mounted, read-only and readable.
-  - **Why it goes through Docker:** Komodo Periphery runs in its own container. It has
-    `/var/run/docker.sock` and `/etc/komodo` bind-mounted, but not `/mnt/audiobooks`. A
-    `findmnt`/`ls` in the pre_deploy shell would inspect Periphery's mount namespace, not the
-    LXC's, and fails even when the share is fine. Bind sources in `compose.yaml` are resolved by
-    the **host Docker daemon**, so the guard asks that same daemon.
-  - **What it runs:** a throwaway probe container
-    (`docker run --rm --network none --pull=missing --read-only`) from the pinned
-    Audiobookshelf image, with `--entrypoint node` and
-    `--mount type=bind,src=/mnt/audiobooks,dst=/audiobooks,readonly`. Unlike `-v`, `--mount`
-    fails instead of creating a missing source path. An inline Node script reads
-    `/proc/self/mountinfo` and requires exactly one `/audiobooks` entry with fs type `cifs`,
-    source `//192.168.1.2/proxmox`, share root `/audiobooks`, and `ro` in the mount options. It
-    then calls `readdirSync("/audiobooks")` to prove the share is readable. Filenames are
-    discarded, not printed.
-  - **What it rejects:** a plain directory left behind when the share is unmounted (fs type is
-    then the LXC's disk, e.g. `zfs`), a wrong share/root/type, a read-write bind, an unreadable
-    share, or a missing `/mnt/audiobooks` (Docker exits ≥125).
-  - It writes nothing to the media and changes nothing on the host. The only side effect is
-    the probe container, which `--rm` removes. If the guard fails, fix the mount on the
-    LXC/Proxmox side and redeploy. It does not protect a running container if the share drops
-    later.
+  Compose uses `create_host_path: false`, so the container fails to start if the path is missing.
+
+## Healthcheck gates the public route
+
+Traefik's Docker provider does not route to a container that is `starting` or `unhealthy`. The
+healthcheck is only green when it is safe to be on the internet:
+
+1. `/audiobooks` is the CIFS share `//192.168.1.2/proxmox` (from `/proc/self/mountinfo`) and is
+   readable. If the share is not mounted on the LXC, Docker binds the empty local directory
+   instead (fs type `zfs`); if the NAS drops later, reads fail or time out.
+2. `GET /status` reports `isInit: true`. A fresh `config` volume lets **whoever reaches it
+   first** create the root user, so it stays private until root exists.
+3. `GET /status` reports `authMethods` = `["openid"]` only. Audiobookshelf falls back to
+   `local` when the OIDC settings are incomplete, which also keeps it private.
+
+So a lost or recreated `config` volume, a dropped share, or a misconfigured auth setting takes
+the route down and shows the container as unhealthy in Komodo, with no manual toggle. The
+healthcheck does not stop the library scan: while the share is down, the next scheduled scan
+marks items missing, and the first scan after it is back restores them.
+
+## First deploy (and after losing the `config` volume)
+
+The container is unhealthy and unrouted until steps 2–4 are done. Do them over the private
+network: get the container IP on `traefik_default` (`docker inspect`) and use
+`http://<container-ip>` from the LXC, or an SSH tunnel to it for the web UI.
+
+1. Deploy the stack (merge to `main`, or **Deploy** in Komodo).
+2. Initialize root: generate a random password into a root-owned `0600` file on the host (don't
+   echo, log or commit it), then
+   `POST /init` with body `{"newRoot":{"username":"root","password":"<from file>"}}`.
+3. In Pocket ID create an OIDC client `audiobookshelf` with callback URLs
+   `https://audiobooks.ravil.space/auth/openid/callback` and
+   `https://audiobooks.ravil.space/auth/openid/mobile-redirect`.
+4. Log in as root, then **Settings → Authentication**:
+   - Enable **OpenID Connect**: issuer `https://pocketid.ravil.space` → **Auto-populate**,
+     client ID/secret from step 3, allowed mobile redirect URI `audiobookshelf://oauth`,
+     *Match existing users by* `username` (so Pocket ID user `root`, or whichever user you map,
+     keeps admin), auto-register as needed.
+   - Log in once through OIDC in a private window to confirm it works.
+   - Disable **Username/Password**. `GET /status` now returns `"authMethods":["openid"]` and the
+     container turns healthy within ~30s; Traefik picks up the route.
+5. Create the library (UI or `POST /api/libraries`):
+   `{"name":"Audiobooks","mediaType":"book","folders":[{"fullPath":"/audiobooks"}],"settings":{"disableWatcher":true,"autoScanCronExpression":"0 * * * *"}}`.
+
+Recovery if OIDC breaks and you are locked out: password login can only be re-enabled in the
+DB. Stop the stack, set `authActiveAuthMethods` back to `["local","openid"]` in the JSON `value`
+of the `settings` row with key `server-settings` in `absdatabase.sqlite` (in the `config`
+volume), start it, fix OIDC
+privately (the healthcheck keeps it off Traefik meanwhile), then disable password login again.
+
+The schemas above were checked against the v2.37.2 source (`server/Server.js`,
+`server/Auth.js`, `server/objects/settings/ServerSettings.js`,
+`server/controllers/LibraryController.js`).
 
 ## Adding books
 
@@ -48,9 +75,9 @@ Author Name/
     cover.jpg
 ```
 
-The library rescans every 5 minutes (library scan cron `*/5 * * * *`). The filesystem watcher is
-disabled because inotify does not work over CIFS. Use **Scan** in the library menu to rescan
-right away.
+The library rescans hourly (library scan cron `0 * * * *`). A full scan walks the whole share
+over CIFS, so don't make it more frequent. The filesystem watcher is disabled because inotify does
+not work over CIFS. Use **Scan** in the library menu to pick up new books right away.
 
 ## Limitations (read-only media)
 
@@ -60,47 +87,10 @@ right away.
   (server defaults `storeCoverWithItem` and `storeMetadataWithItem` are `false`; leave them off).
 - LXC 122 backups (vzdump) exclude bind-mount contents, so the audiobooks are **not** backed up
   with the LXC. The `config` and `metadata` volumes are on the LXC disk and are included.
-- Single-instance setup only. No multi-user or subscriber provisioning is configured here.
 
-## First deploy: bootstrap (not public until root exists)
+## Komodo resource
 
-A fresh Audiobookshelf lets **whoever reaches it first** create the root user. Keep it off the
-public router until root is initialized:
-
-1. Create or deploy the Komodo stack with the environment variable
-   `AUDIOBOOKSHELF_TRAEFIK_ENABLED=false`. This sets the `traefik.enable=false` label, so Traefik
-   creates no route.
-2. On the host, generate a random root password into a root-owned `0600` file. Do not echo it,
-   log it, or commit it.
-3. Find the container's private IP on `traefik_default` and initialize root over plain HTTP from
-   the host:
-   `POST http://<container-ip>/init` with body `{"newRoot":{"username":"root","password":"<from file>"}}`.
-   `GET /status` then returns `"isInit": true`.
-4. Log in (`POST /login`), then create the library:
-   `POST /api/libraries` with body
-   `{"name":"Audiobooks","mediaType":"book","folders":[{"fullPath":"/audiobooks"}],"settings":{"disableWatcher":true,"autoScanCronExpression":"*/5 * * * *"}}`.
-5. Set `AUDIOBOOKSHELF_TRAEFIK_ENABLED=true` (or remove it; the default is `true`) and redeploy.
-
-The schemas above were checked against the v2.37.2 source (`server/Server.js`,
-`server/controllers/LibraryController.js`, `server/models/Library.js`). The container
-healthcheck calls `GET /healthcheck` using `node`, because the image ships no curl.
-
-## Komodo resource and moving to `main`
-
-The `audiobookshelf` entry in `komodo/stacks.toml` sets `branch = "feat/audiobookshelf-smb"`, because
-this deployment is not merged. That `stack.config.branch` only selects which branch Komodo clones
-for this stack's compose files. The global resource sync (`komodo/sync.toml`) reads `stacks.toml`
-from its own branch (`main`), independently, so it doesn't see this entry until merge. The resource
-is created through the Komodo API instead.
-
-`auto_update = false` only turns off Komodo's polling for newer images. It does not block
-deploys: a Komodo webhook, a resource sync with `deploy = true`, or a manual deploy can still
-redeploy the stack.
-
-After a merge is **explicitly approved**:
-
-1. In the same PR (or right after it), change the entry to `branch = "main"`. Optionally set
-   `auto_update = true` to match the other stacks.
-2. Merge. The `homelab-stacks` sync then adopts the existing `audiobookshelf` resource by name.
-3. Do not put `AUDIOBOOKSHELF_TRAEFIK_ENABLED` in the TOML. The default `true` is the
-   steady state.
+The `audiobookshelf` entry in `komodo/stacks.toml` tracks `main` like every other stack, with no
+`deploy = true` (see the header of that file). On merge, `komodo-deploy.yaml` runs the
+`homelab-stacks` sync, which adopts the existing `audiobookshelf` resource by name, and then
+deploys the stack. `auto_update = false` because the image is pinned.

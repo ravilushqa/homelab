@@ -209,45 +209,16 @@ SPOTIFY_CLIENT_ID = [[SPOTIFY_CLIENT_ID]]
 SPOTIFY_CLIENT_SECRET = [[SPOTIFY_CLIENT_SECRET]]
 """
 
-# Tracks the feature branch until a merge is explicitly approved — see komodo/stacks/audiobookshelf/README.md
 [[stack]]
 name = "audiobookshelf"
-description = "Audiobook server — read-only SMB library at /mnt/audiobooks, native auth"
+description = "Audiobook server — read-only SMB library at /mnt/audiobooks, native OIDC (Pocket ID)"
 tags = ["media"]
-deploy = true
 auto_update = false
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
-branch = "feat/audiobookshelf-smb"
+branch = "main"
 run_directory = "komodo/stacks/audiobookshelf"
-# Read-only check: refuse to deploy unless the exact CIFS share is mounted and readable
-# (create_host_path: false alone still accepts an empty, unmounted /mnt/audiobooks).
-# Periphery runs in a container without /mnt/audiobooks, so the check runs in a throwaway
-# `docker run --rm` probe on the host daemon, which resolves the bind exactly like the stack.
-pre_deploy.shell_mode = true
-pre_deploy.command = '''
-docker run --rm --network none --pull=missing --read-only \
-  --mount type=bind,src=/mnt/audiobooks,dst=/audiobooks,readonly \
-  --entrypoint node ghcr.io/advplyr/audiobookshelf:2.37.2 -e '
-const fs = require("fs");
-const fail = (msg) => { console.error("pre_deploy: " + msg); process.exit(1); };
-const lines = fs.readFileSync("/proc/self/mountinfo", "utf8").split("\n").filter((l) => l.split(" ")[4] === "/audiobooks");
-if (lines.length !== 1) fail(`expected exactly one mountpoint at /audiobooks, found ${lines.length}`);
-const [pre, post = ""] = lines[0].split(" - ");
-const f = pre.split(" ");
-const [type, source] = post.split(" ");
-if (type !== "cifs") fail(`/mnt/audiobooks fs type is ${type}, expected cifs (share not mounted on the host?)`);
-if (source !== "//192.168.1.2/proxmox") fail(`/mnt/audiobooks source is ${source}, expected //192.168.1.2/proxmox`);
-if (f[3] !== "/audiobooks") fail(`/mnt/audiobooks share root is ${f[3]}, expected /audiobooks`);
-if (!f[5].split(",").includes("ro")) fail(`/audiobooks options ${f[5]} are not read-only`);
-try { fs.readdirSync("/audiobooks"); } catch (e) { fail(`/mnt/audiobooks is not readable (${e.code})`); }
-console.log("pre_deploy: /mnt/audiobooks is cifs //192.168.1.2/proxmox[/audiobooks], read-only and readable");
-'
-rc=$?
-if [ "$rc" -ge 125 ]; then echo "pre_deploy: docker probe failed (exit $rc); does /mnt/audiobooks exist on the host?" >&2; fi
-exit "$rc"
-'''
 
 # ─── Productivity ────────────────────────────────────────────────
 

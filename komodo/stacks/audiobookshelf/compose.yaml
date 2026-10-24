@@ -16,8 +16,33 @@ services:
         bind:
           create_host_path: false
     healthcheck:
-      # Runtime image is node:24-alpine without curl; /healthcheck returns 200
-      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1/healthcheck', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      # Healthy only when it is safe to be public. Traefik does not route to a starting or
+      # unhealthy container, so this also gates the public route (see README):
+      #   - /audiobooks is the CIFS share and readable (not the empty dir left when it's unmounted)
+      #   - root user exists (a fresh /config would let the first visitor claim root)
+      #   - native OIDC is the only active auth method (no password login on the internet)
+      # The image is node:24-alpine without curl.
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const fs = require("fs");
+          const fail = (msg) => { console.error(msg); process.exit(1); };
+          const media = fs.readFileSync("/proc/self/mountinfo", "utf8").split("\n").filter((l) => l.split(" ")[4] === "/audiobooks");
+          const [type, source] = (media[0] || "").split(" - ")[1]?.split(" ") || [];
+          if (media.length !== 1 || type !== "cifs" || source !== "//192.168.1.2/proxmox") fail("/audiobooks is not the CIFS share: " + type + " " + source);
+          fs.readdirSync("/audiobooks");
+          require("http").get("http://127.0.0.1/status", (res) => {
+            let body = "";
+            res.on("data", (chunk) => (body += chunk));
+            res.on("end", () => {
+              const status = JSON.parse(body);
+              if (!status.isInit) fail("root user not initialized");
+              if (status.authMethods.join() !== "openid") fail("auth methods " + status.authMethods + ", expected only openid");
+              process.exit(0);
+            });
+          }).on("error", (e) => fail(e.message));
       interval: 30s
       timeout: 10s
       retries: 3
@@ -25,8 +50,9 @@ services:
     networks:
       - traefik
     labels:
-      # Set AUDIOBOOKSHELF_TRAEFIK_ENABLED=false until the root user is initialized (see README)
-      - "traefik.enable=${AUDIOBOOKSHELF_TRAEFIK_ENABLED:-true}"
+      # No oidc-auth middleware: the mobile apps can't pass it. Auth is Audiobookshelf's native
+      # OIDC against Pocket ID, enforced by the healthcheck above
+      - "traefik.enable=true"
       - "traefik.http.routers.audiobookshelf.rule=Host(`audiobooks.ravil.space`)"
       - "traefik.http.routers.audiobookshelf.entrypoints=websecure"
       - "traefik.http.routers.audiobookshelf.tls.certresolver=cloudflare"
