@@ -342,7 +342,7 @@ auto_update = true
 [stack.config]
 server_id = "Local"
 repo = "ravilushqa/homelab"
-branch = "main"
+branch = "deploy/vova-medcenter"
 run_directory = "komodo/stacks/vova-medcenter"
 
 [[stack]]
