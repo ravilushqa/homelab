@@ -357,20 +357,6 @@ branch = "deploy/vova-medcenter"
 run_directory = "komodo/stacks/vova-medcenter"
 
 [[stack]]
-name = "hr-breaker"
-description = "AI resume optimizer — Streamlit UI, WeasyPrint PDF output"
-tags = ["ai", "tools"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/hr-breaker"
-environment = """
-OPENROUTER_API_KEY = [[HR_BREAKER_OPENROUTER_API_KEY]]
-"""
-
-[[stack]]
 name = "llm-council"
 description = "LLM Council multi-model OpenRouter web app"
 tags = ["ai", "tools"]
@@ -384,22 +370,6 @@ environment = """
 OPENROUTER_API_KEY = [[LLM_COUNCIL_OPENROUTER_API_KEY]]
 """
 
-[[stack]]
-name = "actual"
-description = "Actual Budget - local-first personal finance"
-tags = ["finance"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/actual"
-environment = """
-ACTUAL_OIDC_CLIENT_ID = [[ACTUAL_OIDC_CLIENT_ID]]
-ACTUAL_OIDC_CLIENT_SECRET = [[ACTUAL_OIDC_CLIENT_SECRET]]
-ACTUAL_PASSWORD = [[ACTUAL_PASSWORD]]
-
-"""
 [[stack]]
 name = "openhands"
 description = "OpenHands - AI autonomous coding agent"
@@ -441,17 +411,6 @@ run_directory = "komodo/stacks/mattermost"
 environment = """
 MATTERMOST_DB_PASSWORD = [[MATTERMOST_DB_PASSWORD]]
 """
-
-[[stack]]
-name = "hermes-webui"
-description = "Hermes WebUI — browser interface for Hermes Agent, exposed via Traefik + Pocket ID OIDC"
-tags = ["ai", "infra"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/hermes-webui"
 
 [[stack]]
 name = "health-connect-bridge"

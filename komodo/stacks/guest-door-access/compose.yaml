@@ -4,6 +4,8 @@ services:
       context: .
     container_name: guest-door-access
     restart: unless-stopped
+    deploy:
+      replicas: 0
     environment:
       HA_URL: ${HA_URL}
       HA_TOKEN: ${HA_TOKEN}

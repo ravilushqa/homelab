@@ -75,14 +75,6 @@ pages:
             title: Daily Services
             style: compact
             sites:
-              - title: Actual
-                url: https://actual.ravil.space
-                check-url: https://actual.ravil.space
-                icon: si:actualbudget
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
               - title: Paperless
                 url: https://paperless.ravil.space
                 check-url: https://paperless.ravil.space

@@ -299,11 +299,8 @@ External services routed through Kubernetes from `k8s/apps/external/`:
 
 Application stacks:
 
-- `actual` — Actual Budget server at `actual.ravil.space`
-- `actual-ai` — scheduled/background AI categorization worker for Actual Budget
 - `bytestash` — snippet manager at `bytestash.ravil.space`
 - `dozzle` — Docker log viewer at `dozzle.ravil.space`
-- `hr-breaker` — HR/career helper app at `hr-breaker.ravil.space`
 - `immich` — photo management at `immich.ravil.space`
 - `karakeep` — bookmarks/read-it-later at `karakeep.ravil.space`
 - `miniflux` — RSS reader at `miniflux.ravil.space`
@@ -313,7 +310,6 @@ Application stacks:
 - `openhands` — AI coding environment at `openhands.ravil.space`
 - `paperless-ngx` — document management at `paperless.ravil.space`
 - `paperless-gpt` — AI assistant for Paperless at `paperless-gpt.ravil.space`
-- `pipecat-call` — outbound AI phone-call API at `call.ravil.space`
 - `rsshub` — RSS generator at `rsshub.ravil.space`
 - `s-pdf` — PDF tools at `pdf.ravil.space`
 - `umami` — web analytics at `umami.ravil.space`
@@ -326,7 +322,6 @@ Platform/support stacks:
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `hermes` — router-only stack for Hermes dashboard at `hermes.ravil.space`
-- `hermes-webui` — router-only stack for Hermes Web UI at `hermes-webui.ravil.space`
 - `honcho` — LAN-only memory backend API on `192.168.1.166:8077`, with PostgreSQL/pgvector and Redis
 - `komodo-core`, `komodo-periphery`, `komodo-mongo` — Komodo itself, present on the Docker host
 
@@ -345,7 +340,7 @@ It appears in two places:
 
 - **Docker/Komodo public services:** usually protected by Traefik `oidc-auth@docker` middleware unless they have acceptable native auth.
 - **Kubernetes services:** use Gateway API routes and, where needed, oauth2-proxy or service-native auth.
-- **Machine/API clients:** may require password/API-token auth even when the browser UI uses OIDC. Actual Budget is a known example.
+- **Machine/API clients:** may require password/API-token auth even when the browser UI uses OIDC.
 
 ## Certificates and secrets
 
