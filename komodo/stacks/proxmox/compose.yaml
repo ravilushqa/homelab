@@ -9,7 +9,9 @@ services:
       - "traefik.http.routers.proxmox.rule=Host(`proxmox.ravil.space`)"
       - "traefik.http.routers.proxmox.entrypoints=websecure"
       - "traefik.http.routers.proxmox.tls.certresolver=cloudflare"
-      # No OIDC — Proxmox has its own PAM/PVE auth
+      # OIDC in front of PVE's own PAM/PVE login. Terraform and cluster traffic
+      # reach PVE directly on 192.168.1.100:8006, so they don't go through this
+      - "traefik.http.routers.proxmox.middlewares=oidc-auth@docker"
       - "traefik.http.services.proxmox-svc.loadbalancer.server.url=https://192.168.1.100:8006"
       - "traefik.http.services.proxmox-svc.loadbalancer.serverstransport=proxmox@file"
       - "traefik.http.services.proxmox-svc.loadbalancer.passHostHeader=true"
