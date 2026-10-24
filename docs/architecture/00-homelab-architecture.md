@@ -248,7 +248,6 @@ Stopped templates:
 - `changedetection`
 - `dozzle`
 - `glance`
-- `grafana`
 - `inbox-zero`
 - `isponsorblocktv`
 - `it-tools`
@@ -268,9 +267,8 @@ External services routed through Kubernetes from `k8s/apps/external/` (EndpointS
 
 - `changedetection.ravil.space` — routes to the Proxmox/LXC service at `192.168.1.155:5000`
 - `openwebui.ravil.space` — routes to Open WebUI at `192.168.1.29:8080`
-- `grafana` — HTTPRoute for `grafana.ravil.space` → `192.168.1.24:3000`, but the hostname is not in `k8s-tcp-router`, so edge traffic goes to the Komodo `grafana-lgtm` stack instead; this K8s route is unreachable from the edge
 
-Home Assistant (`ha.ravil.space`) and PocketID (`pocketid.ravil.space`) are served by Komodo router-only stacks, not Kubernetes.
+Home Assistant (`ha.ravil.space`) and PocketID (`pocketid.ravil.space`) are served by Komodo router-only stacks, and Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, not Kubernetes.
 
 ## Komodo and Docker platform
 

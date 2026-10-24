@@ -206,12 +206,6 @@ Services routed through the Kubernetes Gateway API and exposed via Cloudflare DN
 - **Purpose**: Web interface for AI models
 - **Configuration**: `k8s/apps/external/openwebui/`
 
-#### Grafana
-- **Domain**: grafana.ravil.space
-- **Purpose**: Monitoring dashboards
-- **Configuration**: `k8s/apps/external/grafana/`
-- **Special**: Not in `k8s-tcp-router`, so edge traffic for this hostname goes to the Komodo `grafana-lgtm` stack; this route is unreachable from the edge
-
 #### Change Detection
 - **Domain**: changedetection.ravil.space
 - **Purpose**: Website change monitoring
