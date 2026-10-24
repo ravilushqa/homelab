@@ -59,7 +59,7 @@ Traffic enters via a Traefik instance that does TLS passthrough to two backends:
 - **Adding a new K8s service**: add its hostname to `k8s-tcp-router` rule
 
 K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero`,
-`changedetection`, `grafana`, `ha`, `openwebui`, `pocketid`, `proxmox` (all `.ravil.space`)
+`changedetection`, `openwebui` (all `.ravil.space`)
 
 ## Adding a New K8s Service
 

@@ -11,8 +11,8 @@ spec:
   listeners:
     - protocol: TLS
       port: 443
-      name: proxmox
-      hostname: "proxmox.ravil.space"
+      name: tls
+      hostname: "*.ravil.space"
       tls:
         mode: Passthrough
       allowedRoutes:

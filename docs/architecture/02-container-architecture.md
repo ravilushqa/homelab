@@ -231,11 +231,6 @@ Services routed through the Kubernetes Gateway API and exposed via Cloudflare DN
 - **Purpose**: Website change monitoring
 - **Configuration**: `k8s/apps/external/changedetection/`
 
-#### Proxmox
-- **Domain**: proxmox.ravil.space
-- **Purpose**: Proxmox VE external access (TLS passthrough)
-- **Configuration**: `k8s/apps/external/proxmox/`
-
 ### Docker Stacks (Komodo — via Traefik)
 
 Services deployed as Docker compose stacks managed by Komodo. Traffic is routed directly through the Komodo host's Traefik instance, bypassing the Kubernetes Gateway API.
@@ -251,6 +246,8 @@ Services deployed as Docker compose stacks managed by Komodo. Traffic is routed 
 - **RSSHub** — RSS feed generator (`komodo/stacks/rsshub/`)
 - **Nextflux** — RSS reader frontend (`komodo/stacks/nextflux/`)
 - **Dozzle** — Container log viewer (`komodo/stacks/dozzle/`)
+- **Proxmox VE** — Router-only proxy to the PVE UI at proxmox.ravil.space, behind OIDC (`komodo/stacks/proxmox/`)
+- **Proxmox Backup Server** — Router-only proxy to the PBS UI at pbs.ravil.space, behind OIDC (`komodo/stacks/pbs/`)
 
 ## Service Communication Patterns
 
