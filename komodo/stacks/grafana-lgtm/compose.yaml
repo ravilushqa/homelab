@@ -26,15 +26,28 @@ services:
       - "traefik.docker.network=traefik_default"
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    # Pinned: the stack has auto_update = true, so :latest would be re-pulled on
+    # every deploy. Bump the tag and digest together.
+    image: gcr.io/cadvisor/cadvisor:v0.55.1@sha256:3de2bd5203120b866d74a9b283b2ffb8ec382fbf9dc321814700c6ea6f44ec57
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
+    # Collect only what the dashboards use (cpu, memory, network) plus OOM
+    # events; disk/diskIO walk /var/lib/docker. Keep only the compose labels
+    # instead of every container label and env var.
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --enable_metrics=cpu,memory,network,oom_event
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.project.working_dir,com.docker.compose.service
     # Hard cgroup cap (no extra swap) so a runaway cadvisor is OOM-killed in its
     # own cgroup instead of triggering a host-wide OOM. GOMEMLIMIT is a soft Go
     # runtime target below the cap, making GC work harder before the hard limit.
+    # The CPU cap bounds that GC work (Go 1.25 derives GOMAXPROCS from it).
     mem_limit: 2g
     memswap_limit: 2g
+    cpus: 1
     environment:
       GOMEMLIMIT: 1536MiB
     ports:
