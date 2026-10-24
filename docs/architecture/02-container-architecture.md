@@ -39,11 +39,7 @@ graph TB
         end
 
         subgraph "K8s External Applications"
-            HAOS[Home Assistant<br/>Home Automation]
             OpenWebUI[Open WebUI<br/>AI Interface]
-            Grafana[Grafana<br/>Dashboards]
-            Proxmox[Proxmox Backup<br/>External Access]
-            PocketID[PocketID<br/>Identity]
             ChangeDetection[Change Detection<br/>Website Monitoring]
         end
     end
@@ -58,9 +54,9 @@ graph TB
             Miniflux[Miniflux<br/>RSS Reader]
             Karakeep[Karakeep<br/>Bookmark Manager]
             ByteStash[ByteStash<br/>Snippet Storage]
-            Dify[Dify<br/>AI Platform]
             Spotify[Spotify Tools]
             RSSHub[RSSHub<br/>RSS Generator]
+            RouterOnly[Router-only proxies<br/>Proxmox VE, PBS, HA, PocketID]
         end
     end
 
@@ -119,8 +115,8 @@ These services provide foundational capabilities for the cluster.
 - **Configuration**: `k8s/infra/network/gateway/`
 - **Integration**: Works with Cilium as implementation
 - **Features**:
-  - HTTPRoute and TLSRoute resources
-  - TLS passthrough from Traefik edge
+  - HTTPRoute resources (TLSRoute supported via the `tls-passthrough` gateway, currently unused)
+  - Receives TLS passthrough from the Traefik edge for hostnames listed in `k8s-tcp-router`
   - Path-based and host-based routing
 
 #### Cert-Manager (TLS Certificates)
@@ -205,12 +201,6 @@ Services accessible only from internal network or through VPN.
 
 Services routed through the Kubernetes Gateway API and exposed via Cloudflare DNS.
 
-#### Home Assistant OS
-- **Domain**: haos.ravil.space
-- **Purpose**: Home automation platform
-- **Configuration**: `k8s/apps/external/haos/`
-- **Special**: External service pointing to HAOS VM
-
 #### Open WebUI
 - **Domain**: openwebui.ravil.space
 - **Purpose**: Web interface for AI models
@@ -220,11 +210,7 @@ Services routed through the Kubernetes Gateway API and exposed via Cloudflare DN
 - **Domain**: grafana.ravil.space
 - **Purpose**: Monitoring dashboards
 - **Configuration**: `k8s/apps/external/grafana/`
-
-#### PocketID
-- **Domain**: pocketid.ravil.space
-- **Purpose**: OIDC identity provider
-- **Configuration**: `k8s/apps/external/pocketid/`
+- **Special**: Not in `k8s-tcp-router`, so edge traffic for this hostname goes to the Komodo `grafana-lgtm` stack; this route is unreachable from the edge
 
 #### Change Detection
 - **Domain**: changedetection.ravil.space
@@ -241,11 +227,12 @@ Services deployed as Docker compose stacks managed by Komodo. Traffic is routed 
 - **Miniflux** — RSS feed reader (`komodo/stacks/miniflux/`)
 - **Karakeep** — Bookmark manager (`komodo/stacks/karakeep/`)
 - **ByteStash** — Code snippet storage (`komodo/stacks/bytestash/`)
-- **Dify** — AI application platform (no stack yet)
 - **Your Spotify** — Spotify stats (`komodo/stacks/your_spotify/`)
 - **RSSHub** — RSS feed generator (`komodo/stacks/rsshub/`)
 - **Nextflux** — RSS reader frontend (`komodo/stacks/nextflux/`)
 - **Dozzle** — Container log viewer (`komodo/stacks/dozzle/`)
+- **Home Assistant** — Router-only proxy to HAOS at ha.ravil.space (`komodo/stacks/ha/`)
+- **PocketID** — Router-only proxy to the OIDC provider LXC at pocketid.ravil.space (`komodo/stacks/pocketid/`)
 - **Proxmox VE** — Router-only proxy to the PVE UI at proxmox.ravil.space, behind OIDC (`komodo/stacks/proxmox/`)
 - **Proxmox Backup Server** — Router-only proxy to the PBS UI at pbs.ravil.space, behind OIDC (`komodo/stacks/pbs/`)
 
