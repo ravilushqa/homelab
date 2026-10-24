@@ -136,10 +136,7 @@ Kubernetes SNI hostnames currently routed explicitly:
 - `it-tools.ravil.space`
 - `inbox-zero.ravil.space`
 - `changedetection.ravil.space`
-- `ha.ravil.space`
 - `openwebui.ravil.space`
-- `pocketid.ravil.space`
-- `proxmox.ravil.space`
 
 Operational rule:
 
@@ -258,7 +255,6 @@ Stopped templates:
 - `it-tools`
 - `openwebui`
 - `pocketid`
-- `proxmox`
 
 ### Kubernetes app inventory
 
@@ -276,7 +272,6 @@ External services routed through Kubernetes from `k8s/apps/external/`:
 - `ha.ravil.space` — routes to Home Assistant OS
 - `openwebui.ravil.space` — routes to Open WebUI
 - `pocketid.ravil.space` — routes to PocketID
-- `proxmox.ravil.space` — TLS passthrough route to Proxmox
 - `grafana.ravil.space` — Grafana route; note that Docker `grafana-lgtm` also exposes this hostname in the Komodo stack, so confirm the active route through Traefik logs when changing it
 
 ## Komodo and Docker platform
@@ -322,6 +317,8 @@ Platform/support stacks:
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `hermes` — router-only stack for Hermes dashboard at `hermes.ravil.space`
+- `proxmox` — router-only stack for Proxmox VE at `proxmox.ravil.space` (OIDC) → `192.168.1.100:8006`
+- `pbs` — router-only stack for Proxmox Backup Server at `pbs.ravil.space` (OIDC) → `192.168.1.121:8007`
 - `honcho` — LAN-only memory backend API on `192.168.1.166:8077`, with PostgreSQL/pgvector and Redis
 - `komodo-core`, `komodo-periphery`, `komodo-mongo` — Komodo itself, present on the Docker host
 
