@@ -4,6 +4,8 @@
 - **Proxmox** hosts a Talos-managed K8s cluster and a separate Komodo Docker host
 - **ArgoCD** (deployed at bootstrap) handles all subsequent K8s app deployments via GitOps
 - **Komodo** auto-syncs Docker stacks from `komodo/stacks.toml` in this repo (see `komodo/sync.toml`)
+  - Never set `deploy = true` in `stacks.toml`: the sync deploys all such stacks in parallel and saturates the host CPU.
+    Deploys are done sequentially by `.github/workflows/komodo-deploy.yaml` (runs the sync, then deploys changed stacks one by one)
 - New K8s apps: add to `k8s/apps/external/` or `k8s/apps/internal/` + register in `k8s/infra/argocd/applications`
 
 ## Commands

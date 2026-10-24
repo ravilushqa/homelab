@@ -24,22 +24,39 @@ jobs:
       - name: Detect changed stacks
         id: changed
         run: |
+          # A stack is "changed" if files under komodo/stacks/<name>/ changed
+          # or its [stack.config] in komodo/stacks.toml changed (env, repo, ...).
+          # Only stacks declared in komodo/stacks.toml at HEAD are kept.
           CHANGED=$(git diff --name-only HEAD~1 HEAD -- komodo/stacks/ \
-            | grep '^komodo/stacks/' \
-            | awk -F'/' '{print $3}' \
-            | sort -u \
-            | tr '\n' ' ')
+            | awk -F'/' '$1 == "komodo" && $2 == "stacks" && NF > 3 {print $3}' \
+            | python3 -c '
+          import subprocess, sys, tomllib
+
+          def load(rev):
+              try:
+                  raw = subprocess.run(
+                      ["git", "show", f"{rev}:komodo/stacks.toml"],
+                      check=True, capture_output=True, text=True,
+                  ).stdout
+              except subprocess.CalledProcessError:
+                  return {}
+              return {s["name"]: s.get("config") for s in tomllib.loads(raw).get("stack", [])}
+
+          old, new = load("HEAD~1"), load("HEAD")
+          changed = {line.strip() for line in sys.stdin if line.strip()}
+          changed |= {name for name, config in new.items() if old.get(name) != config}
+          print(" ".join(sorted(name for name in changed if name in new)))
+          ')
           echo "stacks=$CHANGED" >> $GITHUB_OUTPUT
           echo "Changed stacks: $CHANGED"
 
-      - name: Deploy changed stacks
-        if: steps.changed.outputs.stacks != ''
+      - name: Sync and deploy changed stacks
         env:
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
           KOMODO_URL: "http://192.168.1.166:9120"
         run: |
-          # Komodo DeployStack is asynchronous.
+          # Komodo DeployStack / RunSync are asynchronous.
           # Execute response shape (MongoDB Extended JSON):
           #   { "_id": { "$oid": "<hex>" }, "status": "Queued"|"InProgress"|"Complete",
           #     "success": false, ... }
@@ -47,16 +64,15 @@ jobs:
           # Complete when: status == "Complete" AND success == true
           # Source: verified against live StopStack response on this Komodo instance.
 
-          # Submit a DeployStack and return the plain update-ID hex string.
-          deploy_stack() {
-            local stack="$1"
-            echo "Deploying stack: $stack" >&2
+          # Submit an execute request and return the plain update-ID hex string.
+          komodo_execute() {
+            local stack="$1" payload="$2"
             local raw http_code body update_id
             raw=$(curl -sS --connect-timeout 10 --max-time 30 -w '\n%{http_code}' -X POST "$KOMODO_URL/execute" \
               -H "Content-Type: application/json" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
-              -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$stack\"}}") || return 1
+              -d "$payload") || return 1
             http_code=$(printf '%s' "$raw" | tail -n1)
             body=$(printf '%s' "$raw" | head -n -1)
             if [ "$http_code" -ne 200 ]; then
@@ -119,12 +135,40 @@ jobs:
           deploy_and_wait() {
             local stack="$1"
             local update_id
-            update_id=$(deploy_stack "$stack") || return 1
+            echo "Deploying stack: $stack" >&2
+            update_id=$(komodo_execute "$stack" "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$stack\"}}") || return 1
             wait_for_update "$update_id" "$stack"
           }
 
+          # Apply komodo/stacks.toml to Komodo before deploying, so new stacks
+          # exist and changed stack configs are in place. The sync itself does
+          # not deploy anything (no `deploy = true`): it would deploy all stacks
+          # in parallel and saturate the host CPU. Retries cover a sync that is
+          # already running (e.g. started by the repo webhook).
+          sync_and_wait() {
+            local sync="homelab-stacks" attempt update_id
+            for attempt in 1 2 3 4 5; do
+              echo "Running resource sync: $sync (attempt $attempt)" >&2
+              if update_id=$(komodo_execute "$sync" "{\"type\":\"RunSync\",\"params\":{\"sync\":\"$sync\"}}") \
+                && wait_for_update "$update_id" "$sync"; then
+                return 0
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
+          if ! sync_and_wait; then
+            echo "::warning::Resource sync failed — deploying with the stack config Komodo currently has"
+          fi
+
           CHANGED="${{ steps.changed.outputs.stacks }}"
           FAILED=0
+
+          if [ -z "$CHANGED" ]; then
+            echo "No changed stacks to deploy"
+            exit 0
+          fi
 
           # Privacy + ordering gate:
           # traefik ALWAYS deploys first when health-connect-bridge changes —
