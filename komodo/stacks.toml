@@ -209,6 +209,17 @@ SPOTIFY_CLIENT_ID = [[SPOTIFY_CLIENT_ID]]
 SPOTIFY_CLIENT_SECRET = [[SPOTIFY_CLIENT_SECRET]]
 """
 
+[[stack]]
+name = "audiobookshelf"
+description = "Audiobook server — read-only SMB library at /mnt/audiobooks, native OIDC (Pocket ID)"
+tags = ["media"]
+auto_update = false
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/audiobookshelf"
+
 # ─── Productivity ────────────────────────────────────────────────
 
 [[stack]]
