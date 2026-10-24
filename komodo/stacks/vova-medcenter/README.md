@@ -4,7 +4,7 @@ Demo deployment for [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medce
 
 - Public URL: https://vova-medcenter.ravil.space
 - Demo UI: https://vova-medcenter.ravil.space/demo/index.html
-- Live frontend/backend image refs and `EXPECTED_REVISION` are managed in `compose.yaml` by the automated release PR flow from [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medcenter).
+- This stack lives on the `deploy/vova-medcenter` branch of ravilushqa/homelab (not `main`). Every push to this branch is deployed by Komodo. Live frontend/backend image refs and `EXPECTED_REVISION` in `compose.yaml` are updated by direct pushes from the release workflow in [`Zent7/vova-medcenter`](https://github.com/Zent7/vova-medcenter).
 - Images are immutable GHCR artifacts; Komodo pulls digest-pinned image refs.
 
 ## Architecture
