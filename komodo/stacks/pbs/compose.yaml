@@ -1,0 +1,20 @@
+services:
+  pbs:
+    image: traefik/whoami
+    restart: unless-stopped
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pbs.rule=Host(`pbs.ravil.space`)"
+      - "traefik.http.routers.pbs.entrypoints=websecure"
+      - "traefik.http.routers.pbs.tls.certresolver=cloudflare"
+      # No OIDC — Proxmox Backup Server has its own PAM/PBS auth
+      - "traefik.http.services.pbs-svc.loadbalancer.server.url=https://192.168.1.121:8007"
+      # Reuses the insecureSkipVerify transport: PBS serves a self-signed cert
+      - "traefik.http.services.pbs-svc.loadbalancer.serverstransport=proxmox@file"
+      - "traefik.http.services.pbs-svc.loadbalancer.passHostHeader=true"
+
+networks:
+  traefik_default:
+    external: true
