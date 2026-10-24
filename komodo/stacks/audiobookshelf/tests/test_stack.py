@@ -132,87 +132,199 @@ class KomodoResourceTests(unittest.TestCase):
 
 
 MOUNTPOINT = "/mnt/audiobooks"
-CIFS_SOURCE = "//192.168.1.2/proxmox[/audiobooks]"
+TARGET = "/audiobooks"
+CIFS_SOURCE = "//192.168.1.2/proxmox"
+EXPECTED_DOCKER_PREFIX = [
+    "run", "--rm", "--network", "none", "--pull=missing", "--read-only",
+    "--mount", f"type=bind,src={MOUNTPOINT},dst={TARGET},readonly",
+    "--entrypoint", "node", IMAGE, "-e",
+]
+
+# Container-side /proc/self/mountinfo as seen inside the probe (observed on the Komodo host)
+GOOD_LINE = (
+    "1525 1501 0:63 /audiobooks /audiobooks ro,relatime master:521 - cifs //192.168.1.2/proxmox "
+    "rw,vers=3.1.1,cache=strict,uid=0,noforceuid,gid=0,noforcegid,addr=192.168.1.2"
+)
+OTHER_LINES = [
+    "1501 1400 0:120 / / ro,relatime - overlay overlay rw,lowerdir=/var/lib/docker/l/A,upperdir=/u,workdir=/w",
+    "1502 1501 0:122 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw",
+    "1510 1501 0:125 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755",
+]
 
 
+def mountinfo(*media_lines):
+    return "\n".join([*OTHER_LINES, *media_lines]) + "\n"
+
+
+# Patches fs inside the real `node -e` script: /proc/self/mountinfo and /audiobooks are served from
+# env fixtures, any other read is an error, and every access is logged
+FS_MOCK = r"""
+const fs = require("fs");
+const log = (m) => fs.appendFileSync(process.env.FS_LOG, m + "\n");
+const realRead = fs.readFileSync;
+fs.readFileSync = (p, ...rest) => {
+  if (p === process.env.FS_LOG) return realRead(p, ...rest);
+  log("readFileSync " + p);
+  if (p !== "/proc/self/mountinfo") throw new Error("unexpected readFileSync " + p);
+  return process.env.FIXTURE_MOUNTINFO;
+};
+fs.readdirSync = (p) => {
+  log("readdirSync " + p);
+  if (p !== "/audiobooks") throw new Error("unexpected readdirSync " + p);
+  if (process.env.FIXTURE_READDIR_ERROR) {
+    throw Object.assign(new Error(process.env.FIXTURE_READDIR_ERROR + ": denied"), { code: process.env.FIXTURE_READDIR_ERROR });
+  }
+  return ["Secret Author", "Private Book.m4b"];
+};
+"""
+
+# Fake `docker`: records argv, then runs the script after `-e` with the host's node + FS_MOCK
+DOCKER_STUB = r"""#!/usr/bin/env python3
+import json, os, subprocess, sys
+args = sys.argv[1:]
+with open(os.environ["DOCKER_LOG"], "a") as f:
+    f.write(json.dumps(args) + "\n")
+if os.environ.get("FIXTURE_DOCKER_EXIT"):
+    sys.stderr.write("docker: Error response from daemon: invalid mount config\n")
+    sys.exit(int(os.environ["FIXTURE_DOCKER_EXIT"]))
+script = args[args.index("-e") + 1]
+sys.exit(subprocess.run([os.environ["REAL_NODE"], "--require", os.environ["FS_MOCK"], "-e", script]).returncode)
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node not available")
 class PreDeployGuardTests(unittest.TestCase):
-    """Run the real pre_deploy command (as Komodo shell mode does: `sh -c`) against stubbed
-    findmnt/ls on PATH, so no root, CIFS share, or /mnt/audiobooks is needed."""
+    """Run the real pre_deploy command (as Komodo shell mode does: `sh -c`) with a stub `docker` on
+    PATH. The stub runs the guard's inline Node script against mocked fs fixtures, so no Docker
+    daemon, CIFS share, or /mnt/audiobooks is needed."""
 
     def setUp(self):
         self.pre_deploy = stack_entry()[0][0]["config"]["pre_deploy"]
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp)
-        self.bin = self.tmp / "bin"
-        self.bin.mkdir()
-        self.log = self.tmp / "calls.log"
-
-    def stub(self, name, stdout="", code=0):
-        script = self.bin / name
-        script.write_text(
-            "#!/bin/sh\n"
-            f'echo "{name} $*" >> "{self.log}"\n'
-            f"printf '%s' '{stdout}'\n"
-            f"exit {code}\n"
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        docker = bin_dir / "docker"
+        docker.write_text(DOCKER_STUB)
+        docker.chmod(0o755)
+        (self.tmp / "fs_mock.js").write_text(FS_MOCK)
+        self.docker_log = self.tmp / "docker.log"
+        self.fs_log = self.tmp / "fs.log"
+        self.env = dict(
+            os.environ,
+            PATH=f"{bin_dir}:{os.environ['PATH']}",
+            REAL_NODE=shutil.which("node"),
+            FS_MOCK=str(self.tmp / "fs_mock.js"),
+            DOCKER_LOG=str(self.docker_log),
+            FS_LOG=str(self.fs_log),
+            FIXTURE_MOUNTINFO=mountinfo(GOOD_LINE),
         )
-        script.chmod(0o755)
 
-    def run_guard(self):
-        env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}")
+    def run_guard(self, **fixtures):
         return subprocess.run(
             ["sh", "-c", self.pre_deploy["command"]],
             cwd=self.tmp,
-            env=env,
+            env={**self.env, **fixtures},
             capture_output=True,
             text=True,
         )
 
-    def calls(self):
-        return self.log.read_text().splitlines() if self.log.exists() else []
+    def docker_calls(self):
+        return [json.loads(l) for l in self.docker_log.read_text().splitlines()] if self.docker_log.exists() else []
+
+    def fs_calls(self):
+        return self.fs_log.read_text().splitlines() if self.fs_log.exists() else []
+
+    def assert_rejected(self, res, message):
+        self.assertNotEqual(res.returncode, 0, res.stdout)
+        self.assertIn(message, res.stderr)
 
     def test_schema_shell_mode_default_path(self):
         self.assertEqual(set(self.pre_deploy), {"command", "shell_mode"})
         self.assertIs(self.pre_deploy["shell_mode"], True)
 
-    def test_correct_cifs_source_passes(self):
-        self.stub("findmnt", CIFS_SOURCE + "\n")
-        self.stub("ls")
+    def test_probe_is_one_disposable_readonly_container_on_the_host_daemon(self):
         res = self.run_guard()
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn(f"findmnt -rn -M {MOUNTPOINT} -t cifs -o SOURCE", self.calls())
-        self.assertTrue([c for c in self.calls() if c.startswith("ls ") and MOUNTPOINT in c])
+        calls = self.docker_calls()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][: len(EXPECTED_DOCKER_PREFIX)], EXPECTED_DOCKER_PREFIX)
+        self.assertEqual(len(calls[0]), len(EXPECTED_DOCKER_PREFIX) + 1)  # only the script follows -e
+
+    def test_probe_image_matches_compose_pin(self):
+        self.assertIn(f"image: {IMAGE}", COMPOSE_FILE.read_text())
+        self.assertIn(IMAGE, self.pre_deploy["command"])
+
+    def test_observed_cifs_mount_passes(self):
+        res = self.run_guard()
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(self.fs_calls(), ["readFileSync /proc/self/mountinfo", "readdirSync /audiobooks"])
+        self.assertIn(CIFS_SOURCE, res.stdout)
+
+    def test_filenames_are_not_printed(self):
+        res = self.run_guard()
+        self.assertEqual(res.returncode, 0, res.stderr)
+        for name in ("Secret Author", "Private Book"):
+            self.assertNotIn(name, res.stdout + res.stderr)
+
+    def test_stale_ordinary_directory_fails(self):
+        # Share not mounted on the LXC: Docker binds the plain local directory instead
+        stale = "1525 1501 0:31 /mnt/audiobooks /audiobooks ro,relatime - zfs rpool/data/subvol-122-disk-0 rw,xattr"
+        res = self.run_guard(FIXTURE_MOUNTINFO=mountinfo(stale))
+        self.assert_rejected(res, "type")
+        self.assertNotIn("readdirSync /audiobooks", self.fs_calls())
+
+    def test_wrong_root_subpath_fails(self):
+        for root in ("/", "/audiobooks/x", "/audiobooks2"):
+            with self.subTest(root=root):
+                line = GOOD_LINE.replace(" /audiobooks /audiobooks ", f" {root} /audiobooks ", 1)
+                self.assert_rejected(self.run_guard(FIXTURE_MOUNTINFO=mountinfo(line)), "root")
 
     def test_wrong_source_fails(self):
-        self.stub("ls")
-        for wrong in ("//192.168.1.2/proxmox", "//192.168.1.3/proxmox[/audiobooks]",
-                      "//192.168.1.2/proxmox[/audiobooks/x]", CIFS_SOURCE + "\n" + CIFS_SOURCE):
-            with self.subTest(source=wrong):
-                self.stub("findmnt", wrong + "\n")
-                res = self.run_guard()
-                self.assertNotEqual(res.returncode, 0)
-                self.assertIn(CIFS_SOURCE, res.stderr)
+        for source in ("//192.168.1.3/proxmox", "//192.168.1.2/proxmox2", "//192.168.1.2/other"):
+            with self.subTest(source=source):
+                line = GOOD_LINE.replace(f" {CIFS_SOURCE} ", f" {source} ")
+                self.assert_rejected(self.run_guard(FIXTURE_MOUNTINFO=mountinfo(line)), "source")
 
-    def test_unmounted_existing_directory_fails(self):
-        # findmnt prints nothing and exits 1 when nothing (or no cifs) is mounted there;
-        # ls succeeds because the empty mountpoint directory still exists
-        self.stub("findmnt", code=1)
-        self.stub("ls")
-        res = self.run_guard()
-        self.assertNotEqual(res.returncode, 0)
-        self.assertIn("not mounted", res.stderr)
+    def test_wrong_fs_type_fails(self):
+        for fstype in ("smb3", "nfs", "fuse.sshfs"):
+            with self.subTest(fstype=fstype):
+                line = GOOD_LINE.replace(" - cifs ", f" - {fstype} ")
+                self.assert_rejected(self.run_guard(FIXTURE_MOUNTINFO=mountinfo(line)), "type")
+
+    def test_read_write_mount_fails(self):
+        line = GOOD_LINE.replace(" ro,relatime ", " rw,relatime ")
+        self.assert_rejected(self.run_guard(FIXTURE_MOUNTINFO=mountinfo(line)), "read-only")
+
+    def test_missing_or_duplicate_mount_fails(self):
+        for case, info in (("missing", mountinfo()), ("duplicate", mountinfo(GOOD_LINE, GOOD_LINE))):
+            with self.subTest(case=case):
+                self.assert_rejected(self.run_guard(FIXTURE_MOUNTINFO=info), "exactly one")
 
     def test_unreadable_mount_fails(self):
-        self.stub("findmnt", CIFS_SOURCE + "\n")
-        self.stub("ls", code=2)
-        res = self.run_guard()
-        self.assertNotEqual(res.returncode, 0)
-        self.assertIn("not readable", res.stderr)
+        res = self.run_guard(FIXTURE_READDIR_ERROR="EACCES")
+        self.assert_rejected(res, "not readable")
+        self.assertIn("EACCES", res.stderr)
+
+    def test_docker_failure_fails(self):
+        # e.g. --mount on a nonexistent /mnt/audiobooks, or the daemon is unreachable
+        res = self.run_guard(FIXTURE_DOCKER_EXIT="125")
+        self.assert_rejected(res, "probe failed")
+        self.assertEqual(self.fs_calls(), [])
 
     def test_guard_changes_no_host_state(self):
+        # The only side effect allowed is a throwaway `docker run --rm` probe with a readonly bind
         command = self.pre_deploy["command"]
-        for forbidden in ("mount ", "umount", "mkdir", "chmod", "chown", "rm ", "touch", "systemctl", ">"):
-            # findmnt is the only allowed *mount* token; `>&2` is the only allowed redirect
-            stripped = command.replace("findmnt", "").replace(">&2", "").replace(">/dev/null", "")
+        self.assertEqual(command.count("docker run"), 1)
+        self.assertEqual(command.count("docker "), command.count("docker run") + command.count("docker probe"))
+        self.assertIn("docker run --rm ", command)
+        self.assertNotIn(" -v ", command)
+        self.assertNotIn("--volume", command)
+        self.assertNotIn("--privileged", command)
+        for forbidden in ("mount ", "umount", "mkdir", "chmod", "chown", "rm ", "touch", "systemctl",
+                          "writeFile", "appendFile", "mkdirSync", "unlink", "rmSync", ">"):
+            # `>&2` is the only allowed redirect; `=>` is JS arrow syntax; `--rm`/`--mount` are probe flags
+            stripped = command.replace(">&2", "").replace("=>", "").replace("--rm ", "").replace("--mount ", "")
             self.assertNotIn(forbidden, stripped, forbidden)
 
 

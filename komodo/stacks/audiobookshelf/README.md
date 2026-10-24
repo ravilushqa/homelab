@@ -14,11 +14,28 @@ Audiobook server at **https://audiobooks.ravil.space**. It runs on the Komodo ho
   exists but the CIFS share is **not mounted**, Compose binds the empty directory and
   Audiobookshelf sees an empty library.
 - Mount guard: the Komodo resource has a `pre_deploy` command (`shell_mode = true`, runs in the
-  run directory) that aborts the deploy unless
-  `findmnt -rn -M /mnt/audiobooks -t cifs -o SOURCE` prints exactly
-  `//192.168.1.2/proxmox[/audiobooks]` and `ls -A /mnt/audiobooks/` succeeds. It only reads;
-  it never mounts, creates or changes anything on the host. If it fails, fix the mount on the
-  LXC/Proxmox side and redeploy. It does not protect a running container if the share drops later.
+  run directory) that aborts the deploy unless the share is mounted, read-only and readable.
+  - **Why it goes through Docker:** Komodo Periphery runs in its own container. It has
+    `/var/run/docker.sock` and `/etc/komodo` bind-mounted, but not `/mnt/audiobooks`. A
+    `findmnt`/`ls` in the pre_deploy shell would inspect Periphery's mount namespace, not the
+    LXC's, and fails even when the share is fine. Bind sources in `compose.yaml` are resolved by
+    the **host Docker daemon**, so the guard asks that same daemon.
+  - **What it runs:** a throwaway probe container
+    (`docker run --rm --network none --pull=missing --read-only`) from the pinned
+    Audiobookshelf image, with `--entrypoint node` and
+    `--mount type=bind,src=/mnt/audiobooks,dst=/audiobooks,readonly`. Unlike `-v`, `--mount`
+    fails instead of creating a missing source path. An inline Node script reads
+    `/proc/self/mountinfo` and requires exactly one `/audiobooks` entry with fs type `cifs`,
+    source `//192.168.1.2/proxmox`, share root `/audiobooks`, and `ro` in the mount options. It
+    then calls `readdirSync("/audiobooks")` to prove the share is readable. Filenames are
+    discarded, not printed.
+  - **What it rejects:** a plain directory left behind when the share is unmounted (fs type is
+    then the LXC's disk, e.g. `zfs`), a wrong share/root/type, a read-write bind, an unreadable
+    share, or a missing `/mnt/audiobooks` (Docker exits ≥125).
+  - It writes nothing to the media and changes nothing on the host. The only side effect is
+    the probe container, which `--rm` removes. If the guard fails, fix the mount on the
+    LXC/Proxmox side and redeploy. It does not protect a running container if the share drops
+    later.
 
 ## Adding books
 

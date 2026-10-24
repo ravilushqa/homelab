@@ -20,15 +20,21 @@
   `stack.config.branch` only selects the branch Komodo clones for this stack's compose files; the global
   resource sync reads `stacks.toml` from its own branch (`main`) independently. `auto_update = false` only
   disables image-poll redeploys; webhook, sync (`deploy = true`) and manual deploys still run.
-- `stack.config.pre_deploy` (`shell_mode = true`): read-only guard that fails unless
-  `findmnt -rn -M /mnt/audiobooks -t cifs -o SOURCE` equals `//192.168.1.2/proxmox[/audiobooks]` and
-  `ls -A /mnt/audiobooks/` succeeds. Never mounts or changes host state.
+- `stack.config.pre_deploy` (`shell_mode = true`): read-only guard. Komodo Periphery is itself a container
+  (only `/var/run/docker.sock` and `/etc/komodo` bind-mounted, no `/mnt/audiobooks`), so `findmnt`/`ls` in
+  the hook would see Periphery's mount namespace, not the LXC's. The guard therefore runs a disposable
+  `docker run --rm --network none --pull=missing --read-only --mount type=bind,src=/mnt/audiobooks,dst=/audiobooks,readonly --entrypoint node <pinned image> -e '<script>'`
+  on the host daemon, which resolves the bind exactly as the stack will. The inline Node script reads
+  `/proc/self/mountinfo` and requires exactly one `/audiobooks` entry with root `/audiobooks`, `ro` per-mount
+  options, fs type `cifs`, and source `//192.168.1.2/proxmox`, then `fs.readdirSync("/audiobooks")` (names discarded).
+  Never mounts, writes media, or changes host state; the only side effect is the `--rm` probe container.
 - Do not modify `komodo/sync.toml`, other stacks, or `logs/`. No commit, push, or deploy.
 
 ## Review Focus
 
 - Compose short syntax `/mnt/audiobooks:/audiobooks:ro` would silently create the host path if it were missing → the test asserts long syntax with `create_host_path: false`.
-- `create_host_path: false` only rejects a missing path; an existing but unmounted `/mnt/audiobooks` would bind an empty dir → the `pre_deploy` guard is run under `sh -c` against PATH-stubbed `findmnt`/`ls`: correct source passes, wrong source fails, nothing mounted fails even though the directory exists, unreadable fails.
+- `create_host_path: false` only rejects a missing path; an existing but unmounted `/mnt/audiobooks` would bind an empty dir → the `pre_deploy` guard is run under `sh -c` with a PATH-stubbed `docker` that records the exact argv and runs the guard's real inline Node script against mocked `fs` fixtures (`/proc/self/mountinfo`, `readdirSync`): the observed CIFS line passes; a stale plain directory (non-cifs type), wrong root/source/type, `rw`, missing/duplicate entry, unreadable share, and a Docker error (exit ≥125) all fail; filenames are never printed.
+- A guard that inspects the Periphery container's namespace instead of the host daemon's always fails (or, worse, could pass against the wrong filesystem) → the guard probes through `docker run` with the same bind source the stack uses, and the test asserts the argv, including `--rm`, `--network none`, the readonly `--mount`, and the compose image pin.
 - An unset `AUDIOBOOKSHELF_TRAEFIK_ENABLED` must default to exposed (`true`) and `false` must disable it → the test renders both cases.
 - A copy-paste of another stack's labels could bring in `oidc-auth` → the test asserts no middleware label.
 - A second `audiobookshelf` TOML entry, or `branch = "main"` in it, would make the stack deploy compose files from the wrong branch → the test asserts exactly one entry with `stack.config.branch` on the feature branch, and no other stack changed branch or gained `pre_deploy`.
