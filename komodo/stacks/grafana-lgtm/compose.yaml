@@ -30,6 +30,13 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
+    # Hard cgroup cap (no extra swap) so a runaway cadvisor is OOM-killed in its
+    # own cgroup instead of triggering a host-wide OOM. GOMEMLIMIT is a soft Go
+    # runtime target below the cap, making GC work harder before the hard limit.
+    mem_limit: 2g
+    memswap_limit: 2g
+    environment:
+      GOMEMLIMIT: 1536MiB
     ports:
       - "192.168.1.166:8080:8080"
     volumes:
