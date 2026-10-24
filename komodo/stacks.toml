@@ -67,6 +67,17 @@ branch = "main"
 run_directory = "komodo/stacks/proxmox"
 
 [[stack]]
+name = "pbs"
+description = "Proxmox Backup Server web UI — router-only proxy to 192.168.1.121:8007"
+tags = ["infra"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/pbs"
+
+[[stack]]
 name = "ha"
 description = "Home Assistant — router-only proxy to 192.168.1.153:8123"
 tags = ["infra", "home-automation"]
