@@ -48,7 +48,8 @@ network: get the container IP on `traefik_default` (`docker inspect`) and use
    **Settings → Authentication**:
    - Enable **OpenID Connect**: issuer `https://pocketid.ravil.space` → **Auto-populate**,
      client ID/secret from step 3, allowed mobile redirect URI `audiobookshelf://oauth`,
-     *Match existing users by* `username`. Leave *Group claim* empty unless Pocket ID sends
+     *Match existing users by* `username` (the default, *Do not match*, only finds users
+     already linked by `sub`, so the first login fails with `User not found`). Leave *Group claim* empty unless Pocket ID sends
      `groups` with `admin`/`user`/`guest`; a configured claim that is missing denies the login.
    - Keep **Username/Password** enabled and log in once through OIDC in a private window. A
      plain `Unauthorized` means no user matched or the claims were rejected; the reason is in
