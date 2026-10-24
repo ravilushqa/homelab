@@ -1,0 +1,101 @@
+services:
+  db:
+    image: postgres:16
+    container_name: vova-medcenter-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: medcenters
+      POSTGRES_USER: medcenters
+      POSTGRES_PASSWORD: medcenters
+    volumes:
+      - vova-medcenter-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medcenters -d medcenters"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    image: ghcr.io/zent7/vova-medcenter-backend:bea5a9e82a48072dae0081abfe603082be3f05a9@sha256:874db56dad83fcd59c5258f2221eb440c9a23e54143e6229c39b10e39c5d70e9
+    pull_policy: always
+    container_name: vova-medcenter-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://medcenters:medcenters@db:5432/medcenters
+      FRONTEND_ORIGIN: https://vova-medcenter.ravil.space
+      PUBLIC_FRONTEND_ORIGIN: https://vova-medcenter.ravil.space
+      GENERATED_DOCUMENTS_DIR: /app/storage/generated
+      DOCUMENT_TEMPLATE_OVERRIDES_DIR: /app/storage/template-overrides
+    volumes:
+      - vova-medcenter-generated:/app/storage/generated
+      - vova-medcenter-template-overrides:/app/storage/template-overrides
+    labels:
+      - "traefik.enable=false"
+
+  frontend:
+    image: ghcr.io/zent7/vova-medcenter-frontend:bea5a9e82a48072dae0081abfe603082be3f05a9@sha256:66b5b1bb4753a79f1efb4c73596c750eb265c4efe36629f35fa6118442c08e87
+    pull_policy: always
+    container_name: vova-medcenter-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vova-medcenter.rule=Host(`vova-medcenter.ravil.space`)"
+      - "traefik.http.routers.vova-medcenter.entrypoints=websecure"
+      - "traefik.http.routers.vova-medcenter.tls.certresolver=cloudflare"
+      - "traefik.http.services.vova-medcenter.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik_default"
+
+  release-verifier:
+    image: alpine:3.24
+    pull_policy: always
+    container_name: vova-medcenter-release-verifier
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    environment:
+      EXPECTED_REVISION: bea5a9e82a48072dae0081abfe603082be3f05a9
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        while true; do
+          backend_status="$$(wget -qO- http://backend:8000/api/v1/health || true)"
+          frontend_status="$$(wget -qO- http://frontend/build.json || true)"
+          if echo "$${backend_status}" | grep -Fq "\"build_revision\":\"$${EXPECTED_REVISION}\"" \
+            && echo "$${frontend_status}" | grep -Fq "\"build_revision\":\"$${EXPECTED_REVISION}\""; then
+            touch /tmp/release-verified
+            exec tail -f /dev/null
+          fi
+          echo "Waiting for backend and frontend revision $${EXPECTED_REVISION}" >&2
+          sleep 5
+        done
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/release-verified"]
+      interval: 5s
+      timeout: 2s
+      start_period: 60s
+      retries: 6
+    labels:
+      - "traefik.enable=false"
+
+volumes:
+  vova-medcenter-postgres:
+  vova-medcenter-generated:
+  vova-medcenter-template-overrides:
+
+networks:
+  traefik:
+    external: true
+    name: traefik_default
