@@ -10,7 +10,7 @@ These configurations use Kustomize components to provide a DRY (Don't Repeat You
    - HTTP-based routing through the Gateway API
    - EndpointSlice pointing to an external IP
 
-2. **TLS Services** (e.g., Proxmox) - Using the `tls-service` component
+2. **TLS Services** - Using the `tls-service` component (none deployed currently)
    - TLS passthrough routing through the Gateway API
    - Service handles its own TLS termination
 

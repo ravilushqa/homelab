@@ -249,12 +249,10 @@ Stopped templates:
 - `dozzle`
 - `glance`
 - `grafana`
-- `haos`
 - `inbox-zero`
 - `isponsorblocktv`
 - `it-tools`
 - `openwebui`
-- `pocketid`
 
 ### Kubernetes app inventory
 
@@ -266,13 +264,13 @@ Internal apps from `k8s/apps/internal/`:
 - `inbox-zero.ravil.space` — email management
 - `isponsorblocktv` — internal worker/service without public hostname in the edge SNI list
 
-External services routed through Kubernetes from `k8s/apps/external/`:
+External services routed through Kubernetes from `k8s/apps/external/` (EndpointSlice to a LAN IP + HTTPRoute):
 
-- `changedetection.ravil.space` — routes to the Proxmox/LXC service
-- `ha.ravil.space` — routes to Home Assistant OS
-- `openwebui.ravil.space` — routes to Open WebUI
-- `pocketid.ravil.space` — routes to PocketID
-- `grafana.ravil.space` — Grafana route; note that Docker `grafana-lgtm` also exposes this hostname in the Komodo stack, so confirm the active route through Traefik logs when changing it
+- `changedetection.ravil.space` — routes to the Proxmox/LXC service at `192.168.1.155:5000`
+- `openwebui.ravil.space` — routes to Open WebUI at `192.168.1.29:8080`
+- `grafana` — HTTPRoute for `grafana.ravil.space` → `192.168.1.24:3000`, but the hostname is not in `k8s-tcp-router`, so edge traffic goes to the Komodo `grafana-lgtm` stack instead; this K8s route is unreachable from the edge
+
+Home Assistant (`ha.ravil.space`) and PocketID (`pocketid.ravil.space`) are served by Komodo router-only stacks, not Kubernetes.
 
 ## Komodo and Docker platform
 
@@ -294,10 +292,16 @@ External services routed through Kubernetes from `k8s/apps/external/`:
 
 Application stacks:
 
+- `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC)
 - `bytestash` — snippet manager at `bytestash.ravil.space`
 - `dozzle` — Docker log viewer at `dozzle.ravil.space`
+- `free-games-claimer` — free games claimer noVNC UI at `fgc.ravil.space`
+- `guest-door-access` — guest door access app at `guest-access.ravil.space` (currently scaled to 0)
+- `ha-wall-panel` — Home Assistant wall panel at `ha-dashboard.ravil.space`
 - `immich` — photo management at `immich.ravil.space`
 - `karakeep` — bookmarks/read-it-later at `karakeep.ravil.space`
+- `llm-council` — multi-model OpenRouter web app at `llm-council.ravil.space`
+- `mattermost` — team messaging at `mattermost.ravil.space`
 - `miniflux` — RSS reader at `miniflux.ravil.space`
 - `n8n` — workflow automation at `n8n.ravil.space`
 - `nextflux` — Miniflux frontend at `nextflux.ravil.space`
@@ -306,7 +310,6 @@ Application stacks:
 - `paperless-ngx` — document management at `paperless.ravil.space`
 - `paperless-gpt` — AI assistant for Paperless at `paperless-gpt.ravil.space`
 - `rsshub` — RSS generator at `rsshub.ravil.space`
-- `s-pdf` — PDF tools at `pdf.ravil.space`
 - `umami` — web analytics at `umami.ravil.space`
 - `vova-medcenter` — delegated external app at `vova-medcenter.ravil.space`; stack lives on the `deploy/vova-medcenter` branch, deployed by Komodo webhook on push
 - `your_spotify` — Spotify stats at `spotify.ravil.space` and API at `spotify-server.ravil.space`
@@ -317,6 +320,9 @@ Platform/support stacks:
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `hermes` — router-only stack for Hermes dashboard at `hermes.ravil.space`
+- `health-connect-bridge` — router-only stack for Health Connect webhook ingest at `health-connect.ravil.space` → `192.168.1.65:9121`
+- `pocketid` — router-only stack for PocketID at `pocketid.ravil.space` → LXC `104` (`192.168.1.112:1411`)
+- `ha` — router-only stack for Home Assistant at `ha.ravil.space` → `192.168.1.153:8123`
 - `proxmox` — router-only stack for Proxmox VE at `proxmox.ravil.space` (OIDC) → `192.168.1.100:8006`
 - `pbs` — router-only stack for Proxmox Backup Server at `pbs.ravil.space` (OIDC) → `192.168.1.121:8007`
 - `honcho` — LAN-only memory backend API on `192.168.1.166:8077`, with PostgreSQL/pgvector and Redis
@@ -330,7 +336,7 @@ PocketID is the central OIDC identity provider for user-facing services.
 
 It appears in two places:
 
-- As a Proxmox LXC (`104`) and Kubernetes-routed external app (`pocketid.ravil.space`)
+- As a Proxmox LXC (`104`) exposed at `pocketid.ravil.space` through the Komodo `pocketid` router-only stack
 - As the OIDC provider referenced by Docker Traefik middleware and service configs
 
 ### Auth patterns
