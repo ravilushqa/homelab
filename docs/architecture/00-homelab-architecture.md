@@ -105,6 +105,9 @@ The public namespace is `*.ravil.space`.
 - Split DNS: Pi-hole answers `*.ravil.space` with `192.168.1.166` (`misc.dnsmasq_lines = ["address=/*.ravil.space/192.168.1.166"]`),
   so LAN clients reach the Komodo Traefik directly (K8s hostnames included, via the SNI passthrough) instead of hairpinning
   through the router. The apex `ravil.space` and its MX still resolve publicly; AAAA and TXT for subdomains return empty.
+- Local names (`.lan`): static hosts (pve01, komodo, pbs, homeassistant, talos-*, ...) are `dns.hosts` entries in Pi-hole
+  (`expandHosts` adds `.lan`); everything else, plus reverse lookups for `192.168.1.0/24`, is conditionally forwarded to
+  UniFi (`dns.revServers = ["true,192.168.1.0/24,192.168.1.1,lan"]`), which knows DHCP client hostnames.
 - External HTTPS (port 443, forwarded by the router) enters the homelab at the Komodo Traefik on `192.168.1.166`.
 
 ## Ingress and TLS routing
