@@ -116,7 +116,7 @@ Each workout has `type` (Health Connect string), `duration_minutes`, optional `d
 6. **Sync interval**: 60 minutes recommended; 15 minutes is the minimum the app permits.
 7. **Backfill / history**: Android and device-dependent. Some devices/versions allow backfilling up to ~30 days on first sync; others do not. There is no guarantee of historical data. The app does not run a local HTTP server on the phone.
 8. **Production DB is empty until first phone sync.**
-9. **HTTPS not live until GitOps PR merged, Komodo traefik stack redeployed (with umami exclusion), and router stack deployed.**
+9. **HTTPS not live until GitOps PR merged and the Komodo traefik stack (routes + umami exclusion) redeployed.**
 10. **WHOOP**: This skill has no access to WHOOP data and makes no changes to WHOOP configuration.
 
 ## Idempotency and deduplication notes
@@ -146,4 +146,4 @@ curl http://192.168.1.65:9121/healthz
 
 `https://health-connect.ravil.space/ingest/health-connect`
 
-This endpoint only accepts POST with a valid `X-Health-Token` header. It is NOT live until the GitOps PR is merged, the Komodo traefik stack is redeployed (activating the umami exclusion), and the router stack is deployed.
+This endpoint only accepts POST with a valid `X-Health-Token` header. It is NOT live until the GitOps PR is merged and the Komodo traefik stack (routes + umami exclusion) is redeployed.

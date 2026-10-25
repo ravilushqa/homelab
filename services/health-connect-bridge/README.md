@@ -107,27 +107,28 @@ curl http://192.168.1.65:9121/healthz
 
 ### HTTPS routing (GitOps)
 
-The `komodo/stacks/health-connect-bridge/` Komodo stack deploys a router-only container that instructs Traefik to route:
+The routes live in the Traefik file provider config `komodo/stacks/traefik/dynamic/external.yml`:
 
 ```
 POST https://health-connect.ravil.space/ingest/health-connect
   → http://192.168.1.65:9121
 ```
 
-**This route is NOT live until the PR is merged and the Komodo stack is deployed.**
+**This route is NOT live until the PR is merged and the traefik stack is redeployed.**
 
 ## Runbook: deploying the Traefik route
 
-Deployment order (all steps require GitOps PR approval and merge first):
+The routes and the Umami exclusions both ship with the traefik stack, so one deploy activates both.
+`.github/workflows/komodo-deploy.yaml` runs `privacy_gate_check.py` before and after every traefik deploy
+and aborts if the exclusions are missing from the compose or from the running Traefik:
 
-1. **Redeploy traefik stack first** (activates umami exclusion):
-   - `komodo/stacks/traefik/compose.yaml` includes `ignoreURLs[0]=^/ingest/health-connect(\?.*)?$` for the umami-feeder plugin.
-   - This exclusion prevents sync timing and path metadata for `/ingest/health-connect` from flowing to Umami analytics.
-   - The exclusion is **NOT active** until the traefik stack is redeployed via Komodo after PR merge.
+1. **Umami exclusions** (`komodo/stacks/traefik/compose.yaml`):
+   - `ignoreURLs[0]=^/ingest/health-connect(\?.*)?$` (plus `/nutrition/queue`, `/nutrition/ack`) for the umami-feeder plugin.
+   - This exclusion prevents sync timing and path metadata from flowing to Umami analytics.
    - Request body and headers (token, health data) are never logged by umami regardless.
 
-2. **Then deploy this router stack**:
-   - The HTTPS route is **NOT live** until this step completes.
+2. **Routes** (`komodo/stacks/traefik/dynamic/external.yml`):
+   - The HTTPS route is **NOT live** until the traefik stack is redeployed.
 
 3. **After deploying**:
    - Check Traefik access logs: `docker logs traefik | grep health-connect`

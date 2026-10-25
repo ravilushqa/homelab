@@ -51,7 +51,7 @@ graph TB
             ByteStash[ByteStash<br/>Snippet Storage]
             Spotify[Spotify Tools]
             RSSHub[RSSHub<br/>RSS Generator]
-            RouterOnly[Router-only proxies<br/>Proxmox VE, PBS, HA]
+            RouterOnly[File routes to LAN backends<br/>Proxmox VE, PBS, HA, Hermes]
         end
     end
 
@@ -207,10 +207,9 @@ Services deployed as Docker compose stacks managed by Komodo. Traffic is routed 
 - **Nextflux** — RSS reader frontend (`komodo/stacks/nextflux/`)
 - **Dozzle** — Container log viewer (`komodo/stacks/dozzle/`)
 - **Change Detection** — Website change monitoring at changedetection.ravil.space, behind OIDC (`komodo/stacks/changedetection/`)
-- **Home Assistant** — Router-only proxy to HAOS at ha.ravil.space (`komodo/stacks/ha/`)
 - **PocketID** — OIDC provider at pocketid.ravil.space (`komodo/stacks/pocketid/`)
-- **Proxmox VE** — Router-only proxy to the PVE UI at proxmox.ravil.space, behind OIDC (`komodo/stacks/proxmox/`)
-- **Proxmox Backup Server** — Router-only proxy to the PBS UI at pbs.ravil.space, behind OIDC (`komodo/stacks/pbs/`)
+- **LAN backends** — Home Assistant, Proxmox VE, PBS, the Hermes dashboard and Health Connect ingest are routed by the
+  Traefik file provider (`komodo/stacks/traefik/dynamic/external.yml`), no container per route
 
 ## Service Communication Patterns
 

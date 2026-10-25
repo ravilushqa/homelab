@@ -40,8 +40,9 @@ services:
       - --accesslog.fields.queryparameters.defaultmode=drop
       - --accesslog.fields.headers.defaultmode=drop
 
-      # Dynamic file provider (serversTransports for self-signed backends)
-      - --providers.file.filename=/etc/traefik/dynamic/servers-transports.yml
+      # Dynamic file provider: serversTransports + routes to non-Docker backends (dynamic/)
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
 
       # Global settings
       - --global.checknewversion=false
