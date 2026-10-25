@@ -1,0 +1,29 @@
+services:
+  changedetection:
+    # Pinned to the version migrated from LXC 106; bump separately
+    image: ghcr.io/dgtlmoon/changedetection.io:0.49.0
+    container_name: changedetection
+    restart: unless-stopped
+    volumes:
+      - data:/datastore
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.changedetection.rule=Host(`changedetection.ravil.space`)"
+      - "traefik.http.routers.changedetection.entrypoints=websecure"
+      - "traefik.http.routers.changedetection.tls.certresolver=cloudflare"
+      - "traefik.http.services.changedetection.loadbalancer.server.port=5000"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.changedetection.middlewares=oidc-auth@docker"
+
+volumes:
+  data:
+
+networks:
+  default:
+    name: changedetection_default
+  traefik:
+    name: traefik_default
+    external: true

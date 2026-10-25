@@ -433,3 +433,14 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/health-connect-bridge"
+
+[[stack]]
+name = "changedetection"
+description = "Website change monitoring (migrated from LXC 106)"
+tags = ["monitoring"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/changedetection"

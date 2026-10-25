@@ -206,11 +206,6 @@ Services routed through the Kubernetes Gateway API and exposed via Cloudflare DN
 - **Purpose**: Web interface for AI models
 - **Configuration**: `k8s/apps/external/openwebui/`
 
-#### Change Detection
-- **Domain**: changedetection.ravil.space
-- **Purpose**: Website change monitoring
-- **Configuration**: `k8s/apps/external/changedetection/`
-
 ### Docker Stacks (Komodo — via Traefik)
 
 Services deployed as Docker compose stacks managed by Komodo. Traffic is routed directly through the Komodo host's Traefik instance, bypassing the Kubernetes Gateway API.
@@ -225,6 +220,7 @@ Services deployed as Docker compose stacks managed by Komodo. Traffic is routed 
 - **RSSHub** — RSS feed generator (`komodo/stacks/rsshub/`)
 - **Nextflux** — RSS reader frontend (`komodo/stacks/nextflux/`)
 - **Dozzle** — Container log viewer (`komodo/stacks/dozzle/`)
+- **Change Detection** — Website change monitoring at changedetection.ravil.space, behind OIDC (`komodo/stacks/changedetection/`)
 - **Home Assistant** — Router-only proxy to HAOS at ha.ravil.space (`komodo/stacks/ha/`)
 - **PocketID** — Router-only proxy to the OIDC provider LXC at pocketid.ravil.space (`komodo/stacks/pocketid/`)
 - **Proxmox VE** — Router-only proxy to the PVE UI at proxmox.ravil.space, behind OIDC (`komodo/stacks/proxmox/`)
