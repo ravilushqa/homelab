@@ -18,7 +18,11 @@
         "name": "datasource",
         "type": "datasource",
         "query": "prometheus",
-        "label": "Prometheus"
+        "label": "Prometheus",
+        "current": {
+          "text": "grafanacloud-ravilushqa-prom",
+          "value": "grafanacloud-prom"
+        }
       }
     ]
   },
@@ -415,6 +419,13 @@
           "legendFormat": "p95"
         }
       ]
+    }
+  ],
+  "links": [
+    {
+      "title": "Proxmox + Docker Overview",
+      "type": "link",
+      "url": "/d/gar8prx"
     }
   ]
 }
