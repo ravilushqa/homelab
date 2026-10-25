@@ -226,6 +226,23 @@ repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/audiobookshelf"
 
+[[stack]]
+name = "audiobooks-arr"
+description = "AudioBookRequest + Prowlarr + qBittorrent (torrents only via xray VLESS) feeding Audiobookshelf"
+tags = ["media"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/audiobooks-arr"
+environment = """
+VLESS_HOST = [[VLESS_HOST]]
+VLESS_UUID = [[VLESS_UUID]]
+VLESS_SNI = [[VLESS_SNI]]
+VLESS_PBK = [[VLESS_PBK]]
+"""
+
 # ─── Productivity ────────────────────────────────────────────────
 
 [[stack]]

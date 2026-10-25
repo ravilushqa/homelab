@@ -15,6 +15,13 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # Finished torrents from the audiobooks-arr stack (local RAID, keeps seeding from here)
+      - type: bind
+        source: /mnt/raid1/torrents/audiobooks
+        target: /downloads
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       # Healthy only when it is safe to be public. Traefik does not route to a starting or
       # unhealthy container, so this also gates the public route (see README):
