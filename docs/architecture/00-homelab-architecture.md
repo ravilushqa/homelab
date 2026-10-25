@@ -308,7 +308,7 @@ Platform/support stacks:
 
 - `traefik` — Docker reverse proxy and OIDC middleware integration; `traefik/dynamic/external.yml` also routes
   to non-Docker backends: Home Assistant (`ha`, → `192.168.1.153:8123`), Proxmox VE (`proxmox`, OIDC, → `192.168.1.100:8006`),
-  PBS (`pbs`, OIDC, → `192.168.1.121:8007`), Hermes dashboard (`hermes`, OIDC, → `192.168.1.65:9119`) and
+  PBS (`pbs`, OIDC, → `192.168.1.121:8007`) and
   Health Connect ingest (`health-connect`, → `192.168.1.65:9121`)
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner

@@ -107,14 +107,6 @@ pages:
                   - 302
                   - 401
                   - 403
-              - title: Hermes
-                url: https://hermes.ravil.space
-                check-url: https://hermes.ravil.space
-                icon: mdi:robot-outline
-                alt-status-codes:
-                  - 302
-                  - 401
-                  - 403
 
           - type: videos
             title: Homelab Video Queue
