@@ -101,13 +101,13 @@
         <rect x="500" y="112" width="180" height="52" rx="8" class="box-bg" />
         <rect x="500" y="112" width="180" height="52" rx="8" class="external" />
         <text x="532" y="135" class="label">Deutsche Telekom</text>
-        <text x="535" y="151" class="sub">WAN observed 79.235.241.107</text>
+        <text x="535" y="151" class="sub">WAN PPPoE (VLAN 7)</text>
 
         <rect x="744" y="104" width="210" height="68" rx="8" class="box-bg" />
         <rect x="744" y="104" width="210" height="68" rx="8" class="network" />
         <text x="782" y="128" class="label">UniFi Express UX</text>
         <text x="778" y="145" class="sub">UniFi-Express · FW 4.0.15</text>
-        <text x="774" y="160" class="sub">LAN 192.168.1.1 / 192.168.2.188</text>
+        <text x="774" y="160" class="sub">LAN 192.168.1.1</text>
 
         <rect x="1016" y="112" width="160" height="52" rx="8" class="box-bg" />
         <rect x="1016" y="112" width="160" height="52" rx="8" class="security" />
@@ -220,7 +220,7 @@
     </section>
 
     <section class="legend" aria-label="legend">
-      <div><strong>Edge</strong> UniFi Express WAN/LAN and Proxmox Traefik LXC route traffic into K8s or Komodo by SNI.</div>
+      <div><strong>Edge</strong> UniFi Express forwards 443 to the Komodo Traefik, which routes to Komodo stacks or passes K8s hostnames through by SNI.</div>
       <div><strong>Kubernetes</strong> Talos nodes run Cilium, Gateway API, ArgoCD, cert-manager, Sealed Secrets, and internal/external app routes.</div>
       <div><strong>Docker</strong> Komodo manages Compose stacks; Docker Traefik terminates TLS for catch-all hostnames.</div>
       <div><strong>Data/Auth</strong> PocketID/OIDC protects apps; Proxmox, PBS, SMB, and Docker volumes hold persistent state.</div>

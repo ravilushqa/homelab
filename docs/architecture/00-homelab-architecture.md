@@ -26,7 +26,7 @@ Exact IP addresses and service inventories below are operationally useful, but t
 flowchart TB
   Internet((Internet))
   ISP[Deutsche Telekom AG]
-  UniFi[UniFi Express UX\nWAN observed: 79.235.241.107\nLAN: 192.168.1.1 + 192.168.2.188]
+  Modem[Telekom Glasfaser-Modem 2]\n  UniFi[UniFi Express UX\nWAN: PPPoE, VLAN 7\nLAN: 192.168.1.1]
   LAN[Home LAN\n192.168.1.0/24 primary]
   PVE[Proxmox pve01\n192.168.1.100\ncluster01]
   PiHole[Pi-hole LXC\nVMID 110]
@@ -40,7 +40,7 @@ flowchart TB
   Auth[PocketID OIDC]
   DNS[Cloudflare DNS + DDNS]
 
-  Internet --> ISP --> UniFi --> LAN
+  Internet --> ISP --> Modem --> UniFi --> LAN
   LAN --> PVE
   LAN --> PiHole
   PVE --> Komodo --> DockerStacks
@@ -66,8 +66,9 @@ flowchart TB
 - **Network app:** `9.0.118`
 - **ISP:** Deutsche Telekom AG
 - **Timezone:** Europe/Berlin
-- **WAN IP observed:** `79.235.241.107`
-- **LAN IPs observed on gateway:** `192.168.1.1`, `192.168.2.188`
+- **WAN:** PPPoE directly to Telekom FTTH (VLAN 7, MTU 1492) via the Telekom Glasfaser-Modem 2; no Speedport, no double NAT.
+  Public IPv4 is dynamic, `cloudflare-ddns` (namespace `ddns`) keeps `*.ravil.space` pointed at it. IPv6 disabled.
+- **LAN IP on gateway:** `192.168.1.1`
 - **Configuration counts:**
   - LAN configurations: 3
   - WAN configurations: 1
@@ -101,6 +102,9 @@ The public namespace is `*.ravil.space`.
 - Cloudflare DNS points public service names at the homelab edge.
 - `cloudflare-ddns` runs in Kubernetes namespace `ddns` and keeps DNS aligned with WAN changes.
 - Pi-hole exists as a Proxmox LXC for LAN DNS/ad-blocking.
+- Split DNS: Pi-hole answers `*.ravil.space` with `192.168.1.166` (`misc.dnsmasq_lines = ["address=/*.ravil.space/192.168.1.166"]`),
+  so LAN clients reach the Komodo Traefik directly (K8s hostnames included, via the SNI passthrough) instead of hairpinning
+  through the router. The apex `ravil.space` and its MX still resolve publicly; AAAA and TXT for subdomains return empty.
 - External HTTPS (port 443, forwarded by the router) enters the homelab at the Komodo Traefik on `192.168.1.166`.
 
 ## Ingress and TLS routing
