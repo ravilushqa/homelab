@@ -6,7 +6,7 @@
 - **Komodo** auto-syncs Docker stacks from `komodo/stacks.toml` in this repo (see `komodo/sync.toml`)
   - Never set `deploy = true` in `stacks.toml`: the sync deploys all such stacks in parallel and saturates the host CPU.
     Deploys are done sequentially by `.github/workflows/komodo-deploy.yaml` (runs the sync, then deploys changed stacks one by one)
-- New K8s apps: add to `k8s/apps/external/` or `k8s/apps/internal/` + register in `k8s/infra/argocd/applications`
+- New K8s apps: add to `k8s/apps/internal/` (picked up by the `internal-apps` ApplicationSet)
 
 ## Commands
 - **Terraform**: `terraform -chdir=./terraform init/plan/apply`
@@ -14,8 +14,6 @@
 - **Restart Services**: `make glance-restart`, `make isponsorblocktv-restart`
 - **Full Deployment**: `make bootstrap`
 - **Update DDNS**: `make cloudflare-ddns-gen`
-- **Scaffold K8s external service**: `make create-external-service SERVICE=name PORT=port IP=ip`
-- **Scaffold K8s TLS service**: `make create-tls-service SERVICE=name PORT=port IP=ip`
 - **Fetch kubeconfig from Terraform**: `make kubeconfig`
 - **Restart ArgoCD**: `make argocd-restart`
 - **ArgoCD**:
@@ -28,7 +26,6 @@
 - **Terraform**: 2-space indentation, resource naming in snake_case
 - **Kubernetes Resources**: Follow standard K8s naming conventions (camelCase for spec fields)
 - **Directory Structure**:
-  - `/k8s/apps/external/` - External-facing applications
   - `/k8s/apps/internal/` - Internal services
   - `/k8s/infra/` - Infrastructure components
 - **Resource Organization**: Group resources by functionality, use kustomization.yaml
@@ -58,16 +55,15 @@ Traffic enters via a Traefik instance that does TLS passthrough to two backends:
 - **Adding a new Komodo service**: no change needed in `tcp_routers.yaml`
 - **Adding a new K8s service**: add its hostname to `k8s-tcp-router` rule
 
-K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero`,
-`openwebui` (all `.ravil.space`)
+K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero` (all `.ravil.space`)
 
 ## Adding a New K8s Service
 
-1. Use `make create-external-service SERVICE=name PORT=port IP=ip` (or `create-tls-service` for TLS passthrough)
-   — generates `k8s/apps/external/{name}/` with kustomization
-2. Add the hostname to `k8s-tcp-router` in `terraform/modules/traefik/configs/tcp_routers.yaml`
-3. Apply: `kubectl apply -k ./k8s/apps/external/{name}`
-4. Register under `k8s/infra/argocd/applications` for ArgoCD to manage it going forward
+1. Create `k8s/apps/internal/{name}/` with a kustomization (the `internal-apps` ApplicationSet picks it up)
+2. Add an HTTPRoute on the `external` gateway and add the hostname to `k8s-tcp-router` in
+   `terraform/modules/traefik/configs/tcp_routers.yaml`
+
+Services running outside Docker/K8s (LXC, VM) are routed by Komodo's Traefik, not by K8s.
 
 ## Adding a New Service (Docker/Komodo)
 

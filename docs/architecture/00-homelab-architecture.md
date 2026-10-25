@@ -135,7 +135,6 @@ Kubernetes SNI hostnames currently routed explicitly:
 - `dozzle.k8s.ravil.space`
 - `it-tools.ravil.space`
 - `inbox-zero.ravil.space`
-- `openwebui.ravil.space`
 
 Operational rule:
 
@@ -249,7 +248,6 @@ Stopped templates:
 - `inbox-zero`
 - `isponsorblocktv`
 - `it-tools`
-- `openwebui`
 
 ### Kubernetes app inventory
 
@@ -260,10 +258,6 @@ Internal apps from `k8s/apps/internal/`:
 - `it-tools.ravil.space` — utility toolbox
 - `inbox-zero.ravil.space` — email management
 - `isponsorblocktv` — internal worker/service without public hostname in the edge SNI list
-
-External services routed through Kubernetes from `k8s/apps/external/` (EndpointSlice to a LAN IP + HTTPRoute):
-
-- `openwebui.ravil.space` — routes to Open WebUI at `192.168.1.29:8080`
 
 Home Assistant (`ha.ravil.space`) is served by a Komodo router-only stack, PocketID (`pocketid.ravil.space`) by the Komodo `pocketid` stack, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
 
