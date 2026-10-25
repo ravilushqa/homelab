@@ -401,6 +401,8 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 2. Add/update the stack entry in `komodo/stacks.toml` (never `deploy = true`).
 3. Keep secrets in Komodo variables/secrets or stack-local `.env` files on the host, not in Git.
 4. On merge, `.github/workflows/komodo-deploy.yaml` runs the resource sync, then deploys changed stacks one by one.
+   Traefik deploys are wrapped in the health-connect Umami privacy gate (`.github/scripts/privacy_gate_check.py`),
+   which `.github/workflows/privacy-gate.yaml` also runs nightly against the running Traefik.
 5. Verify container status, app logs, HTTPS status, and Docker Traefik access logs.
 
 ### Git workflow
