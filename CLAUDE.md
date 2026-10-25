@@ -15,9 +15,7 @@
 ## Commands
 - **Terraform**: `terraform -chdir=./terraform init/plan/apply`
 - **Kubernetes**: `kubectl apply -k ./k8s/[path]`, `kubectl kustomize --enable-helm ./k8s/[path] | kubectl apply -f -`
-- **Restart Services**: `make glance-restart`, `make isponsorblocktv-restart`
 - **Full Deployment**: `make bootstrap`
-- **Update DDNS config** (re-seal `config.json`): `make -C k8s/infra/network/cloudflare-ddns gen`
 - **Fetch kubeconfig from Terraform**: `make kubeconfig`
 - **Restart ArgoCD**: `make argocd-restart`
 - **ArgoCD**:
@@ -55,7 +53,7 @@ The router forwards `443/tcp` to the Komodo Traefik (`192.168.1.166:443`), the o
 - **Everything else**: HTTP routes from Docker labels (Komodo stacks) or from `dynamic/external.yml`
   (LXC/VM backends such as Home Assistant, Proxmox, PBS).
 
-K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero` (all `.ravil.space`)
+K8s domains (as of last update): `argocd.ravil.space` only; all apps run as Komodo stacks
 
 ## Adding a New K8s Service
 

@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: config-glance
-  namespace: glance
-data:
-  glance.yml: !include-glance.yml

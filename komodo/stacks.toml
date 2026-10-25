@@ -59,6 +59,20 @@ POCKETID_ENCRYPTION_KEY = [[POCKETID_ENCRYPTION_KEY]]
 """
 
 [[stack]]
+name = "cloudflare-ddns"
+description = "Dynamic DNS: *.ravil.space -> public IPv4"
+tags = ["infra"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/cloudflare-ddns"
+environment = """
+CLOUDFLARE_API_TOKEN = [[CF_DNS_API_TOKEN]]
+"""
+
+[[stack]]
 name = "ha-wall-panel"
 description = "Home Assistant wall panel dashboard"
 tags = ["infra", "home-automation"]
@@ -99,6 +113,17 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/dozzle"
+
+[[stack]]
+name = "glance"
+description = "Homelab dashboard"
+tags = ["monitoring"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/glance"
 
 [[stack]]
 name = "umami"
@@ -278,6 +303,28 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/ntfy"
+
+[[stack]]
+name = "it-tools"
+description = "Developer utilities"
+tags = ["tools"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/it-tools"
+
+[[stack]]
+name = "isponsorblocktv"
+description = "SponsorBlock for YouTube on TVs"
+tags = ["tools"]
+auto_update = true
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/isponsorblocktv"
 
 [[stack]]
 name = "free-games-claimer"

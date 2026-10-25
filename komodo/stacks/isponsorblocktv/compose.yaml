@@ -1,0 +1,7 @@
+services:
+  isponsorblocktv:
+    image: ghcr.io/dmunozv04/isponsorblocktv:v2.11.0
+    container_name: isponsorblocktv
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/app/data/config.json:ro
