@@ -25,9 +25,9 @@ make bootstrap
 which runs, in order:
 
 1. `terraform-init`, `terraform-plan`, `terraform-apply` (`-auto-approve`): Talos image, VMs 101/102, Talos config and
-   bootstrap with Cilium as an inline manifest, sealed-secrets via Helm, the LXCs
+   bootstrap with Cilium as an inline manifest, Proxmox CSI and sealed-secrets via Helm, the LXCs
 2. `kubeconfig`: asks before overwriting `~/.kube/config` with `terraform output -raw kubeconfig_content`
-3. `k8s-apply`: applies `k8s/infra/crds`, Cilium, cert-manager and ArgoCD,
+3. `k8s-apply`: marks `proxmox-csi` as the default StorageClass, applies `k8s/infra/crds`, Cilium, cert-manager and ArgoCD,
    then `k8s/infra/argocd/applications`
 
 From there ArgoCD syncs `k8s/infra/*` (`infrastructure.yaml`) and every directory under `k8s/apps/internal/`
@@ -52,9 +52,9 @@ Then open one K8s hostname from outside the LAN; it goes through the `k8s` TCP r
 
 The cluster is a sandbox and is currently parked (no apps run on it; everything lives in Komodo).
 
-- **Park:** while it is still up, `terraform -chdir=terraform destroy -target=module.sealed-secrets`
+- **Park:** while it is still up, `terraform -chdir=terraform destroy -target=module.sealed-secrets -target=module.proxmox_csi_plugin`
   (otherwise the helm/kubernetes providers lose their cluster mid-plan), then set `k8s_enabled = false` and merge;
   the apply deletes VMs 101/102.
-- **Unpark:** set `k8s_enabled = true` and merge (the apply recreates the VMs, Talos and sealed-secrets with the same
+- **Unpark:** set `k8s_enabled = true` and merge (the apply recreates the VMs, Talos, CSI and sealed-secrets with the same
   key), then `make kubeconfig k8s-apply` from a machine with the gitignored certs and `k8s/infra/security/cert-manager/secret.yaml`.
   Add new hostnames to the `k8s` TCP router.

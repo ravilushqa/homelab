@@ -221,14 +221,15 @@ Terraform manages the LXCs in `var.lxc` (`terraform/homelab.auto.tfvars`): 103, 
 - **IaC source:** Terraform modules `terraform/modules/{proxmox,talos}/`, gated by `var.k8s_enabled`
 - **Manifests:** `k8s/`
 - **GitOps:** ArgoCD. `k8s/infra/argocd/applications/infrastructure.yaml` syncs crds, cilium, cert-manager, gateway and ddns;
-  the `internal-apps` ApplicationSet syncs every directory in `k8s/apps/internal/`. sealed-secrets is
-  installed by Terraform (Helm). No StorageClass: the cluster has no persistent volumes.
+  the `internal-apps` ApplicationSet syncs every directory in `k8s/apps/internal/`. Proxmox CSI and sealed-secrets are
+  installed by Terraform (Helm).
 
 ### Core infrastructure namespaces
 
 - `argocd` — GitOps controller and UI
 - `cert-manager` — certificate automation
 - `cilium-secrets` and `kube-system` — Cilium/eBPF networking and Hubble
+- `csi-proxmox` — Proxmox CSI controller and node plugin
 - `gateway` — Gateway API resources
 - `sealed-secrets` — encrypted Kubernetes secrets controller
 - `kubelet-serving-cert-approver` — approves kubelet serving certificates (Talos)
@@ -347,6 +348,7 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 
 ### Persistent data locations
 
+- Kubernetes PVs are provisioned by Proxmox CSI where applicable.
 - Docker stacks use named Docker volumes and bind mounts defined in `komodo/stacks/<name>/compose.yaml`.
 - Proxmox VMs/LXCs use `raid1`, `nvme-thin`, `local-lvm`, and related storage pools.
 - Fileserver and SMB storage provide shared/backup-oriented capacity.
@@ -362,7 +364,7 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 
 ### Infrastructure flow
 
-1. Terraform under `terraform/` manages Proxmox (Talos VMs and LXC containers), Talos, and sealed-secrets bootstrap pieces.
+1. Terraform under `terraform/` manages Proxmox (Talos VMs and LXC containers), Talos, Proxmox CSI, and sealed-secrets bootstrap pieces.
    CI (`.github/workflows/terraform.yaml`) plans on PRs and applies on `main` from the self-hosted runner.
 2. Talos nodes run Kubernetes on Proxmox VMs.
 3. Kubernetes manifests under `k8s/` are reconciled by ArgoCD.

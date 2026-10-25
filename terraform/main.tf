@@ -50,6 +50,26 @@ module "proxmox" {
   talos_version   = module.talos[0].talos_version
 }
 
+module "proxmox_csi_plugin" {
+  count      = var.k8s_enabled ? 1 : 0
+  depends_on = [module.talos]
+  source     = "./modules/proxmox-csi-plugin"
+
+  providers = {
+    proxmox    = proxmox
+    kubernetes = kubernetes
+    helm       = helm
+  }
+
+  proxmox = {
+    endpoint     = var.proxmox_endpoint
+    insecure     = true
+    cluster_name = var.cluster_name
+  }
+
+  proxmox_csi_plugin_helm_values = file("${path.module}/../k8s/infra/storage/proxmox-csi/values.yaml")
+}
+
 module "sealed-secrets" {
   count      = var.k8s_enabled ? 1 : 0
   depends_on = [module.talos]
@@ -80,6 +100,11 @@ moved {
 moved {
   from = module.proxmox
   to   = module.proxmox[0]
+}
+
+moved {
+  from = module.proxmox_csi_plugin
+  to   = module.proxmox_csi_plugin[0]
 }
 
 moved {

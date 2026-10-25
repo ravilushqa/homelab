@@ -19,11 +19,12 @@ flowchart LR
 
 ## Core Technologies 🛠️
 - [Proxmox VE](https://www.proxmox.com/) and [Proxmox Backup Server](https://www.proxmox.com/en/proxmox-backup-server) — virtualization and backups.
-- [Terraform](https://www.terraform.io/) — Talos VMs, LXCs and sealed-secrets (state in Terraform Cloud, CI plan/apply).
+- [Terraform](https://www.terraform.io/) — Talos VMs, LXCs, Proxmox CSI and sealed-secrets (state in Terraform Cloud, CI plan/apply).
 - [Talos Linux](https://www.talos.dev/) — Kubernetes OS.
 - [Cilium](https://cilium.io/) — CNI, L2 load balancer and [Gateway API](https://gateway-api.sigs.k8s.io/) implementation.
 - [ArgoCD](https://argo-cd.readthedocs.io/) — GitOps for everything under `k8s/`.
 - [Cert-Manager](https://cert-manager.io/) — certificates for the K8s gateway.
+- [Proxmox CSI](https://github.com/sergelogvinov/proxmox-csi-plugin) — persistent volumes.
 - [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) — encrypted secrets that are safe to store in Git.
 - [Komodo](https://komo.do/) — Docker Compose stacks from `komodo/stacks/`, declared in `komodo/stacks.toml`.
 - [Traefik](https://traefik.io/) — the single public entry point (Komodo stack): HTTP routing plus TLS passthrough to K8s.
@@ -79,7 +80,8 @@ flowchart LR
 │       ├── argocd        # ArgoCD and its Applications
 │       ├── crds          # Gateway API CRDs
 │       ├── network       # cilium, gateway, coredns
-│       └── security      # cert-manager, sealed-secrets
+│       ├── security      # cert-manager, sealed-secrets
+│       └── storage       # proxmox-csi
 ├── komodo
 │   ├── stacks            # docker compose stacks
 │   ├── stacks.toml       # Komodo stack declarations (resource sync)
@@ -88,6 +90,7 @@ flowchart LR
     ├── lxc.tf            # LXC containers from var.lxc
     └── modules
         ├── proxmox             # Talos VMs
+        ├── proxmox-csi-plugin  # Proxmox storage for k8s
         ├── sealed-secrets      # sealed-secrets controller + key
         └── talos               # Talos cluster
 ```
