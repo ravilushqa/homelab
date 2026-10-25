@@ -25,6 +25,8 @@ services:
       STORES: epic,prime,gog,steam,fab
       FAB_ACCEPT_EULA: "false"
       UNITY_ACCEPT_TOS: "false"
+      GOG_EMAIL: ${GOG_EMAIL}
+      GOG_PASSWORD: ${GOG_PASSWORD}
     networks:
       - traefik
     labels:
