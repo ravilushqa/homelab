@@ -347,7 +347,7 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
   Docker logs of every Komodo container (`job="integrations/docker"`, label `container`, read via
   `docker-socket-proxy` on `192.168.1.166:2375`), Proxmox metrics and Alloy self-monitoring (`job="integrations/alloy"`).
 - `/etc/alloy/config.alloy` on `pve01` additionally holds local pipelines that are not in Fleet Management, e.g. the
-  CrowdSec scrape (`grafana-cloud/crowdsec.alloy`, metrics on `192.168.1.166:6060`, `job="crowdsec"`).
+  CrowdSec scrape (`grafana-cloud/crowdsec.alloy`, metrics on `komodo.lan:6060`, `job="crowdsec"`).
 - Dashboards kept in git: `grafana-cloud/` (e.g. `crowdsec-dashboard.json`, uid `crowdsec-homelab`).
 
 ### Docker/Komodo

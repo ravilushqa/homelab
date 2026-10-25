@@ -125,9 +125,11 @@ services:
       COLLECTIONS: crowdsecurity/traefik crowdsecurity/http-cve
       # Registers the "traefik" bouncer with this key on startup
       BOUNCER_KEY_TRAEFIK: ${CROWDSEC_BOUNCER_KEY:?CROWDSEC_BOUNCER_KEY is required}
-    # Prometheus metrics, scraped by Alloy on pve01 into Grafana Cloud (LAN only)
+    # Prometheus metrics, scraped by Alloy on pve01 (komodo.lan:6060) into Grafana Cloud.
+    # LAN only without pinning an IP: the LXC's sole NIC is on the LAN (IPv6 is ULA)
+    # and the router forwards only 443.
     ports:
-      - "192.168.1.166:6060:6060"
+      - "6060:6060"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro
