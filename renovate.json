@@ -76,6 +76,15 @@
       "groupName": "immich"
     },
     {
+      "description": "DB major upgrades need a manual dump/restore - approve from the Dependency Dashboard, one PR per DB",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres", "docker.io/library/postgres", "mongo"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "groupName": null
+    },
+    {
       "description": "Group all Helm major updates",
       "matchDatasources": ["helm"],
       "matchUpdateTypes": ["major"],
