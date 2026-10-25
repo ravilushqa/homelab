@@ -71,8 +71,8 @@ variable "datastore_id" {
 variable "k8s_enabled" {
   type        = bool
   default     = true
-  description = "Create the Talos Kubernetes cluster (VMs, Talos, CSI, sealed-secrets)"
+  description = "Create the Talos Kubernetes cluster (VMs, Talos, sealed-secrets)"
   # To turn off an existing cluster, first destroy the in-cluster resources while it's
-  # still on (terraform destroy -target=module.sealed-secrets -target=module.proxmox_csi_plugin),
+  # still on (terraform destroy -target=module.sealed-secrets),
   # then set false: with the cluster gone the kubernetes provider can't refresh them.
 }

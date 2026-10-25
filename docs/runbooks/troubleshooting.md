@@ -44,8 +44,6 @@ talosctl -n 192.168.1.210 logs kubelet
 
 - ArgoCD app `OutOfSync` that will not converge: `kubectl -n argocd get application <name> -o yaml`; restart with
   `make argocd-restart`.
-- Pending PVC: Proxmox CSI (`kubectl -n csi-proxmox logs deploy/proxmox-csi-plugin-controller`) and free space on the
-  datastore.
 - SealedSecret not decrypting: the controller key must be the one in `terraform/modules/sealed-secrets/certs/`.
 
 ## Proxmox and backups

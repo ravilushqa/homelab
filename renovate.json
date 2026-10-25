@@ -76,6 +76,14 @@
       "groupName": "immich"
     },
     {
+      "description": "0.x minors can break (changedetection 0.49 -> 0.60 ran 13 datastore migrations, #819) - manual, one PR each",
+      "matchDatasources": ["docker"],
+      "matchCurrentVersion": "/^v?0\\./",
+      "matchUpdateTypes": ["minor"],
+      "automerge": false,
+      "groupName": null
+    },
+    {
       "description": "DB major upgrades need a manual dump/restore - approve from the Dependency Dashboard, one PR per DB",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["postgres", "docker.io/library/postgres", "mongo"],

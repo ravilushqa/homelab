@@ -1,9 +1,0 @@
-storageClass:
-  - name: proxmox-csi
-    cache: writethrough
-    fstype: ext4
-    reclaimPolicy: Retain
-    ssd: false
-    storage: raid1
-    mountOptions:
-      - noatime
