@@ -70,6 +70,9 @@ services:
       CONTAINERS: 1
       NETWORKS: 1
       POST: 0
+      # info logs every request; Alloy polls every 5s (~600 lines/min) and ships
+      # them to Loki.
+      LOG_LEVEL: warning
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
