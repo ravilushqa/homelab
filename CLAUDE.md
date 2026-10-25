@@ -69,6 +69,7 @@ Services running outside Docker/K8s (LXC, VM) are routed by Komodo's Traefik, no
 
 1. Create `komodo/stacks/{name}/compose.yaml` with Traefik labels
    - Hardcode domain as `ravil.space` in labels (not via env var)
+   - Pin images to a version tag (or `latest@sha256:...` if the image has none) so Renovate can bump them; never bare `:latest`
 2. Add secrets to Komodo Variables/Secrets (never commit secrets to repo)
 3. Declare the stack in `komodo/stacks.toml` (never `deploy = true`); merging to `main` deploys it
 4. Configure OIDC (Traefik middleware or native) — **mandatory for public services**

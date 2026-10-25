@@ -11,7 +11,7 @@ services:
       - miniflux-db:/var/lib/postgresql/data
 
   miniflux:
-    image: miniflux/miniflux:latest
+    image: miniflux/miniflux:2.3.4
     container_name: miniflux
     restart: unless-stopped
     depends_on:

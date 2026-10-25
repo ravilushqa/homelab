@@ -1,6 +1,6 @@
 services:
   nextflux:
-    image: electh/nextflux:latest
+    image: electh/nextflux:latest@sha256:37752eb6e667e28036464feaceb523f91dcb346f7b7e44e2b1fb1ac9bf2cc815
     container_name: nextflux
     restart: unless-stopped
     networks:
