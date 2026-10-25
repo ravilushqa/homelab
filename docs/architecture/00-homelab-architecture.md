@@ -29,7 +29,6 @@ flowchart TB
   UniFi[UniFi Express UX\nWAN observed: 79.235.241.107\nLAN: 192.168.1.1 + 192.168.2.188]
   LAN[Home LAN\n192.168.1.0/24 primary]
   PVE[Proxmox pve01\n192.168.1.100\ncluster01]
-  Edge[Traefik edge LXC\nVMID 108\n80/443 TLS passthrough]
   PiHole[Pi-hole LXC\nVMID 110]
   Komodo[Komodo Docker host\nVMID 122\n192.168.1.166]
   K8sVIP[Kubernetes Gateway VIP\n192.168.1.222:443]
@@ -43,7 +42,6 @@ flowchart TB
 
   Internet --> ISP --> UniFi --> LAN
   LAN --> PVE
-  LAN --> Edge
   LAN --> PiHole
   PVE --> Komodo --> DockerStacks
   PVE --> TalosCP
@@ -51,9 +49,9 @@ flowchart TB
   TalosCP --> K8sVIP --> K8sApps
   TalosWorker --> K8sApps
   PVE --> Storage
-  DNS --> Edge
-  Edge -- explicit K8s SNI priority 100 --> K8sVIP
-  Edge -- catch-all SNI priority 50 --> Komodo
+  DNS --> UniFi
+  UniFi -- 443 port forward --> Komodo
+  Komodo -- K8s SNI TLS passthrough --> K8sVIP
   Auth -. OIDC / forward auth .-> DockerStacks
   Auth -. OIDC / oauth2-proxy .-> K8sApps
 ```
@@ -94,7 +92,7 @@ flowchart TB
 - `192.168.1.166` — Komodo Docker host LXC
 - `192.168.1.210` — Talos control-plane node observed from Kubernetes pods
 - `192.168.1.211` — Talos worker node observed from Kubernetes pods
-- `192.168.1.222` — Kubernetes Gateway API HTTPS target used by edge Traefik
+- `192.168.1.222` — Kubernetes Gateway API HTTPS target used by the Komodo Traefik passthrough
 
 ### DNS and public access
 
@@ -103,32 +101,21 @@ The public namespace is `*.ravil.space`.
 - Cloudflare DNS points public service names at the homelab edge.
 - `cloudflare-ddns` runs in Kubernetes namespace `ddns` and keeps DNS aligned with WAN changes.
 - Pi-hole exists as a Proxmox LXC for LAN DNS/ad-blocking.
-- External HTTPS enters the homelab at the Traefik edge LXC.
+- External HTTPS (port 443, forwarded by the router) enters the homelab at the Komodo Traefik on `192.168.1.166`.
 
 ## Ingress and TLS routing
 
-There are two Traefik layers with different jobs.
+A single Traefik (the Komodo `traefik` stack) receives all external HTTPS. The router forwards `443/tcp` to `192.168.1.166`.
+Until 2026-10 a separate edge Traefik LXC (`108`) did SNI passthrough in front of it; it was removed.
 
-### Edge Traefik LXC
+### Kubernetes hostnames (TLS passthrough)
 
-- **Proxmox guest:** LXC `108`, name `traefik`
-- **Role:** public edge, receives `80/tcp` and `443/tcp`
-- **Terraform source:** `terraform/modules/traefik/`
-- **Dynamic routing source:** `terraform/modules/traefik/configs/tcp_routers.yaml`
-- **Mode:** TCP SNI routing with TLS passthrough
+`komodo/stacks/traefik/dynamic/external.yml` has a `tcp:` router `k8s` that matches the Kubernetes-served hostnames by
+`HostSNI` and passes the TLS connection through, untouched, to the Cilium gateway at `192.168.1.222:443`
+(cert-manager certificates). TCP routers are matched before the HTTP routers, so every other hostname is handled by
+the HTTP routes below.
 
-Routing policy:
-
-- `k8s-tcp-router`
-  - Priority: `100`
-  - Target: `192.168.1.222:443`
-  - Matches explicit Kubernetes-served hostnames.
-- `komodo-tcp-router`
-  - Priority: `50`
-  - Target: `192.168.1.166:443`
-  - Catch-all `HostSNI("*")` for Komodo/Docker services.
-
-Kubernetes SNI hostnames currently routed explicitly:
+Kubernetes SNI hostnames currently routed:
 
 - `argocd.ravil.space`
 - `glance.ravil.space`
@@ -138,21 +125,21 @@ Kubernetes SNI hostnames currently routed explicitly:
 
 Operational rule:
 
-- Add a new Kubernetes-served hostname to `tcp_routers.yaml`.
-- Add a new Komodo-served hostname only to the stack labels; it will fall through to the Komodo catch-all.
+- Add a new Kubernetes-served hostname to the `k8s` TCP router in `komodo/stacks/traefik/dynamic/external.yml`.
+- Add a new Komodo-served hostname only to the stack labels.
 
 ### Komodo Traefik container
 
 - **Host:** Komodo LXC `122`, `192.168.1.166`
 - **Stack source:** `komodo/stacks/traefik/compose.yaml`
-- **Role:** HTTP reverse proxy for Docker Compose stacks
+- **Role:** the only public entry point: HTTP reverse proxy for Docker Compose stacks and LAN backends, TLS passthrough for K8s
 - **TLS:** Cloudflare resolver configured in the stack
 - **Auth:** OIDC forward-auth middleware backed by PocketID for protected public apps
 
 ### Kubernetes Gateway API
 
 - **Gateway manifests:** `k8s/infra/network/gateway/`
-- **Gateway target used by edge:** `192.168.1.222:443`
+- **Gateway target used by Komodo Traefik passthrough:** `192.168.1.222:443`
 - **CNI/LB:** Cilium with Gateway API support
 - **TLS:** cert-manager manages certificates; wildcard cert resources live under gateway manifests
 
@@ -183,7 +170,6 @@ Running LXCs:
 - `103` — `proxmox-backup-server`, backup service
 - `104` — `pocketid`, stopped; migrated to the Komodo `pocketid` stack
 - `106` — `changedetection`, stopped; migrated to the Komodo `changedetection` stack
-- `108` — `traefik`, edge TLS-passthrough router
 - `110` — `pihole`, LAN DNS/ad-blocking
 - `112` — `prometheus-pve-exporter`, Proxmox metrics exporter
 - `114` — `hermes`, Hermes Agent host/services
@@ -257,7 +243,7 @@ Internal apps from `k8s/apps/internal/`:
 - `dozzle.k8s.ravil.space` — Kubernetes-side log viewer with oauth2-proxy
 - `it-tools.ravil.space` — utility toolbox
 - `inbox-zero.ravil.space` — email management
-- `isponsorblocktv` — internal worker/service without public hostname in the edge SNI list
+- `isponsorblocktv` — internal worker/service without a public hostname
 
 Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynamic/external.yml`), PocketID (`pocketid.ravil.space`) by the Komodo `pocketid` stack, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
 
@@ -273,7 +259,7 @@ Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynami
 
 ### Routing model
 
-- The edge Traefik catch-all sends non-Kubernetes SNI traffic to `192.168.1.166:443`.
+- The router forwards `443/tcp` straight to `192.168.1.166`.
 - The Docker Traefik container terminates TLS and routes by Docker labels.
 - Most public apps are protected either by Traefik OIDC middleware or by their native auth.
 
@@ -381,17 +367,17 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 
 ### Infrastructure flow
 
-1. Terraform under `terraform/` manages Proxmox, Talos, Traefik edge, monitoring, Proxmox CSI, and sealed-secrets bootstrap pieces.
+1. Terraform under `terraform/` manages Proxmox (Talos VMs and LXC containers), Talos, Proxmox CSI, and sealed-secrets bootstrap pieces.
 2. Talos nodes run Kubernetes on Proxmox VMs.
 3. Kubernetes manifests under `k8s/` are reconciled by ArgoCD.
-4. External/public routes are wired through Gateway API and edge Traefik SNI rules.
+4. External/public routes are wired through Gateway API and the Komodo Traefik `k8s` SNI passthrough router.
 
 ### Kubernetes app flow
 
 1. Add or change manifests under `k8s/apps/` or `k8s/infra/`.
-2. For new public K8s hostnames, add the hostname to `terraform/modules/traefik/configs/tcp_routers.yaml`.
+2. For new public K8s hostnames, add the hostname to the `k8s` TCP router in `komodo/stacks/traefik/dynamic/external.yml`.
 3. ArgoCD syncs the desired state.
-4. Verify pods, routes, certificate state, and edge Traefik access logs.
+4. Verify pods, routes and certificate state.
 
 ### Komodo app flow
 
@@ -415,14 +401,13 @@ Use these sources when refreshing this document:
 - **Proxmox:** Proxmox API or `terraform/modules/proxmox/` and `terraform/modules/talos/`.
 - **Kubernetes live:** `kubectl get nodes,pods,svc,httproutes,tlsroutes -A` and ArgoCD applications.
 - **Kubernetes desired state:** `k8s/infra/` and `k8s/apps/`.
-- **Edge routing:** `terraform/modules/traefik/configs/tcp_routers.yaml`.
+- **Edge routing:** `komodo/stacks/traefik/dynamic/external.yml`.
 - **Docker desired state:** `komodo/stacks/` and `komodo/stacks.toml`.
 - **Docker live state:** `ssh 192.168.1.166 'docker ps'` and Traefik logs.
 - **Service verification:** always check Traefik access logs, not only `curl` HTTP status.
 
 ## Known architecture notes
 
-- The edge design intentionally uses TLS passthrough at the Proxmox/LXC Traefik layer because different backends terminate TLS independently.
-- Kubernetes hostnames must be explicitly listed at the edge; Komodo hostnames use the catch-all route.
-- Some services have multiple possible placements or historical routes. If a hostname appears in both Kubernetes and Komodo definitions, confirm the effective route with edge Traefik logs before changing it.
+- Kubernetes terminates TLS itself, so its hostnames are TLS-passthrough TCP routes in the Komodo Traefik and must be listed explicitly; everything else is an HTTP route there.
+- If a hostname appears in both Kubernetes and Komodo definitions, the TCP (passthrough) route wins; confirm with the Traefik dashboard before changing it.
 - IDS/IPS is currently disabled on the UniFi gateway; security is primarily service auth, TLS, segmentation by host/platform, and GitOps/IaC discipline.

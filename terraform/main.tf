@@ -91,14 +91,6 @@ module "sealed-secrets" {
   helm_values = file("${path.module}/../k8s/infra/security/sealed-secrets/values.yaml")
 }
 
-module "traefik" {
-  source = "./modules/traefik"
-
-  providers = {
-    proxmox = proxmox
-  }
-}
-
 # The K8s modules got count = 1 for k8s_enabled; keep their existing state
 moved {
   from = module.talos
