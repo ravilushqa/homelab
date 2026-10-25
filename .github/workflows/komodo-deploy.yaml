@@ -176,7 +176,7 @@ jobs:
           # before the deploy (Komodo only pulls the repo on deploy) and again after it.
           # Runbook if it fails: fix the traefik compose labels, redeploy traefik.
           gate_privacy_check() {
-            "$RUNNER_TEMP/gate_venv/bin/python" services/health-connect-bridge/privacy_gate_check.py \
+            "$RUNNER_TEMP/gate_venv/bin/python" .github/scripts/privacy_gate_check.py \
               --source komodo/stacks/traefik/compose.yaml \
               --live-host local \
             || {
