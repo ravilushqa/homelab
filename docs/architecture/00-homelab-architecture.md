@@ -135,7 +135,6 @@ Kubernetes SNI hostnames currently routed explicitly:
 - `dozzle.k8s.ravil.space`
 - `it-tools.ravil.space`
 - `inbox-zero.ravil.space`
-- `changedetection.ravil.space`
 - `openwebui.ravil.space`
 
 Operational rule:
@@ -184,7 +183,7 @@ Running LXCs:
 
 - `103` — `proxmox-backup-server`, backup service
 - `104` — `pocketid`, identity provider instance
-- `106` — `changedetection`, website change monitoring
+- `106` — `changedetection`, stopped; migrated to the Komodo `changedetection` stack
 - `108` — `traefik`, edge TLS-passthrough router
 - `110` — `pihole`, LAN DNS/ad-blocking
 - `112` — `prometheus-pve-exporter`, Proxmox metrics exporter
@@ -245,7 +244,6 @@ Stopped templates:
 
 ### Application namespaces
 
-- `changedetection`
 - `dozzle`
 - `glance`
 - `inbox-zero`
@@ -265,10 +263,9 @@ Internal apps from `k8s/apps/internal/`:
 
 External services routed through Kubernetes from `k8s/apps/external/` (EndpointSlice to a LAN IP + HTTPRoute):
 
-- `changedetection.ravil.space` — routes to the Proxmox/LXC service at `192.168.1.155:5000`
 - `openwebui.ravil.space` — routes to Open WebUI at `192.168.1.29:8080`
 
-Home Assistant (`ha.ravil.space`) and PocketID (`pocketid.ravil.space`) are served by Komodo router-only stacks, and Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, not Kubernetes.
+Home Assistant (`ha.ravil.space`) and PocketID (`pocketid.ravil.space`) are served by Komodo router-only stacks, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
 
 ## Komodo and Docker platform
 
@@ -292,6 +289,7 @@ Application stacks:
 
 - `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC)
 - `bytestash` — snippet manager at `bytestash.ravil.space`
+- `changedetection` — website change monitoring at `changedetection.ravil.space` (migrated from LXC 106)
 - `dozzle` — Docker log viewer at `dozzle.ravil.space`
 - `free-games-claimer` — free games claimer noVNC UI at `fgc.ravil.space`
 - `guest-door-access` — guest door access app at `guest-access.ravil.space` (currently scaled to 0)
