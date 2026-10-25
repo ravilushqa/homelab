@@ -1,0 +1,120 @@
+services:
+  # VLESS client. qBittorrent's only way to the internet is this SOCKS5 proxy (see the vpn network)
+  xray:
+    image: teddysun/xray:26.10.21
+    restart: unless-stopped
+    configs:
+      - source: xray
+        target: /etc/xray/config.json
+    networks:
+      - vpn
+      - traefik
+    labels:
+      # qBittorrent is not on the traefik network (that would give it a direct route out), so its
+      # web UI is reached through xray's dokodemo-door inbound on :8080
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbittorrent.rule=Host(`qbit.ravil.space`)"
+      - "traefik.http.routers.qbittorrent.entrypoints=websecure"
+      - "traefik.http.routers.qbittorrent.tls.certresolver=cloudflare"
+      - "traefik.http.routers.qbittorrent.middlewares=oidc-auth@docker"
+      - "traefik.http.services.qbittorrent.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:5.3.0
+    restart: unless-stopped
+    depends_on:
+      - xray
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Berlin
+      WEBUI_PORT: 8080
+    volumes:
+      - qbittorrent:/config
+      - type: bind
+        source: /mnt/raid1/torrents
+        target: /data
+        bind:
+          create_host_path: false
+    networks:
+      - vpn
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:2.6.5
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Berlin
+    volumes:
+      - prowlarr:/config
+    networks:
+      - vpn
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.ravil.space`)"
+      - "traefik.http.routers.prowlarr.entrypoints=websecure"
+      - "traefik.http.routers.prowlarr.tls.certresolver=cloudflare"
+      - "traefik.http.routers.prowlarr.middlewares=oidc-auth@docker"
+      - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
+      - "traefik.docker.network=traefik_default"
+
+  audiobookrequest:
+    image: markbeep/audiobookrequest:1.10.8
+    restart: unless-stopped
+    environment:
+      # Single user behind the oidc-auth middleware, so ABR's own login is off
+      ABR_APP__FORCE_LOGIN_TYPE: none
+    volumes:
+      - audiobookrequest:/config
+    networks:
+      - vpn
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.audiobookrequest.rule=Host(`abr.ravil.space`)"
+      - "traefik.http.routers.audiobookrequest.entrypoints=websecure"
+      - "traefik.http.routers.audiobookrequest.tls.certresolver=cloudflare"
+      - "traefik.http.routers.audiobookrequest.middlewares=oidc-auth@docker"
+      - "traefik.http.services.audiobookrequest.loadbalancer.server.port=8000"
+      - "traefik.docker.network=traefik_default"
+
+configs:
+  xray:
+    content: |
+      {
+        "log": { "loglevel": "warning" },
+        "inbounds": [
+          { "tag": "socks", "listen": "0.0.0.0", "port": 1080, "protocol": "socks",
+            "settings": { "auth": "noauth", "udp": true } },
+          { "tag": "qbit-ui", "listen": "0.0.0.0", "port": 8080, "protocol": "dokodemo-door",
+            "settings": { "address": "qbittorrent", "port": 8080, "network": "tcp" } }
+        ],
+        "outbounds": [
+          { "tag": "vless", "protocol": "vless",
+            "settings": { "vnext": [ { "address": "${VLESS_HOST}", "port": 443,
+              "users": [ { "id": "${VLESS_UUID}", "encryption": "none", "flow": "xtls-rprx-vision" } ] } ] },
+            "streamSettings": { "network": "tcp", "security": "reality",
+              "realitySettings": { "serverName": "${VLESS_SNI}", "fingerprint": "firefox",
+                "publicKey": "${VLESS_PBK}", "shortId": "" } } },
+          { "tag": "direct", "protocol": "freedom" }
+        ],
+        "routing": {
+          "rules": [ { "type": "field", "inboundTag": ["qbit-ui"], "outboundTag": "direct" } ]
+        }
+      }
+
+volumes:
+  qbittorrent:
+  prowlarr:
+  audiobookrequest:
+
+networks:
+  # No gateway: containers only on this network can't reach the internet (kill switch for qBittorrent)
+  vpn:
+    internal: true
+  traefik:
+    name: traefik_default
+    external: true

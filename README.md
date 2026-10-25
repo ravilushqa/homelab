@@ -46,6 +46,7 @@ flowchart LR
 - [Immich](https://immich.app/) — photos.
 - [Paperless-ngx](https://docs.paperless-ngx.com/) and [Paperless-GPT](https://github.com/icereed/paperless-gpt) — documents with OCR and LLM tagging.
 - [Audiobookshelf](https://www.audiobookshelf.org/) — audiobooks.
+- [AudioBookRequest](https://github.com/markbeep/AudioBookRequest), [Prowlarr](https://prowlarr.com/), [qBittorrent](https://www.qbittorrent.org/) over [Xray](https://github.com/XTLS/Xray-core) VLESS — audiobook requests and downloads.
 - [n8n](https://n8n.io/) — workflow automation.
 - [Miniflux](https://miniflux.app/), [Nextflux](https://github.com/electh/nextflux), [RSSHub](https://rsshub.app/) — RSS.
 - [Karakeep](https://karakeep.app/) — bookmarks and read-it-later.
