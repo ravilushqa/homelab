@@ -1,0 +1,186 @@
+{
+  "title": "traefik",
+  "interval": 60,
+  "rules": [
+    {
+      "uid": "traefik-cert-expiry",
+      "title": "Traefik Certificate Expiring",
+      "condition": "C",
+      "folderUID": "f8sl7f",
+      "ruleGroup": "traefik",
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 600,
+            "to": 0
+          },
+          "datasourceUid": "grafanacloud-prom",
+          "model": {
+            "refId": "A",
+            "expr": "max by (cn) (traefik_tls_certs_not_after - time()) / 86400",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "datasource": {
+              "type": "__expr__",
+              "uid": "__expr__"
+            },
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "lt",
+                  "params": [
+                    14
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "for": "1h",
+      "annotations": {
+        "summary": "Certificate {{ $labels.cn }} expires in {{ printf \"%.0f\" $values.A.Value }} days: ACME renewal is failing",
+        "description": "Let's Encrypt renews at 30 days left, so under 14 means renewal has been failing for two weeks (check the cloudflare DNS challenge and CF_DNS_API_TOKEN in the Traefik logs)."
+      },
+      "notification_settings": {
+        "receiver": "Botya"
+      }
+    },
+    {
+      "uid": "traefik-5xx-ratio",
+      "title": "Traefik Service 5xx",
+      "condition": "C",
+      "folderUID": "f8sl7f",
+      "ruleGroup": "traefik",
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 600,
+            "to": 0
+          },
+          "datasourceUid": "grafanacloud-prom",
+          "model": {
+            "refId": "A",
+            "expr": "(sum by (service) (rate(traefik_service_requests_total{code=~\"5..\"}[10m])) / sum by (service) (rate(traefik_service_requests_total[10m]))) and sum by (service) (rate(traefik_service_requests_total[10m])) > 0.05",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "datasource": {
+              "type": "__expr__",
+              "uid": "__expr__"
+            },
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "gt",
+                  "params": [
+                    0.05
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "for": "10m",
+      "annotations": {
+        "summary": "{{ $labels.service }} answers 5xx to {{ humanizePercentage $values.A.Value }} of requests",
+        "description": "Over 5% of a service's responses are 5xx for 10m. Services under 0.05 req/s (30 requests per 10m) are ignored so a single 502 on an idle service doesn't alert."
+      },
+      "notification_settings": {
+        "receiver": "Botya"
+      }
+    },
+    {
+      "uid": "traefik-scrape-down",
+      "title": "Traefik Metrics Missing",
+      "condition": "C",
+      "folderUID": "f8sl7f",
+      "ruleGroup": "traefik",
+      "data": [
+        {
+          "refId": "A",
+          "relativeTimeRange": {
+            "from": 600,
+            "to": 0
+          },
+          "datasourceUid": "grafanacloud-prom",
+          "model": {
+            "refId": "A",
+            "expr": "max(up{job=\"traefik\"})",
+            "instant": true,
+            "range": false
+          }
+        },
+        {
+          "refId": "C",
+          "relativeTimeRange": {
+            "from": 0,
+            "to": 0
+          },
+          "datasourceUid": "__expr__",
+          "model": {
+            "refId": "C",
+            "type": "threshold",
+            "expression": "A",
+            "datasource": {
+              "type": "__expr__",
+              "uid": "__expr__"
+            },
+            "conditions": [
+              {
+                "evaluator": {
+                  "type": "lt",
+                  "params": [
+                    1
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "noDataState": "Alerting",
+      "execErrState": "Error",
+      "for": "15m",
+      "annotations": {
+        "summary": "Alloy on pve01 can't scrape Traefik metrics (komodo.lan:8081)",
+        "description": "Without Traefik metrics the certificate and 5xx alerts go silent. Check the traefik stack and the prometheus.scrape \"traefik\" block in /etc/alloy/config.alloy on pve01."
+      },
+      "notification_settings": {
+        "receiver": "Botya"
+      }
+    }
+  ]
+}

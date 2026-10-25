@@ -1,0 +1,19 @@
+// Appended to /etc/alloy/config.alloy on pve01 (not managed by Fleet Management).
+// Ships Traefik metrics (traefik stack, published on the Komodo host) to Grafana Cloud.
+prometheus.scrape "traefik" {
+  targets         = [{"__address__" = "komodo.lan:8081", "instance" = "komodo"}]
+  job_name        = "traefik"
+  scrape_interval = "60s"
+  forward_to      = [prometheus.relabel.traefik.receiver]
+}
+
+// Drop the Go runtime and process series; keep traefik_* and up (the scrape-down alert).
+prometheus.relabel "traefik" {
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+
+  rule {
+    source_labels = ["__name__"]
+    regex         = "traefik_.*|up"
+    action        = "keep"
+  }
+}

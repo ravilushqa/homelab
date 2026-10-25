@@ -41,6 +41,12 @@ services:
       - --accesslog.fields.queryparameters.defaultmode=drop
       - --accesslog.fields.headers.defaultmode=drop
 
+      # Prometheus metrics on the internal "traefik" entrypoint (:8080, published as 8081),
+      # scraped by Alloy on pve01 (komodo.lan:8081) into Grafana Cloud. Per-service labels
+      # only: router labels would multiply the request histograms by every router.
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addRoutersLabels=false
+
       # Dynamic file provider: serversTransports + routes to non-Docker backends (dynamic/)
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
@@ -64,6 +70,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # Metrics only (the dashboard is api@internal behind OIDC). LAN only: the LXC's
+      # sole NIC is on the LAN and the router forwards only 443.
       - "8081:8080"
 
     environment:
