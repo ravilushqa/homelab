@@ -22,7 +22,7 @@ lxc = {
     disk     = { datastore = "local-lvm", size = 4 }
     ipv4     = "192.168.1.3/24"
     ipv6     = "fd2f:3771:abd2:0001::1/64"
-    dns      = { servers = ["1.1.1.1"], domain = "google.com" }
+    dns      = { servers = ["1.1.1.1"], domain = "lan" }
     features = { nesting = true, keyctl = true }
     tags     = ["proxmox-helper-scripts"]
   }
