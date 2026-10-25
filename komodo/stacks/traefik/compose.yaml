@@ -13,7 +13,8 @@ services:
       - --entrypoints.websecure.address=:443
 
       # Default middlewares for websecure
-      - --entrypoints.websecure.http.middlewares=umami@docker
+      # crowdsec first: banned IPs are rejected before anything else runs
+      - --entrypoints.websecure.http.middlewares=crowdsec@docker,umami@docker
 
       # HTTP to HTTPS redirect
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
@@ -55,6 +56,10 @@ services:
       # Umami analytics plugin
       - --experimental.plugins.umami-feeder.modulename=github.com/astappiev/traefik-umami-feeder
       - --experimental.plugins.umami-feeder.version=v1.4.0
+
+      # CrowdSec bouncer plugin
+      - --experimental.plugins.crowdsec-bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
+      - --experimental.plugins.crowdsec-bouncer.version=v1.8.1
 
     ports:
       - "80:80"
@@ -98,6 +103,33 @@ services:
       # Gate: traefik must deploy and confirm exclusions active before health-connect-bridge deploys.
       - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[1]=^/nutrition/queue(\\?.*)?$$"
       - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[2]=^/nutrition/ack(\\?.*)?$$"
+      # CrowdSec bouncer: 403 for IPs banned locally or on the community blocklist.
+      # Stream mode pulls the ban list every 60s, so requests never wait on CrowdSec.
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.enabled=true"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.crowdsecMode=stream"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.crowdsecLapiScheme=http"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.crowdsecLapiHost=crowdsec:8080"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.crowdsecLapiKey=${CROWDSEC_BOUNCER_KEY}"
+      # Fail open: a broken or restarting CrowdSec must never take down every site
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.updateMaxFailure=-1"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.streamStartupBlock=false"
+      # LAN (split DNS, hairpin via 192.168.1.1) and Docker networks are never banned
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.clientTrustedIPs=192.168.1.0/24,172.16.0.0/12,10.0.0.0/8"
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.1
+    container_name: crowdsec
+    restart: unless-stopped
+    environment:
+      # traefik: parser + base HTTP scenarios (probing, sensitive files, bad UAs, ...)
+      COLLECTIONS: crowdsecurity/traefik crowdsecurity/http-cve
+      # Registers the "traefik" bouncer with this key on startup
+      BOUNCER_KEY_TRAEFIK: ${CROWDSEC_BOUNCER_KEY:?CROWDSEC_BOUNCER_KEY is required}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro
+      - crowdsec-config:/etc/crowdsec
+      - crowdsec-data:/var/lib/crowdsec/data
 
   whoami:
     image: traefik/whoami:v1.12.0
@@ -112,3 +144,5 @@ services:
 
 volumes:
   letsencrypt:
+  crowdsec-config:
+  crowdsec-data:

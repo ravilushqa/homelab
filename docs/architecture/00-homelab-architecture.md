@@ -142,6 +142,10 @@ Operational rule:
 - **Role:** the only public entry point: HTTP reverse proxy for Docker Compose stacks and LAN backends, TLS passthrough for K8s
 - **TLS:** Cloudflare resolver configured in the stack
 - **Auth:** OIDC forward-auth middleware backed by PocketID for protected public apps
+- **Blocking:** CrowdSec (in the same stack) reads Traefik's access log from Docker and bans scanners; the
+  `crowdsec@docker` bouncer middleware runs first on every `websecure` route and returns 403 for banned IPs
+  (local decisions + community blocklist). It fails open, and LAN/Docker ranges are never banned.
+  Bouncer key: Komodo secret `CROWDSEC_BOUNCER_KEY`. Inspect with `docker exec crowdsec cscli decisions list` / `cscli alerts list`
 
 ### Kubernetes Gateway API
 
@@ -290,7 +294,7 @@ Application stacks:
 
 Platform/support stacks:
 
-- `traefik` — Docker reverse proxy and OIDC middleware integration; `traefik/dynamic/external.yml` also routes
+- `traefik` — Docker reverse proxy, OIDC middleware integration and CrowdSec (scanner bans); `traefik/dynamic/external.yml` also routes
   to non-Docker backends: Home Assistant (`ha`, → `192.168.1.153:8123`), Proxmox VE (`proxmox`, OIDC, → `192.168.1.100:8006`),
   PBS (`pbs`, OIDC, → `192.168.1.121:8007`) and
   Health Connect ingest (`health-connect`, → `192.168.1.65:9121`)
