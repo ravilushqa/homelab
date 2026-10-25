@@ -10,7 +10,8 @@ It combines infrastructure-as-code from this repository with a point-in-time liv
 - **Primary domain:** `ravil.space`
 - **Home network:** UniFi-managed LAN behind a UniFi Express gateway
 - **Virtualization:** Proxmox VE cluster `cluster01`
-- **Kubernetes:** Talos Linux cluster on Proxmox VMs
+- **Kubernetes:** Talos sandbox cluster on Proxmox VMs, **parked** since 2026-10-25 (`k8s_enabled = false`, VMs 101/102 destroyed;
+  code kept, see [bootstrap](../runbooks/bootstrap.md) to bring it back). Sections below describe it when enabled
 - **Docker platform:** Komodo-managed Docker Compose host
 - **IaC sources:** `terraform/`, `k8s/`, `komodo/stacks/`, `komodo/stacks.toml`
 - **Live sources used:** UniFi API, Proxmox API, Kubernetes API, Docker on `komodo`
@@ -167,8 +168,8 @@ Operational rule:
 
 Running VMs:
 
-- `101` — `talos-cp-01`, Talos Kubernetes control-plane, Terraform-managed
-- `102` — `talos-worker-01`, Talos Kubernetes worker, Terraform-managed
+- `101` — `talos-cp-01`, Talos Kubernetes control-plane, Terraform-managed (absent while parked)
+- `102` — `talos-worker-01`, Talos Kubernetes worker, Terraform-managed (absent while parked)
 - `105` — `haos12.4`, Home Assistant OS
 
 Running LXCs:

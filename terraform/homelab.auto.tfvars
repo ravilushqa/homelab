@@ -1,6 +1,10 @@
 # This homelab's own values (no secrets). Loaded automatically by terraform plan/apply.
 # Keys are hostnames; see the lxc variable in lxc.tf for the schema.
 
+# Talos sandbox cluster parked (2026-10-25). To bring it back: set true, apply, then
+# `make kubeconfig k8s-apply` (docs/runbooks/bootstrap.md)
+k8s_enabled = false
+
 lxc = {
   proxmox-backup-server = {
     vm_id    = 103
