@@ -293,6 +293,9 @@ run_directory = "komodo/stacks/free-games-claimer"
 environment = """
 GOG_EMAIL = [[GOG_EMAIL]]
 GOG_PASSWORD = [[GOG_PASSWORD]]
+EG_EMAIL = [[EG_EMAIL]]
+EG_PASSWORD = [[EG_PASSWORD]]
+EG_OTP_KEY = [[EG_OTP_KEY]]
 """
 
 [[stack]]
