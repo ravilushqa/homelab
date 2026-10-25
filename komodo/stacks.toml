@@ -290,6 +290,10 @@ server_id = "Local"
 repo = "ravilushqa/homelab"
 branch = "main"
 run_directory = "komodo/stacks/free-games-claimer"
+environment = """
+GOG_EMAIL = [[GOG_EMAIL]]
+GOG_PASSWORD = [[GOG_PASSWORD]]
+"""
 
 [[stack]]
 name = "honcho"
