@@ -266,7 +266,7 @@ Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynami
 Application stacks:
 
 - `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC); also reads finished downloads from `/mnt/raid1/torrents/audiobooks`
-- `audiobooks-arr` — AudioBookRequest (`abr.ravil.space`), Prowlarr (`prowlarr.ravil.space`) and qBittorrent (`qbit.ravil.space`); torrent traffic leaves only through an xray VLESS client (qBittorrent is on an internal-only network)
+- `audiobooks-arr` — AudioBookRequest (`abr.ravil.space`), Prowlarr (`prowlarr.ravil.space`), FlareSolverr (Cloudflare challenge solver reachable only by Prowlarr, no route) and qBittorrent (`qbit.ravil.space`); torrent traffic leaves only through an xray VLESS client (qBittorrent is on an internal-only network)
 - `bytestash` — snippet manager at `bytestash.ravil.space`
 - `changedetection` — website change monitoring at `changedetection.ravil.space` (migrated from LXC 106)
 - `cloudflare-ddns` — keeps `*.ravil.space` on the dynamic public IPv4 (reuses the Traefik ACME token `CF_DNS_API_TOKEN`)

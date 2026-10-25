@@ -4,6 +4,7 @@ Request an audiobook, get it from RuTracker over VLESS, and Audiobookshelf picks
 
 ```
 ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space) ──HTTPS, home IP──▶ rutracker.org
+                                             ├──indexer proxy──▶ FlareSolverr ──HTTPS, home IP──▶ Cloudflare-protected indexers
                                              └──API──▶ qBittorrent ──SOCKS5──▶ xray ──VLESS/Reality──▶ peers, tracker
 /mnt/raid1/torrents/audiobooks ──ro bind──▶ Audiobookshelf (/downloads)
 ```
@@ -20,6 +21,9 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   server is from Komodo secrets `VLESS_HOST`, `VLESS_UUID`, `VLESS_SNI`, `VLESS_PBK`. For Trojan or
   Outline (shadowsocks) swap the `vless` outbound. The SOCKS port is open to every container on
   `traefik_default`.
+- **FlareSolverr** (`ghcr.io/flaresolverr/flaresolverr`): solves Cloudflare challenges for Prowlarr
+  indexers. It shares only the stack-local `indexer` network with Prowlarr (not `vpn`, not
+  `traefik_default`), has no ports or route, and goes out directly from the home IP.
 
 All UIs are behind the `oidc-auth` middleware; ABR's own login is off
 (`ABR_APP__FORCE_LOGIN_TYPE=none`).
@@ -45,6 +49,12 @@ user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if t
    - Check: *Execution log* shows the VLESS exit IP as external IP, trackers show *Working*.
 2. **Prowlarr**: add the qBittorrent client `qbittorrent:8080` (user `admin`), category
    `audiobooks`. Add the *RuTracker.org* indexer with your RuTracker login.
+   - FlareSolverr is not wired up by compose; set it in Prowlarr
+     ([docs](https://wiki.servarr.com/prowlarr/settings)): *Settings → Indexers → Indexer Proxies →
+     FlareSolverr*, host `http://flaresolverr:8191`, tag `flaresolverr`. Add the same
+     `flaresolverr` tag to each indexer that needs it. The proxy only applies to indexers with a
+     matching tag (without tags it's disabled), and Prowlarr only uses it when it detects a
+     Cloudflare challenge; it is not a general proxy for all requests.
 3. **ABR**: create the root user on `/init`. *Settings → Prowlarr*: `http://prowlarr:9696` + the
    Prowlarr API key, pick the RuTracker indexer. *Settings → Download*: enable auto-download.
 4. **Audiobookshelf**: *Libraries → Audiobooks → Edit*: add folder `/downloads`. The hourly scan

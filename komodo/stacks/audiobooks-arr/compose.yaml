@@ -54,6 +54,7 @@ services:
     networks:
       - vpn
       - traefik
+      - indexer
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.ravil.space`)"
@@ -62,6 +63,19 @@ services:
       - "traefik.http.routers.prowlarr.middlewares=oidc-auth@docker"
       - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
       - "traefik.docker.network=traefik_default"
+
+  # Cloudflare challenge solver for Prowlarr indexer proxies; only Prowlarr can reach it (indexer network)
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Berlin
+      LOG_LEVEL: info
+      LOG_HTML: "false"
+    networks:
+      - indexer
+    labels:
+      - "traefik.enable=false"
 
   audiobookrequest:
     image: markbeep/audiobookrequest:1.10.8
@@ -117,6 +131,8 @@ networks:
   # No gateway: containers only on this network can't reach the internet (kill switch for qBittorrent)
   vpn:
     internal: true
+  # Prowlarr ↔ FlareSolverr only. Not internal: FlareSolverr needs internet egress to solve challenges
+  indexer:
   traefik:
     name: traefik_default
     external: true
