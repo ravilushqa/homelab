@@ -1,18 +1,31 @@
 services:
   pocketid:
-    image: traefik/whoami
+    # Pinned to the version migrated from LXC 104; bump separately
+    image: ghcr.io/pocket-id/pocket-id:v2.19.1
+    container_name: pocketid
     restart: unless-stopped
+    environment:
+      APP_URL: https://pocketid.ravil.space
+      TRUST_PROXY: "true"
+      # Must match the key from LXC 104, otherwise the migrated DB can't be decrypted
+      ENCRYPTION_KEY: ${POCKETID_ENCRYPTION_KEY:?POCKETID_ENCRYPTION_KEY is required}
+    volumes:
+      - data:/app/data
     networks:
-      - traefik_default
+      - traefik
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pocketid.rule=Host(`pocketid.ravil.space`)"
       - "traefik.http.routers.pocketid.entrypoints=websecure"
       - "traefik.http.routers.pocketid.tls.certresolver=cloudflare"
       # No OIDC — PocketID is the OIDC provider itself
-      - "traefik.http.services.pocketid-svc.loadbalancer.server.url=http://192.168.1.112:1411"
-      - "traefik.http.services.pocketid-svc.loadbalancer.passHostHeader=true"
+      - "traefik.http.services.pocketid.loadbalancer.server.port=1411"
+      - "traefik.docker.network=traefik_default"
+
+volumes:
+  data:
 
 networks:
-  traefik_default:
+  traefik:
+    name: traefik_default
     external: true
