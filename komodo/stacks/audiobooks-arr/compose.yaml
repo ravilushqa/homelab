@@ -80,7 +80,12 @@ services:
   audiobookrequest:
     image: markbeep/audiobookrequest:1.10.8
     restart: unless-stopped
-    # Login type is set in ABR (Settings → Security) while OIDC is being set up; still behind oidc-auth
+    environment:
+      # Native OIDC (Pocket ID client `audiobookrequest`, group `family`) instead of oidc-auth, so
+      # family members can log in. The root user is only the backup login (/login?backup=1)
+      ABR_APP__FORCE_LOGIN_TYPE: oidc
+      ABR_APP__INIT_ROOT_USERNAME: ${ABR_ROOT_USERNAME}
+      ABR_APP__INIT_ROOT_PASSWORD: ${ABR_ROOT_PASSWORD}
     volumes:
       - audiobookrequest:/config
     networks:
@@ -91,7 +96,6 @@ services:
       - "traefik.http.routers.audiobookrequest.rule=Host(`abr.ravil.space`)"
       - "traefik.http.routers.audiobookrequest.entrypoints=websecure"
       - "traefik.http.routers.audiobookrequest.tls.certresolver=cloudflare"
-      - "traefik.http.routers.audiobookrequest.middlewares=oidc-auth@docker"
       - "traefik.http.services.audiobookrequest.loadbalancer.server.port=8000"
       - "traefik.docker.network=traefik_default"
 
