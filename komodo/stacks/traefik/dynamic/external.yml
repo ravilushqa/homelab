@@ -27,14 +27,6 @@ http:
       middlewares: [oidc-auth@docker]
       service: pbs
 
-    # Hermes dashboard on the Hermes host
-    hermes:
-      rule: Host(`hermes.ravil.space`)
-      entryPoints: [websecure]
-      tls: { certResolver: cloudflare }
-      middlewares: [oidc-auth@docker]
-      service: hermes
-
     # health-connect-bridge receiver on the Hermes host. No OIDC: the Android
     # Health Connect app can't do OAuth; the receiver checks pre-shared tokens
     # (X-Health-Token / X-Nutrition-Token). Only exact Host+Path+Method is
@@ -74,9 +66,6 @@ http:
         # PBS serves a self-signed cert too
         serversTransport: proxmox
         servers: [{ url: "https://192.168.1.121:8007" }]
-    hermes:
-      loadBalancer:
-        servers: [{ url: "http://192.168.1.65:9119" }]
     health-connect-bridge:
       loadBalancer:
         servers: [{ url: "http://192.168.1.65:9121" }]
