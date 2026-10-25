@@ -271,7 +271,7 @@ spec:
   source:
     repoURL: https://github.com/user/homelab
     targetRevision: main
-    path: k8s/apps/external/example-app
+    path: k8s/apps/internal/example-app
   destination:
     server: https://kubernetes.default.svc
     namespace: example-app
@@ -459,7 +459,7 @@ helm upgrade <release> <chart> -n <namespace> -f values.yaml
 
 3. **Partial Recovery**
    ```bash
-   kubectl kustomize --enable-helm ./k8s/apps/external/<app> | kubectl apply -f -
+   kubectl kustomize --enable-helm ./k8s/apps/internal/<app> | kubectl apply -f -
    ```
 
 ## Monitoring and Observability

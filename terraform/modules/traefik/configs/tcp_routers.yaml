@@ -13,7 +13,6 @@ tcp:
         || HostSNI(`dozzle.k8s.ravil.space`)
         || HostSNI(`it-tools.ravil.space`)
         || HostSNI(`inbox-zero.ravil.space`)
-        || HostSNI(`openwebui.ravil.space`)
       service: k8s-tcp-service
       priority: 100
       tls:

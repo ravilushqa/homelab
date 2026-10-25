@@ -296,7 +296,7 @@ Applications are automatically deployed by ArgoCD. Manual deployment (if needed)
 
 ```bash
 # Deploy a specific application
-kubectl kustomize ./k8s/apps/external/immich | kubectl apply -f -
+kubectl kustomize ./k8s/apps/internal/<app> | kubectl apply -f -
 
 # Or use ArgoCD CLI
 argocd app sync immich

@@ -31,13 +31,9 @@ deployment.
 - [iSponsorBlockTV](https://github.com/dmunozv04/iSponsorBlockTV) - YouTube sponsor block for smart TVs.
 - [Inbox Zero](https://www.inboxzero.com/) - Email management.
 
-### Running on Proxmox, routed via Kubernetes (`k8s/apps/external/`)
+### Running on Proxmox, routed via Komodo Traefik
 - [Home Assistant OS](https://www.home-assistant.io/) - Home automation platform.
-- [Open WebUI](https://openwebui.com/) - Web interface for AI models.
-- [Grafana](https://grafana.com/) - Monitoring dashboards.
-- [PocketID](https://github.com/stonith404/pocket-id) - OIDC identity provider.
-- [Change Detection](https://changedetection.io/) - Website change monitoring.
-- [Proxmox](https://www.proxmox.com/) - Proxmox VE external access.
+- [Proxmox](https://www.proxmox.com/) - Proxmox VE and Proxmox Backup Server external access.
 
 ### Docker Stacks — Komodo (`komodo/stacks/`)
 - [Immich](https://immich.app/) - Google Photos alternative.
@@ -56,6 +52,8 @@ deployment.
 - [Grafana LGTM](https://grafana.com/) - Self-hosted OTEL observability stack (Loki, Grafana, Tempo, Mimir) with cAdvisor.
 - [Ntfy](https://ntfy.sh/) - Push notification service.
 - [Umami](https://umami.is/) - Privacy-focused web analytics.
+- [PocketID](https://github.com/pocket-id/pocket-id) - OIDC identity provider.
+- [Change Detection](https://changedetection.io/) - Website change monitoring.
 
 ---
 
@@ -95,7 +93,6 @@ The cluster uses ArgoCD for GitOps-based continuous delivery. All applications a
 - **Application Structure**:
   - Infrastructure components (`k8s/infra/*`)
   - Internal services (glance, isponsorblocktv)
-  - External applications (`k8s/apps/external/*`)
 
 ### Quick Commands:
 ```bash

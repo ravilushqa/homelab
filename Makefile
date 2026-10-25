@@ -4,24 +4,6 @@ DEFAULT_KUBECONFIG := ~/.kube/config
 
 include k8s/infra/network/cloudflare-ddns/Makefile
 
-# Create a new external service configuration
-create-external-service:
-	@echo "Creating a new external service using components..."
-	@echo "Usage: make create-external-service SERVICE=name PORT=port IP=ip"
-	@[ -n "$(SERVICE)" ] || { echo "Error: SERVICE parameter is required"; exit 1; }
-	@[ -n "$(PORT)" ] || { echo "Error: PORT parameter is required"; exit 1; }
-	@[ -n "$(IP)" ] || { echo "Error: IP parameter is required"; exit 1; }
-	@./scripts/create-external-service-component.sh "$(SERVICE)" "$(PORT)" "$(IP)"
-
-# Create a new TLS service configuration
-create-tls-service:
-	@echo "Creating a new TLS service using components..."
-	@echo "Usage: make create-tls-service SERVICE=name PORT=port IP=ip"
-	@[ -n "$(SERVICE)" ] || { echo "Error: SERVICE parameter is required"; exit 1; }
-	@[ -n "$(PORT)" ] || { echo "Error: PORT parameter is required"; exit 1; }
-	@[ -n "$(IP)" ] || { echo "Error: IP parameter is required"; exit 1; }
-	@./scripts/create-tls-service-component.sh "$(SERVICE)" "$(PORT)" "$(IP)"
-
 bootstrap: terraform-init terraform-plan terraform-apply kubeconfig k8s-apply
 
 terraform-init:

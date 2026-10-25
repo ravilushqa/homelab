@@ -37,11 +37,6 @@ graph TB
             ITTools[IT Tools<br/>Utilities]
             InboxZero[Inbox Zero<br/>Email Management]
         end
-
-        subgraph "K8s External Applications"
-            OpenWebUI[Open WebUI<br/>AI Interface]
-            ChangeDetection[Change Detection<br/>Website Monitoring]
-        end
     end
 
     subgraph "Komodo Docker Host"
@@ -196,15 +191,6 @@ Services accessible only from internal network or through VPN.
 - **Purpose**: Email management and organization
 - **Configuration**: `k8s/apps/internal/inbox-zero/`
 - **Special**: Requires sealed secrets for email credentials
-
-### External Applications (Kubernetes — via Gateway API)
-
-Services routed through the Kubernetes Gateway API and exposed via Cloudflare DNS.
-
-#### Open WebUI
-- **Domain**: openwebui.ravil.space
-- **Purpose**: Web interface for AI models
-- **Configuration**: `k8s/apps/external/openwebui/`
 
 ### Docker Stacks (Komodo — via Traefik)
 
