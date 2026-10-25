@@ -1,6 +1,6 @@
 services:
   openhands:
-    image: ghcr.io/openhands/openhands:latest
+    image: ghcr.io/openhands/openhands:latest@sha256:17d0648956f9c181ca4ee18bd8e87a6e1bc1ddeee3862395a92bdb33d38653c8
     container_name: openhands
     restart: unless-stopped
     environment:

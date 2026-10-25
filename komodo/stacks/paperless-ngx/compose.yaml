@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
 
   webserver:
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.4
     networks:
       - default
       - traefik
@@ -70,11 +70,11 @@ services:
       - "--chromium-allow-list=file:///tmp/.*"
 
   tika:
-    image: docker.io/apache/tika:latest
+    image: docker.io/apache/tika:4.1.0
     restart: unless-stopped
 
   paperless-gpt:
-    image: icereed/paperless-gpt:latest
+    image: icereed/paperless-gpt:v0.31.0
     restart: unless-stopped
     networks:
       - default

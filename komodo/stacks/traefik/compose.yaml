@@ -100,7 +100,7 @@ services:
       - "traefik.http.middlewares.umami.plugin.umami-feeder.ignoreURLs[2]=^/nutrition/ack(\\?.*)?$$"
 
   whoami:
-    image: traefik/whoami
+    image: traefik/whoami:v1.12.0
     container_name: whoami
     restart: unless-stopped
     labels:

@@ -13,7 +13,7 @@ services:
       - default
 
   mattermost:
-    image: mattermost/mattermost-team-edition:latest
+    image: mattermost/mattermost-team-edition:12.0.1
     container_name: mattermost
     restart: unless-stopped
     depends_on:

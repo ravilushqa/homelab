@@ -1,6 +1,6 @@
 services:
   bytestash:
-    image: ghcr.io/jordan-dalby/bytestash:latest
+    image: ghcr.io/jordan-dalby/bytestash:1.6.0
     restart: always
     volumes:
       - bytestash_data:/data/snippets

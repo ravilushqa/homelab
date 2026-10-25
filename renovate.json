@@ -56,9 +56,9 @@
       "stabilityDays": 3
     },
     {
-      "description": "Automerge minor+patch Docker image updates",
+      "description": "Automerge minor+patch+digest Docker image updates (digest: images without version tags, e.g. rsshub)",
       "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true,
       "automergeType": "pr",
       "groupName": "docker minor/patch updates"
@@ -68,6 +68,12 @@
       "matchPackageNames": ["getmeili/meilisearch"],
       "automerge": false,
       "groupName": null
+    },
+    {
+      "description": "Immich server + ML in one PR, always manual (read release notes)",
+      "matchPackageNames": ["ghcr.io/immich-app/immich-server", "ghcr.io/immich-app/immich-machine-learning"],
+      "automerge": false,
+      "groupName": "immich"
     },
     {
       "description": "Group all Helm major updates",

@@ -1,6 +1,6 @@
 services:
   server:
-    image: yooooomi/your_spotify_server
+    image: yooooomi/your_spotify_server:1.20.0
     restart: always
     depends_on:
       - mongo
@@ -28,7 +28,7 @@ services:
       - spotify_db:/data/db
 
   web:
-    image: yooooomi/your_spotify_client
+    image: yooooomi/your_spotify_client:1.20.0
     restart: always
     environment:
       API_ENDPOINT: https://spotify-server.ravil.space

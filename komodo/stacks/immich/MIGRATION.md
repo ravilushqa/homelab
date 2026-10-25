@@ -7,7 +7,6 @@
 2. Enough disk space on .166 for Postgres + ML model cache
 
 ## Required Komodo Secrets
-- `IMMICH_VERSION` = release
 - `UPLOAD_LOCATION` = /mnt/raid1/library
 - `DB_PASSWORD` = postgres
 - `DB_USERNAME` = postgres
