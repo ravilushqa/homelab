@@ -581,9 +581,12 @@ class TestDeployWorkflow(unittest.TestCase):
         self.assertGreater(gate_pos, -1)
         self.assertLess(gate_pos, loop_pos)
 
-    def test_hcb_always_deploys_traefik_first(self):
-        self.assertIn('grep -qw "health-connect-bridge"', self.wf)
-        self.assertIn('deploy_and_wait "traefik"', self.wf)
+    def test_gate_wraps_traefik_deploy(self):
+        # health-connect routes live in the traefik stack: gate before and after its deploy
+        before = self.wf.find('gate_privacy_check || exit 1')
+        deploy = self.wf.find('deploy_and_wait "traefik"')
+        after = self.wf.find('gate_privacy_check || exit 1', deploy)
+        self.assertTrue(-1 < before < deploy < after)
 
     def test_gate_script_invoked(self):
         self.assertIn("privacy_gate_check.py", self.wf)

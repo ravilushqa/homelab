@@ -59,39 +59,6 @@ POCKETID_ENCRYPTION_KEY = [[POCKETID_ENCRYPTION_KEY]]
 """
 
 [[stack]]
-name = "proxmox"
-description = "Proxmox VE web UI — router-only proxy to 192.168.1.100:8006"
-tags = ["infra"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/proxmox"
-
-[[stack]]
-name = "pbs"
-description = "Proxmox Backup Server web UI — router-only proxy to 192.168.1.121:8007"
-tags = ["infra"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/pbs"
-
-[[stack]]
-name = "ha"
-description = "Home Assistant — router-only proxy to 192.168.1.153:8123"
-tags = ["infra", "home-automation"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/ha"
-
-[[stack]]
 name = "ha-wall-panel"
 description = "Home Assistant wall panel dashboard"
 tags = ["infra", "home-automation"]
@@ -399,17 +366,6 @@ OPENHANDS_LLM_API_KEY = [[ANTHROPIC_API_KEY]]
 OPENHANDS_LLM_MODEL = anthropic/claude-sonnet-4-20250514
 """
 
-[[stack]]
-name = "hermes"
-description = "Hermes Agent web dashboard — exposed via Traefik + Pocket ID OIDC"
-tags = ["ai", "infra"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/hermes"
-
 # ─── Communication ───────────────────────────────────────────────
 
 [[stack]]
@@ -425,17 +381,6 @@ run_directory = "komodo/stacks/mattermost"
 environment = """
 MATTERMOST_DB_PASSWORD = [[MATTERMOST_DB_PASSWORD]]
 """
-
-[[stack]]
-name = "health-connect-bridge"
-description = "Health Connect webhook ingest — router-only proxy to Hermes host 192.168.1.65:9121"
-tags = ["health", "infra"]
-auto_update = true
-[stack.config]
-server_id = "Local"
-repo = "ravilushqa/homelab"
-branch = "main"
-run_directory = "komodo/stacks/health-connect-bridge"
 
 [[stack]]
 name = "changedetection"

@@ -259,7 +259,7 @@ Internal apps from `k8s/apps/internal/`:
 - `inbox-zero.ravil.space` — email management
 - `isponsorblocktv` — internal worker/service without public hostname in the edge SNI list
 
-Home Assistant (`ha.ravil.space`) is served by a Komodo router-only stack, PocketID (`pocketid.ravil.space`) by the Komodo `pocketid` stack, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
+Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynamic/external.yml`), PocketID (`pocketid.ravil.space`) by the Komodo `pocketid` stack, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
 
 ## Komodo and Docker platform
 
@@ -306,15 +306,13 @@ Application stacks:
 
 Platform/support stacks:
 
-- `traefik` — Docker reverse proxy and OIDC middleware integration
+- `traefik` — Docker reverse proxy and OIDC middleware integration; `traefik/dynamic/external.yml` also routes
+  to non-Docker backends: Home Assistant (`ha`, → `192.168.1.153:8123`), Proxmox VE (`proxmox`, OIDC, → `192.168.1.100:8006`),
+  PBS (`pbs`, OIDC, → `192.168.1.121:8007`), Hermes dashboard (`hermes`, OIDC, → `192.168.1.65:9119`) and
+  Health Connect ingest (`health-connect`, → `192.168.1.65:9121`)
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
-- `hermes` — router-only stack for Hermes dashboard at `hermes.ravil.space`
-- `health-connect-bridge` — router-only stack for Health Connect webhook ingest at `health-connect.ravil.space` → `192.168.1.65:9121`
 - `pocketid` — PocketID OIDC provider at `pocketid.ravil.space` (migrated from LXC `104`)
-- `ha` — router-only stack for Home Assistant at `ha.ravil.space` → `192.168.1.153:8123`
-- `proxmox` — router-only stack for Proxmox VE at `proxmox.ravil.space` (OIDC) → `192.168.1.100:8006`
-- `pbs` — router-only stack for Proxmox Backup Server at `pbs.ravil.space` (OIDC) → `192.168.1.121:8007`
 - `honcho` — LAN-only memory backend API on `192.168.1.166:8077`, with PostgreSQL/pgvector and Redis
 - `komodo-core`, `komodo-periphery`, `komodo-mongo` — Komodo itself, present on the Docker host
 
