@@ -25,9 +25,18 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   indexers. It shares only the stack-local `indexer` network with Prowlarr (not `vpn`, not
   `traefik_default`), has no ports or route, and goes out directly from the home IP.
 
-All UIs are behind the `oidc-auth` middleware (Pocket ID group `ravil` only). ABR is moving to
-its own OIDC client (`audiobookrequest`, group `family`) so family members can request books;
-until that is done its login type is `none` (stored in its DB) behind the middleware.
+Prowlarr and qBittorrent are behind the `oidc-auth` middleware (Pocket ID group `ravil` only).
+ABR uses native OIDC instead (`ABR_APP__FORCE_LOGIN_TYPE=oidc`), so family members can request books:
+
+- Pocket ID client `audiobookrequest`, callback `https://abr.ravil.space/auth/oidc`, allowed group `family`.
+- ABR *Settings → Security*: well-known `https://pocketid.ravil.space/.well-known/openid-configuration`,
+  scope `openid profile email groups`, username claim `preferred_username`, group claim `groups`,
+  redirect scheme `https`.
+- ABR roles come from Pocket ID group names: `admin` (ravilushqa), `trusted` (tanya, requests download
+  without approval); anyone else in `family` is `untrusted`. ABR only accepts claims listed in Pocket
+  ID's `claims_supported`, so custom claims don't work here.
+- Backup login: `/login?backup=1` with the root user (Komodo secrets `ABR_ROOT_USERNAME`,
+  `ABR_ROOT_PASSWORD`; also `/root/.abr-root-password` on the LXC).
 
 Downloads live on local RAID (`/mnt/raid1/torrents`, owned by `1000:1000`), not on the SMB share,
 so books keep seeding from where Audiobookshelf reads them.

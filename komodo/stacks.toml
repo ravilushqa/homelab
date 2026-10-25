@@ -241,6 +241,8 @@ VLESS_HOST = [[VLESS_HOST]]
 VLESS_UUID = [[VLESS_UUID]]
 VLESS_SNI = [[VLESS_SNI]]
 VLESS_PBK = [[VLESS_PBK]]
+ABR_ROOT_USERNAME = [[ABR_ROOT_USERNAME]]
+ABR_ROOT_PASSWORD = [[ABR_ROOT_PASSWORD]]
 """
 
 # ─── Productivity ────────────────────────────────────────────────
