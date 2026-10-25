@@ -7,13 +7,17 @@
   - Never set `deploy = true` in `stacks.toml`: the sync deploys all such stacks in parallel and saturates the host CPU.
     Deploys are done sequentially by `.github/workflows/komodo-deploy.yaml` (runs the sync, then deploys changed stacks one by one)
 - New K8s apps: add to `k8s/apps/internal/` (picked up by the `internal-apps` ApplicationSet)
+- **Terraform** (state in Terraform Cloud `ravilushqa/homelab`): the `Terraform` workflow plans on PRs and applies on `main`.
+  LXCs are entries in `var.lxc` (`terraform/homelab.auto.tfvars`); `var.k8s_enabled` gates the Talos/K8s modules
+- **Docs**: `docs/architecture/00-homelab-architecture.md` is the architecture source of truth; update it (and README.md)
+  in the same PR as infra changes. Mermaid labels use `<br/>` for line breaks, never `\n`
 
 ## Commands
 - **Terraform**: `terraform -chdir=./terraform init/plan/apply`
 - **Kubernetes**: `kubectl apply -k ./k8s/[path]`, `kubectl kustomize --enable-helm ./k8s/[path] | kubectl apply -f -`
 - **Restart Services**: `make glance-restart`, `make isponsorblocktv-restart`
 - **Full Deployment**: `make bootstrap`
-- **Update DDNS**: `make cloudflare-ddns-gen`
+- **Update DDNS config** (re-seal `config.json`): `make -C k8s/infra/network/cloudflare-ddns gen`
 - **Fetch kubeconfig from Terraform**: `make kubeconfig`
 - **Restart ArgoCD**: `make argocd-restart`
 - **ArgoCD**:
@@ -66,6 +70,6 @@ Services running outside Docker/K8s (LXC, VM) are routed by Komodo's Traefik, no
 1. Create `komodo/stacks/{name}/compose.yaml` with Traefik labels
    - Hardcode domain as `ravil.space` in labels (not via env var)
 2. Add secrets to Komodo Variables/Secrets (never commit secrets to repo)
-3. Create Komodo stack pointing to this git repo
+3. Declare the stack in `komodo/stacks.toml` (never `deploy = true`); merging to `main` deploys it
 4. Configure OIDC (Traefik middleware or native) — **mandatory for public services**
 

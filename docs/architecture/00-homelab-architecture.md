@@ -6,7 +6,7 @@ It combines infrastructure-as-code from this repository with a point-in-time liv
 
 ## Snapshot metadata
 
-- **Snapshot date:** 2026-06-14
+- **Snapshot date:** 2026-10-25
 - **Primary domain:** `ravil.space`
 - **Home network:** UniFi-managed LAN behind a UniFi Express gateway
 - **Virtualization:** Proxmox VE cluster `cluster01`
@@ -25,35 +25,35 @@ Exact IP addresses and service inventories below are operationally useful, but t
 ```mermaid
 flowchart TB
   Internet((Internet))
-  ISP[Deutsche Telekom AG]
-  Modem[Telekom Glasfaser-Modem 2]\n  UniFi[UniFi Express UX\nWAN: PPPoE, VLAN 7\nLAN: 192.168.1.1]
-  LAN[Home LAN\n192.168.1.0/24 primary]
-  PVE[Proxmox pve01\n192.168.1.100\ncluster01]
-  PiHole[Pi-hole LXC\nVMID 110]
-  Komodo[Komodo Docker host\nVMID 122\n192.168.1.166]
-  K8sVIP[Kubernetes Gateway VIP\n192.168.1.222:443]
-  TalosCP[Talos control-plane\nVMID 101\n192.168.1.210]
-  TalosWorker[Talos worker\nVMID 102\n192.168.1.211]
-  DockerStacks[Komodo stacks\nImmich, Paperless, n8n, etc.]
-  K8sApps[K8s apps\nArgoCD, Glance, HA route, etc.]
-  Storage[Storage\nraid1 ZFS, nvme-thin, PBS, SMB]
+  DNS[Cloudflare DNS<br/>DDNS from K8s]
+  Modem[Telekom Glasfaser-Modem 2]
+  UniFi[UniFi Express<br/>PPPoE, VLAN 7<br/>192.168.1.1]
+  PiHole[Pi-hole LXC 110<br/>split DNS]
+  PVE[Proxmox pve01<br/>192.168.1.100]
+  Traefik[Komodo Traefik<br/>LXC 122, 192.168.1.166]
+  DockerStacks[Komodo stacks<br/>Immich, Paperless, n8n, ...]
+  LanBackends[LAN backends<br/>HA, Proxmox, PBS]
+  K8sGW[Cilium Gateway<br/>192.168.1.222:443]
+  Talos[Talos VMs 101/102<br/>192.168.1.210-211]
+  K8sApps[K8s apps<br/>ArgoCD, Glance, ...]
+  Storage[(raid1 ZFS, nvme-thin,<br/>PBS, SMB)]
   Auth[PocketID OIDC]
-  DNS[Cloudflare DNS + DDNS]
 
-  Internet --> ISP --> Modem --> UniFi --> LAN
-  LAN --> PVE
-  LAN --> PiHole
-  PVE --> Komodo --> DockerStacks
-  PVE --> TalosCP
-  PVE --> TalosWorker
-  TalosCP --> K8sVIP --> K8sApps
-  TalosWorker --> K8sApps
+  Internet --> Modem --> UniFi
+  DNS -.->|"resolves *.ravil.space"| Internet
+  UniFi -->|443 port forward| Traefik
+  PiHole -.->|"LAN: *.ravil.space"| Traefik
+  Traefik -->|HTTP routes| DockerStacks
+  Traefik -->|file provider| LanBackends
+  Traefik -->|K8s SNI TLS passthrough| K8sGW
+  K8sGW --> K8sApps
+  Talos --- K8sApps
+  PVE --> Traefik
+  PVE --> Talos
+  PVE --> PiHole
   PVE --> Storage
-  DNS --> UniFi
-  UniFi -- 443 port forward --> Komodo
-  Komodo -- K8s SNI TLS passthrough --> K8sVIP
-  Auth -. OIDC / forward auth .-> DockerStacks
-  Auth -. OIDC / oauth2-proxy .-> K8sApps
+  Auth -. forward auth / OIDC .-> DockerStacks
+  Auth -. oauth2-proxy .-> K8sApps
 ```
 
 ## Network and edge
@@ -89,11 +89,14 @@ flowchart TB
 ### LAN roles
 
 - `192.168.1.1` — UniFi Express gateway
+- `192.168.1.2` — `fileserver` LXC
+- `192.168.1.3` — Pi-hole LXC
 - `192.168.1.100` — Proxmox node `pve01`
 - `192.168.1.166` — Komodo Docker host LXC
 - `192.168.1.210` — Talos control-plane node observed from Kubernetes pods
 - `192.168.1.211` — Talos worker node observed from Kubernetes pods
-- `192.168.1.222` — Kubernetes Gateway API HTTPS target used by the Komodo Traefik passthrough
+- `192.168.1.221` — Kubernetes `tls-passthrough` Gateway
+- `192.168.1.222` — Kubernetes `external` Gateway, HTTPS target used by the Komodo Traefik passthrough
 
 ### DNS and public access
 
@@ -184,9 +187,8 @@ Running LXCs:
 - `122` — `komodo`, Docker/Komodo host at `192.168.1.166`
 - `125` — `vless-gateway`, sing-box/VLESS gateway
 
-Stopped templates:
-
-- `113` — `ubuntu`, LXC template
+Terraform manages the LXCs in `var.lxc` (`terraform/homelab.auto.tfvars`): 103, 110, 112, 117, 122.
+`hermes` (114) and `vless-gateway` (125) are intentionally unmanaged.
 
 ### Storage
 
@@ -216,12 +218,14 @@ Stopped templates:
 
 ### Cluster shape
 
-- **OS:** Talos Linux
+- **OS:** Talos Linux v1.11, Kubernetes v1.34
 - **Control plane:** `talos-cp-01`, observed at `192.168.1.210`
 - **Worker:** `talos-worker-01`, observed at `192.168.1.211`
-- **IaC source:** Terraform modules under `terraform/modules/talos/`
+- **IaC source:** Terraform modules `terraform/modules/{proxmox,talos}/`, gated by `var.k8s_enabled`
 - **Manifests:** `k8s/`
-- **GitOps:** ArgoCD
+- **GitOps:** ArgoCD. `k8s/infra/argocd/applications/infrastructure.yaml` syncs crds, cilium, cert-manager, gateway and ddns;
+  the `internal-apps` ApplicationSet syncs every directory in `k8s/apps/internal/`. Proxmox CSI and sealed-secrets are
+  installed by Terraform (Helm).
 
 ### Core infrastructure namespaces
 
@@ -231,8 +235,8 @@ Stopped templates:
 - `csi-proxmox` — Proxmox CSI controller and node plugin
 - `ddns` — Cloudflare DDNS updater
 - `gateway` — Gateway API resources
-- `monitoring` — cluster monitoring components
 - `sealed-secrets` — encrypted Kubernetes secrets controller
+- `kubelet-serving-cert-approver` — approves kubelet serving certificates (Talos)
 
 ### Application namespaces
 
@@ -337,9 +341,8 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 ### Kubernetes
 
 - Cilium and Hubble provide network visibility.
-- Metrics Server is installed for Kubernetes resource metrics.
-- Monitoring namespace exists for cluster observability components.
-- Grafana/Grafana Cloud integration is managed through Terraform and manifests.
+- Metrics Server is installed by the Talos control-plane config (`extraManifests`).
+- There is no in-cluster metrics/log shipping; Grafana Cloud and the Terraform `monitoring` module are gone.
 
 ### Proxmox
 
@@ -375,6 +378,7 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 ### Infrastructure flow
 
 1. Terraform under `terraform/` manages Proxmox (Talos VMs and LXC containers), Talos, Proxmox CSI, and sealed-secrets bootstrap pieces.
+   CI (`.github/workflows/terraform.yaml`) plans on PRs and applies on `main` from the self-hosted runner.
 2. Talos nodes run Kubernetes on Proxmox VMs.
 3. Kubernetes manifests under `k8s/` are reconciled by ArgoCD.
 4. External/public routes are wired through Gateway API and the Komodo Traefik `k8s` SNI passthrough router.
@@ -389,9 +393,9 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 ### Komodo app flow
 
 1. Add or change `komodo/stacks/<name>/compose.yaml`.
-2. Add/update Komodo stack config in `komodo/stacks.toml` when needed.
+2. Add/update the stack entry in `komodo/stacks.toml` (never `deploy = true`).
 3. Keep secrets in Komodo variables/secrets or stack-local `.env` files on the host, not in Git.
-4. Komodo deploys the stack on the `komodo` host.
+4. On merge, `.github/workflows/komodo-deploy.yaml` runs the resource sync, then deploys changed stacks one by one.
 5. Verify container status, app logs, HTTPS status, and Docker Traefik access logs.
 
 ### Git workflow

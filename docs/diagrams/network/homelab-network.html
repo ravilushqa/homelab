@@ -67,7 +67,7 @@
         <h1>Ravil's Homelab Network Architecture</h1>
         <p>Point-in-time topology: UniFi edge, Proxmox, Talos Kubernetes, Komodo/Docker, ingress, identity, storage, and observability.</p>
       </div>
-      <div class="badge"><span class="dot"></span> Snapshot: 2026-06-14</div>
+      <div class="badge"><span class="dot"></span> Snapshot: 2026-10-25</div>
     </header>
 
     <section class="canvas">
@@ -130,13 +130,13 @@
         <text x="124" y="500" class="label">Fileserver</text>
         <text x="124" y="517" class="sub">LXC 117 · SMB</text>
 
-        <!-- edge -->
+        <!-- LAN backends routed by the Komodo Traefik file provider -->
         <rect x="384" y="364" width="210" height="88" rx="8" class="box-bg" />
-        <rect x="384" y="364" width="210" height="88" rx="8" class="network" filter="url(#glow)" />
-        <text x="430" y="390" class="label">Edge Traefik</text>
-        <text x="420" y="408" class="sub">LXC 108 · receives 80/443</text>
-        <text x="414" y="425" class="sub">TCP SNI TLS passthrough</text>
-        <text x="410" y="442" class="sub">Terraform module: traefik</text>
+        <rect x="384" y="364" width="210" height="88" rx="8" class="compute" />
+        <text x="430" y="390" class="label">LAN backends</text>
+        <text x="410" y="408" class="sub">Home Assistant VM 105</text>
+        <text x="410" y="425" class="sub">Proxmox UI · PBS LXC 103</text>
+        <text x="410" y="442" class="sub">Traefik file provider</text>
 
         <!-- k8s -->
         <rect x="666" y="354" width="220" height="84" rx="8" class="box-bg" />
@@ -161,27 +161,27 @@
         <rect x="640" y="574" width="300" height="124" rx="10" class="k8s" />
         <text x="742" y="600" class="label">Kubernetes apps</text>
         <text x="662" y="622" class="sub">ArgoCD · Glance · Dozzle.k8s · IT Tools</text>
-        <text x="662" y="639" class="sub">Inbox Zero · HA route · OpenWebUI</text>
-        <text x="662" y="656" class="sub">PocketID · Proxmox route · cert-manager</text>
-        <text x="662" y="673" class="sub">Sealed Secrets · Proxmox CSI · DDNS</text>
+        <text x="662" y="639" class="sub">Inbox Zero · iSponsorBlockTV</text>
+        <text x="662" y="656" class="sub">cert-manager · Sealed Secrets</text>
+        <text x="662" y="673" class="sub">Proxmox CSI · Cloudflare DDNS</text>
 
         <!-- komodo -->
         <rect x="966" y="354" width="170" height="84" rx="8" class="box-bg" />
         <rect x="966" y="354" width="170" height="84" rx="8" class="docker" />
         <text x="1018" y="381" class="label">Komodo</text>
         <text x="992" y="399" class="sub">LXC 122 · 192.168.1.166</text>
-        <text x="1000" y="416" class="sub">Docker + Compose</text>
+        <text x="990" y="416" class="sub">Traefik · public :443</text>
 
         <rect x="966" y="472" width="170" height="226" rx="10" class="box-bg" />
         <rect x="966" y="472" width="170" height="226" rx="10" class="docker" />
         <text x="1002" y="498" class="label">Docker stacks</text>
         <text x="986" y="522" class="sub">Immich · Paperless · n8n</text>
-        <text x="986" y="539" class="sub">ntfy</text>
+        <text x="986" y="539" class="sub">PocketID · ntfy</text>
         <text x="986" y="556" class="sub">Karakeep · Miniflux</text>
         <text x="986" y="573" class="sub">Your Spotify · Umami</text>
         <text x="986" y="590" class="sub">Grafana LGTM · cAdvisor</text>
         <text x="986" y="607" class="sub">Honcho LAN API :8077</text>
-        <text x="986" y="624" class="sub">Hermes router</text>
+        <text x="986" y="624" class="sub">Mattermost · Audiobooks</text>
         <text x="986" y="658" class="sub">Vova Medcenter</text>
         <text x="986" y="675" class="sub">Traefik terminates TLS</text>
 
@@ -203,11 +203,12 @@
         <path class="arrow" d="M214 138 L270 138" />
         <path class="arrow" d="M442 138 L500 138" />
         <path class="arrow" d="M680 138 L744 138" />
-        <path class="arrow-cyan arrow" d="M850 172 C850 230 490 250 490 364" />
         <path class="arrow-cyan arrow" d="M850 172 C850 236 170 240 170 304" />
         <path class="arrow-cyan arrow" d="M850 172 C850 260 1050 275 1050 354" />
-        <path class="arrow-cyan arrow" d="M594 396 L666 396" />
-        <path class="arrow-amber arrow" d="M594 422 C760 460 910 410 966 404" />
+        <text x="958" y="268" class="tiny">443 forward</text>
+        <text x="896" y="388" class="tiny">SNI</text>
+        <path class="arrow-cyan arrow" d="M966 396 L886 396" />
+        <path class="arrow-amber arrow" d="M990 438 C940 462 640 462 594 432" />
         <path class="arrow-cyan arrow" d="M776 438 L776 472" />
         <path class="arrow-cyan arrow" d="M708 536 L728 574" />
         <path class="arrow-cyan arrow" d="M856 536 L840 574" />
@@ -221,8 +222,8 @@
 
     <section class="legend" aria-label="legend">
       <div><strong>Edge</strong> UniFi Express forwards 443 to the Komodo Traefik, which routes to Komodo stacks or passes K8s hostnames through by SNI.</div>
-      <div><strong>Kubernetes</strong> Talos nodes run Cilium, Gateway API, ArgoCD, cert-manager, Sealed Secrets, and internal/external app routes.</div>
-      <div><strong>Docker</strong> Komodo manages Compose stacks; Docker Traefik terminates TLS for catch-all hostnames.</div>
+      <div><strong>Kubernetes</strong> Talos nodes run Cilium, Gateway API, ArgoCD, cert-manager, Sealed Secrets, and the internal apps; TLS terminates at the gateway.</div>
+      <div><strong>Docker</strong> Komodo manages Compose stacks; its Traefik terminates TLS for every non-K8s hostname, LAN backends included.</div>
       <div><strong>Data/Auth</strong> PocketID/OIDC protects apps; Proxmox, PBS, SMB, and Docker volumes hold persistent state.</div>
     </section>
   </main>

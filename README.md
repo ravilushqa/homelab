@@ -1,59 +1,71 @@
 # HomeLab Project 🏠💻
 
-This repository represents my **HomeLab setup**, showcasing an integration of various modern technologies for managing a
-Kubernetes-based infrastructure. It includes configurations for virtualization, networking, storage, and application
-deployment.
+My homelab as code: a single Proxmox node running a Talos Kubernetes cluster, a Komodo-managed Docker host and a
+handful of LXCs and VMs, all published under `*.ravil.space` through one Traefik.
+
+Docs: [architecture snapshot](docs/architecture/00-homelab-architecture.md) · [docs index](docs/README.md) ·
+[bootstrap](docs/runbooks/bootstrap.md) · [troubleshooting](docs/runbooks/troubleshooting.md)
+
+```mermaid
+flowchart LR
+  Users((Internet)) -->|443| UniFi[UniFi Express]
+  UniFi --> Traefik[Komodo Traefik]
+  Traefik --> Stacks[Docker stacks]
+  Traefik --> Lan[HA, Proxmox, PBS]
+  Traefik -->|SNI passthrough| K8s[Talos K8s<br/>Cilium Gateway]
+```
 
 ---
 
 ## Core Technologies 🛠️
-- [Proxmox](https://www.proxmox.com/) Server management and virtualization.
-- [Terraform](https://www.terraform.io/) Infrastructure as Code.
-- [Talos Linux](https://www.talos.dev/) Kubernetes OS.
-- [Cilium](https://cilium.io/) Network security and observability.
-- [Traefik](https://traefik.io/) Edge Router due to its simplicity and TLS passthrough capabilities and my router limitations.
-- [Cert-Manager](https://cert-manager.io/) Certificate management.
-- [Proxmox CSI](https://github.com/sergelogvinov/proxmox-csi-plugin) Storage provisioning.
-- [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) Encrypted secrets management, which is safe to store in Git.
-- [Gateway API](https://gateway-api.sigs.k8s.io/) Next generation of Kubernetes Ingress.
-- [Grafana Cloud](https://grafana.com/) Monitoring and observability of the cluster.
-- [ArgoCD](https://argo-cd.readthedocs.io/) GitOps continuous delivery tool for declarative Kubernetes management.
-- [Komodo](https://komo.do/) Docker stack management — deploys compose stacks from the `komodo/stacks/` directory.
+- [Proxmox VE](https://www.proxmox.com/) and [Proxmox Backup Server](https://www.proxmox.com/en/proxmox-backup-server) — virtualization and backups.
+- [Terraform](https://www.terraform.io/) — Talos VMs, LXCs, Proxmox CSI and sealed-secrets (state in Terraform Cloud, CI plan/apply).
+- [Talos Linux](https://www.talos.dev/) — Kubernetes OS.
+- [Cilium](https://cilium.io/) — CNI, L2 load balancer and [Gateway API](https://gateway-api.sigs.k8s.io/) implementation.
+- [ArgoCD](https://argo-cd.readthedocs.io/) — GitOps for everything under `k8s/`.
+- [Cert-Manager](https://cert-manager.io/) — certificates for the K8s gateway.
+- [Proxmox CSI](https://github.com/sergelogvinov/proxmox-csi-plugin) — persistent volumes.
+- [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) — encrypted secrets that are safe to store in Git.
+- [Komodo](https://komo.do/) — Docker Compose stacks from `komodo/stacks/`, declared in `komodo/stacks.toml`.
+- [Traefik](https://traefik.io/) — the single public entry point (Komodo stack): HTTP routing plus TLS passthrough to K8s.
+- [PocketID](https://github.com/pocket-id/pocket-id) — OIDC provider for Traefik forward auth, oauth2-proxy and native SSO.
+- [Pi-hole](https://pi-hole.net/) — LAN DNS, ad blocking and split DNS for `*.ravil.space`.
+- [Grafana LGTM](https://grafana.com/) — self-hosted logs, metrics and traces (Komodo stack).
 
 ---
 
 ## Applications 📦
 
-### Running in Kubernetes (`k8s/apps/internal/`)
-- [Glance](https://github.com/glanceapp/glance) - Personal dashboard.
-- [Dozzle](https://dozzle.dev/) - Real-time container log viewer.
-- [IT Tools](https://github.com/CorentinTh/it-tools) - Collection of IT utility tools.
-- [iSponsorBlockTV](https://github.com/dmunozv04/iSponsorBlockTV) - YouTube sponsor block for smart TVs.
-- [Inbox Zero](https://www.inboxzero.com/) - Email management.
+### Kubernetes (`k8s/apps/internal/`)
+- [Glance](https://github.com/glanceapp/glance) — personal dashboard.
+- [Dozzle](https://dozzle.dev/) — Kubernetes log viewer.
+- [IT Tools](https://github.com/CorentinTh/it-tools) — IT utility toolbox.
+- [iSponsorBlockTV](https://github.com/dmunozv04/iSponsorBlockTV) — SponsorBlock for YouTube on TVs.
+- [Inbox Zero](https://www.inboxzero.com/) — email management.
 
-### Running on Proxmox, routed via Komodo Traefik
-- [Home Assistant OS](https://www.home-assistant.io/) - Home automation platform.
-- [Proxmox](https://www.proxmox.com/) - Proxmox VE and Proxmox Backup Server external access.
+### Docker stacks — Komodo (`komodo/stacks/`)
+- [Immich](https://immich.app/) — photos.
+- [Paperless-ngx](https://docs.paperless-ngx.com/) and [Paperless-GPT](https://github.com/icereed/paperless-gpt) — documents with OCR and LLM tagging.
+- [Audiobookshelf](https://www.audiobookshelf.org/) — audiobooks.
+- [n8n](https://n8n.io/) — workflow automation.
+- [Miniflux](https://miniflux.app/), [Nextflux](https://github.com/electh/nextflux), [RSSHub](https://rsshub.app/) — RSS.
+- [Karakeep](https://karakeep.app/) — bookmarks and read-it-later.
+- [ByteStash](https://github.com/jordan-dalby/ByteStash) — code snippets.
+- [Your Spotify](https://github.com/Yooooomi/your_spotify) — Spotify listening stats.
+- [Mattermost](https://mattermost.com/) — team chat.
+- [OpenHands](https://github.com/All-Hands-AI/OpenHands) — AI coding environment.
+- [LLM Council](https://github.com/karpathy/llm-council) — multi-model OpenRouter web app.
+- [Change Detection](https://changedetection.io/) — website change monitoring.
+- [Free Games Claimer](https://github.com/vogler/free-games-claimer) — claims free Epic/GOG games.
+- [Ntfy](https://ntfy.sh/) — push notifications.
+- [Umami](https://umami.is/) — web analytics.
+- [Dozzle](https://dozzle.dev/) — Docker log viewer.
+- HA wall panel, guest door access, Honcho (LAN-only memory API) — small custom apps.
+- Platform: Traefik, PocketID, Grafana LGTM, GitHub Actions runner.
 
-### Docker Stacks — Komodo (`komodo/stacks/`)
-- [Immich](https://immich.app/) - Google Photos alternative.
-- [Paperless-ngx](https://docs.paperless-ngx.com/) - Document management with OCR.
-- [n8n](https://n8n.io/) - Workflow automation and integrations.
-- [Miniflux](https://miniflux.app/) - RSS feed reader.
-- [Nextflux](https://github.com/electh/nextflux) - Miniflux web frontend.
-- [RSSHub](https://rsshub.app/) - RSS feed generator.
-- [Karakeep](https://karakeep.app/) - Bookmark and read-it-later manager.
-- [ByteStash](https://github.com/jordan-dalby/ByteStash) - Code snippet manager.
-- [Your Spotify](https://github.com/Yooooomi/your_spotify) - Spotify listening stats.
-- [S-PDF](https://github.com/Stirling-Tools/Stirling-PDF) - PDF tools.
-- [Dozzle](https://dozzle.dev/) - Container log viewer.
-- [Traefik](https://traefik.io/) - Reverse proxy for Docker stacks.
-- [GitHub Runner](https://github.com/actions/runner) - Self-hosted GitHub Actions runner.
-- [Grafana LGTM](https://grafana.com/) - Self-hosted OTEL observability stack (Loki, Grafana, Tempo, Mimir) with cAdvisor.
-- [Ntfy](https://ntfy.sh/) - Push notification service.
-- [Umami](https://umami.is/) - Privacy-focused web analytics.
-- [PocketID](https://github.com/pocket-id/pocket-id) - OIDC identity provider.
-- [Change Detection](https://changedetection.io/) - Website change monitoring.
+### Proxmox guests (routed by the Komodo Traefik file provider)
+- [Home Assistant OS](https://www.home-assistant.io/) — VM 105.
+- Proxmox VE and Proxmox Backup Server web UIs.
 
 ---
 
@@ -61,51 +73,39 @@ deployment.
 
 ```shell
 .
+├── docs                  # architecture snapshot, runbooks, ADRs
 ├── k8s
-│   ├── apps  # applications
-│   │   ├── external  # external-facing applications (Gateway API routes)
-│   │   └── internal  # internal services
-│   ├── components    # reusable kustomize components
-│   └── infra         # k8s infrastructure
-│       ├── argocd    # gitops deployment
-│       ├── network   # networking components
-│       ├── security  # security components
-│       └── storage   # storage components
-├── stacks            # docker compose stacks managed by Komodo
+│   ├── apps/internal     # one directory per app, synced by the internal-apps ApplicationSet
+│   ├── components        # reusable kustomize components (auth-middleware)
+│   ├── examples          # reference manifests, not deployed
+│   └── infra
+│       ├── argocd        # ArgoCD and its Applications
+│       ├── crds          # Gateway API CRDs
+│       ├── network       # cilium, gateway, coredns, cloudflare-ddns
+│       ├── security      # cert-manager, sealed-secrets
+│       └── storage       # proxmox-csi
+├── komodo
+│   ├── stacks            # docker compose stacks
+│   ├── stacks.toml       # Komodo stack declarations (resource sync)
+│   └── sync.toml         # the resource sync itself
 └── terraform
+    ├── lxc.tf            # LXC containers from var.lxc
     └── modules
-        ├── monitoring          # grafana cloud monitoring
-        ├── proxmox             # talos vm deployment
-        ├── proxmox-csi-plugin  # proxmox storage for k8s
-        ├── sealed-secrets      # k8s secret management
-        ├── talos               # talos cluster deployment
-        └── traefik             # traefik tls passthrough lxc container
+        ├── proxmox             # Talos VMs
+        ├── proxmox-csi-plugin  # Proxmox storage for k8s
+        ├── sealed-secrets      # sealed-secrets controller + key
+        └── talos               # Talos cluster
 ```
 
-## GitOps with ArgoCD 🚢
+## Deployment 🚢
 
-The cluster uses ArgoCD for GitOps-based continuous delivery. All applications and infrastructure components are automatically synchronized from this Git repository.
+- **Kubernetes:** merge to `main`; ArgoCD auto-syncs `k8s/infra/*` and `k8s/apps/internal/*` (https://argocd.ravil.space).
+- **Docker stacks:** merge to `main`; the `Komodo Deploy` workflow runs the resource sync and deploys changed stacks one at a time.
+- **Terraform:** the `Terraform` workflow plans on PRs and applies on `main` (self-hosted runner).
+- **From scratch:** `make bootstrap` (see the [bootstrap runbook](docs/runbooks/bootstrap.md)).
 
-### Key Features:
-- **UI Access**: https://argocd.ravil.space
-- **Auto-sync**: All applications are configured for automatic synchronization
-- **Self-healing**: Automatic correction of manual cluster changes to match Git state
-- **Application Structure**:
-  - Infrastructure components (`k8s/infra/*`)
-  - Internal services (glance, isponsorblocktv)
-
-### Quick Commands:
 ```bash
-# Get ArgoCD admin password
-make argocd-password
-
-# Restart ArgoCD components
-make argocd-restart
-
-# View application status
-kubectl -n argocd get applications
+make argocd-password   # ArgoCD admin password
+make argocd-restart    # restart ArgoCD
+make kubeconfig        # kubeconfig from Terraform output
 ```
-
----
-
-
