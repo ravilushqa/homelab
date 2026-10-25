@@ -28,6 +28,7 @@ flowchart LR
 - [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) — encrypted secrets that are safe to store in Git.
 - [Komodo](https://komo.do/) — Docker Compose stacks from `komodo/stacks/`, declared in `komodo/stacks.toml`.
 - [Traefik](https://traefik.io/) — the single public entry point (Komodo stack): HTTP routing plus TLS passthrough to K8s.
+- [CrowdSec](https://www.crowdsec.net/) — bans scanners from Traefik's access log (bouncer plugin on every route).
 - [PocketID](https://github.com/pocket-id/pocket-id) — OIDC provider for Traefik forward auth, oauth2-proxy and native SSO.
 - [Pi-hole](https://pi-hole.net/) — LAN DNS, ad blocking and split DNS for `*.ravil.space`.
 - [Grafana LGTM](https://grafana.com/) — self-hosted logs, metrics and traces (Komodo stack).

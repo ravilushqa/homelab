@@ -1,0 +1,7 @@
+# Traefik access logs, read from the container's stdout (keeps them in Docker
+# logs for Alloy/Dozzle too).
+source: docker
+container_name:
+  - traefik
+labels:
+  type: traefik
