@@ -1,7 +1,8 @@
 # CLAUDE.md - Guidelines for HomeLab Repository
 
 ## Architecture Overview
-- **Proxmox** hosts a Talos-managed K8s cluster and a separate Komodo Docker host
+- **Proxmox** hosts a Komodo Docker host (runs every app) and, when enabled, a Talos K8s sandbox cluster.
+  The cluster is parked: `k8s_enabled = false` in `terraform/homelab.auto.tfvars` (code in `terraform/modules`, `k8s/` kept)
 - **ArgoCD** (deployed at bootstrap) handles all subsequent K8s app deployments via GitOps
 - **Komodo** auto-syncs Docker stacks from `komodo/stacks.toml` in this repo (see `komodo/sync.toml`)
   - Never set `deploy = true` in `stacks.toml`: the sync deploys all such stacks in parallel and saturates the host CPU.

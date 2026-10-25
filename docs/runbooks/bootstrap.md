@@ -12,7 +12,7 @@ touched by the K8s part; the LXCs in `var.lxc` are managed by the same Terraform
 - Sealed-secrets key pair in `terraform/modules/sealed-secrets/certs/sealed-secrets.{cert,key}` (gitignored; also stored as
   GitHub secrets `SEALED_SECRETS_CERT`/`SEALED_SECRETS_KEY`). The **same** key must be reused, or every committed
   `sealed-*.yaml` becomes undecryptable.
-- `var.k8s_enabled = true` (default)
+- `k8s_enabled = true` in `terraform/homelab.auto.tfvars` (it is `false` while the cluster is parked)
 
 Node layout comes from `var.nodes` in `terraform/variables.tf` (`talos-cp-01` 192.168.1.210, `talos-worker-01` 192.168.1.211).
 
@@ -48,8 +48,13 @@ make argocd-password                        # https://argocd.ravil.space
 Then open one K8s hostname from outside the LAN; it goes through the `k8s` TCP router in
 `komodo/stacks/traefik/dynamic/external.yml`.
 
-## Turning the cluster off
+## Parking and unparking the cluster
 
-Set `k8s_enabled = false` only after a targeted destroy of the K8s modules (`module.talos`, `module.proxmox`,
-`module.proxmox_csi_plugin`, `module.sealed-secrets`); otherwise the helm/kubernetes providers lose their cluster
-mid-plan.
+The cluster is a sandbox and is currently parked (no apps run on it; everything lives in Komodo).
+
+- **Park:** while it is still up, `terraform -chdir=terraform destroy -target=module.sealed-secrets -target=module.proxmox_csi_plugin`
+  (otherwise the helm/kubernetes providers lose their cluster mid-plan), then set `k8s_enabled = false` and merge;
+  the apply deletes VMs 101/102.
+- **Unpark:** set `k8s_enabled = true` and merge (the apply recreates the VMs, Talos, CSI and sealed-secrets with the same
+  key), then `make kubeconfig k8s-apply` from a machine with the gitignored certs and `k8s/infra/security/cert-manager/secret.yaml`.
+  Add new hostnames to the `k8s` TCP router.
