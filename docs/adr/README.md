@@ -87,7 +87,7 @@ When a decision is replaced:
 | [0004](0004-use-sealed-secrets.md) | Use Sealed Secrets for Secret Management | Accepted | 2024-04 |
 | [0005](0005-use-argocd-gitops.md) | Use ArgoCD for GitOps | Accepted | 2024-06 |
 | [0006](0006-use-proxmox-csi.md) | Use Proxmox CSI for Storage | Accepted | 2024-04 |
-| [0007](0007-use-grafana-cloud.md) | Use Grafana Cloud for Observability | Accepted | 2024-04 |
+| 0007 | Use Grafana Cloud for Observability | Superseded: self-hosted `grafana-lgtm` Komodo stack | 2024-04 |
 | [0008](0008-use-traefik-edge.md) | Use Traefik as Edge Reverse Proxy | Accepted | 2024-04 |
 
 ## Decision Categories

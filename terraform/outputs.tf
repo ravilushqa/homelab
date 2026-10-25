@@ -1,10 +1,10 @@
 output "kubeconfig_content" {
-  value     = module.talos.kubeconfig
+  value     = one(module.talos[*].kubeconfig)
   sensitive = true
 }
 
 output "talosconfig" {
-  value     = module.talos.talosconfig
+  value     = one(module.talos[*].talosconfig)
   sensitive = true
 }
 

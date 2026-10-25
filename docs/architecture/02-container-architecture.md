@@ -146,13 +146,6 @@ These services provide foundational capabilities for the cluster.
 - **Backend**: Proxmox VE storage
 - **Features**: Dynamic PV creation, volume expansion
 
-#### Grafana Agent (Observability)
-- **Purpose**: Metrics, logs, and traces collection
-- **Technology**: Grafana Agent
-- **Configuration**: `terraform/modules/monitoring/`
-- **Backend**: Grafana Cloud
-- **Data Types**: Prometheus metrics, Loki logs, Tempo traces
-
 #### CoreDNS (DNS)
 - **Purpose**: Cluster DNS resolution
 - **Technology**: CoreDNS
