@@ -25,8 +25,9 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   indexers. It shares only the stack-local `indexer` network with Prowlarr (not `vpn`, not
   `traefik_default`), has no ports or route, and goes out directly from the home IP.
 
-All UIs are behind the `oidc-auth` middleware; ABR's own login is off
-(`ABR_APP__FORCE_LOGIN_TYPE=none`).
+All UIs are behind the `oidc-auth` middleware (Pocket ID group `ravil` only). ABR is moving to
+its own OIDC client (`audiobookrequest`, group `family`) so family members can request books;
+until that is done its login type is `none` (stored in its DB) behind the middleware.
 
 Downloads live on local RAID (`/mnt/raid1/torrents`, owned by `1000:1000`), not on the SMB share,
 so books keep seeding from where Audiobookshelf reads them.

@@ -80,9 +80,7 @@ services:
   audiobookrequest:
     image: markbeep/audiobookrequest:1.10.8
     restart: unless-stopped
-    environment:
-      # Single user behind the oidc-auth middleware, so ABR's own login is off
-      ABR_APP__FORCE_LOGIN_TYPE: none
+    # Login type is set in ABR (Settings → Security) while OIDC is being set up; still behind oidc-auth
     volumes:
       - audiobookrequest:/config
     networks:
