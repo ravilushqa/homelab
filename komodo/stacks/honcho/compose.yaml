@@ -10,8 +10,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # LAN only without pinning an IP: the Komodo LXC's sole NIC is on the LAN (IPv6 is ULA) and the router forwards only 443.
     ports:
-      - "192.168.1.166:8077:8000"
+      - "8077:8000"
     environment:
       DB_CONNECTION_URI: postgresql+psycopg://postgres:${HONCHO_DB_PASSWORD:?HONCHO_DB_PASSWORD is required}@database:5432/postgres
       CACHE_URL: redis://redis:6379/0

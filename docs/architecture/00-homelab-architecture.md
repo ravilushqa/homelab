@@ -301,7 +301,7 @@ Platform/support stacks:
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `pocketid` — PocketID OIDC provider at `pocketid.ravil.space` (migrated from LXC `104`)
-- `honcho` — LAN-only memory backend API on `192.168.1.166:8077`, with PostgreSQL/pgvector and Redis
+- `honcho` — LAN-only memory backend API on `komodo.lan:8077`, with PostgreSQL/pgvector and Redis
 - `komodo-core`, `komodo-periphery`, `komodo-mongo` — Komodo itself, present on the Docker host
 
 ## Identity and access

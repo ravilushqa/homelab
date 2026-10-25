@@ -50,8 +50,9 @@ services:
     cpus: 1
     environment:
       GOMEMLIMIT: 1536MiB
+    # LAN only without pinning an IP: the Komodo LXC's sole NIC is on the LAN (IPv6 is ULA) and the router forwards only 443.
     ports:
-      - "192.168.1.166:8080:8080"
+      - "8080:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -76,7 +77,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "192.168.1.166:2375:2375"
+      - "2375:2375"
     networks:
       - default
 

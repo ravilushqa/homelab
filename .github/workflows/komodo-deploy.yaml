@@ -54,7 +54,7 @@ jobs:
         env:
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
-          KOMODO_URL: "http://192.168.1.166:9120"
+          KOMODO_URL: "http://komodo.lan:9120"
         run: |
           # Komodo DeployStack / RunSync are asynchronous.
           # Execute response shape (MongoDB Extended JSON):
