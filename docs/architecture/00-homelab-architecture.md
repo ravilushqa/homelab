@@ -182,7 +182,7 @@ Running VMs:
 Running LXCs:
 
 - `103` — `proxmox-backup-server`, backup service
-- `104` — `pocketid`, identity provider instance
+- `104` — `pocketid`, stopped; migrated to the Komodo `pocketid` stack
 - `106` — `changedetection`, stopped; migrated to the Komodo `changedetection` stack
 - `108` — `traefik`, edge TLS-passthrough router
 - `110` — `pihole`, LAN DNS/ad-blocking
@@ -265,7 +265,7 @@ External services routed through Kubernetes from `k8s/apps/external/` (EndpointS
 
 - `openwebui.ravil.space` — routes to Open WebUI at `192.168.1.29:8080`
 
-Home Assistant (`ha.ravil.space`) and PocketID (`pocketid.ravil.space`) are served by Komodo router-only stacks, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
+Home Assistant (`ha.ravil.space`) is served by a Komodo router-only stack, PocketID (`pocketid.ravil.space`) by the Komodo `pocketid` stack, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
 
 ## Komodo and Docker platform
 
@@ -317,7 +317,7 @@ Platform/support stacks:
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `hermes` — router-only stack for Hermes dashboard at `hermes.ravil.space`
 - `health-connect-bridge` — router-only stack for Health Connect webhook ingest at `health-connect.ravil.space` → `192.168.1.65:9121`
-- `pocketid` — router-only stack for PocketID at `pocketid.ravil.space` → LXC `104` (`192.168.1.112:1411`)
+- `pocketid` — PocketID OIDC provider at `pocketid.ravil.space` (migrated from LXC `104`)
 - `ha` — router-only stack for Home Assistant at `ha.ravil.space` → `192.168.1.153:8123`
 - `proxmox` — router-only stack for Proxmox VE at `proxmox.ravil.space` (OIDC) → `192.168.1.100:8006`
 - `pbs` — router-only stack for Proxmox Backup Server at `pbs.ravil.space` (OIDC) → `192.168.1.121:8007`
@@ -330,10 +330,8 @@ Platform/support stacks:
 
 PocketID is the central OIDC identity provider for user-facing services.
 
-It appears in two places:
-
-- As a Proxmox LXC (`104`) exposed at `pocketid.ravil.space` through the Komodo `pocketid` router-only stack
-- As the OIDC provider referenced by Docker Traefik middleware and service configs
+It runs as the Komodo `pocketid` stack (data in the `pocketid_data` volume) at `pocketid.ravil.space`,
+and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO and the K8s oauth2-proxy.
 
 ### Auth patterns
 
