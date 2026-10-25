@@ -68,58 +68,11 @@ variable "datastore_id" {
   description = "Datastore ID for Proxmox storage"
 }
 
-# Monitoring
-variable "monitoring_enabled" {
-  type    = bool
-  default = false
-}
-
-variable "monitoring_namespace" {
-  type    = string
-  default = "monitoring"
-}
-
-variable "externalservices_prometheus_host" {
-  type    = string
-  default = ""
-}
-
-variable "externalservices_prometheus_basicauth_username" {
-  type    = number
-  default = 0
-}
-
-variable "externalservices_prometheus_basicauth_password" {
-  type    = string
-  default = ""
-}
-
-variable "externalservices_loki_host" {
-  type    = string
-  default = ""
-}
-
-variable "externalservices_loki_basicauth_username" {
-  type    = number
-  default = 0
-}
-
-variable "externalservices_loki_basicauth_password" {
-  type    = string
-  default = ""
-}
-
-variable "externalservices_tempo_host" {
-  type    = string
-  default = ""
-}
-
-variable "externalservices_tempo_basicauth_username" {
-  type    = number
-  default = 0
-}
-
-variable "externalservices_tempo_basicauth_password" {
-  type    = string
-  default = ""
+variable "k8s_enabled" {
+  type        = bool
+  default     = true
+  description = "Create the Talos Kubernetes cluster (VMs, Talos, CSI, sealed-secrets)"
+  # To turn off an existing cluster, first destroy the in-cluster resources while it's
+  # still on (terraform destroy -target=module.sealed-secrets -target=module.proxmox_csi_plugin),
+  # then set false: with the cluster gone the kubernetes provider can't refresh them.
 }

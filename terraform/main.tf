@@ -27,10 +27,11 @@ provider "kubernetes" {
 }
 
 module "talos" {
+  count  = var.k8s_enabled ? 1 : 0
   source = "./modules/talos"
 
   nodes  = var.nodes
-  vm_ids = module.proxmox.vm_ids
+  vm_ids = module.proxmox[0].vm_ids
 
   cilium = {
     values  = file("${path.module}/../k8s/infra/network/cilium/values.yaml")
@@ -38,34 +39,19 @@ module "talos" {
   }
 }
 
+# Talos VMs
 module "proxmox" {
+  count           = var.k8s_enabled ? 1 : 0
   source          = "./modules/proxmox"
   default_gateway = var.default_gateway
   nodes           = var.nodes
   datastore_id    = var.datastore_id
-  talos_image_url = module.talos.disk_image_url
-  talos_version   = module.talos.talos_version
-}
-
-module "monitoring" {
-  depends_on = [module.talos]
-  source     = "./modules/monitoring"
-
-  enabled                                        = var.monitoring_enabled
-  cluster_name                                   = var.cluster_name
-  namespace                                      = var.monitoring_namespace
-  externalservices_prometheus_host               = var.externalservices_prometheus_host
-  externalservices_prometheus_basicauth_username = var.externalservices_prometheus_basicauth_username
-  externalservices_prometheus_basicauth_password = var.externalservices_prometheus_basicauth_password
-  externalservices_loki_host                     = var.externalservices_loki_host
-  externalservices_loki_basicauth_username       = var.externalservices_loki_basicauth_username
-  externalservices_loki_basicauth_password       = var.externalservices_loki_basicauth_password
-  externalservices_tempo_host                    = var.externalservices_tempo_host
-  externalservices_tempo_basicauth_username      = var.externalservices_tempo_basicauth_username
-  externalservices_tempo_basicauth_password      = var.externalservices_tempo_basicauth_password
+  talos_image_url = module.talos[0].disk_image_url
+  talos_version   = module.talos[0].talos_version
 }
 
 module "proxmox_csi_plugin" {
+  count      = var.k8s_enabled ? 1 : 0
   depends_on = [module.talos]
   source     = "./modules/proxmox-csi-plugin"
 
@@ -85,6 +71,7 @@ module "proxmox_csi_plugin" {
 }
 
 module "sealed-secrets" {
+  count      = var.k8s_enabled ? 1 : 0
   depends_on = [module.talos]
   source     = "./modules/sealed-secrets"
 
@@ -94,19 +81,41 @@ module "sealed-secrets" {
   }
 
   // openssl req -x509 -days 365 -nodes -newkey rsa:4096 -keyout sealed-secrets.key -out sealed-secrets.cert -subj "/CN=sealed-secret/O=sealed-secret"
+  # The certs are gitignored; module arguments are evaluated even with count = 0,
+  # so only read them when the cluster is on
   cert = {
-    cert = file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.cert")
-    key  = file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.key")
+    cert = var.k8s_enabled ? file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.cert") : ""
+    key  = var.k8s_enabled ? file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.key") : ""
   }
 
   helm_values = file("${path.module}/../k8s/infra/security/sealed-secrets/values.yaml")
 }
 
 module "traefik" {
-  depends_on = [module.talos]
-  source     = "./modules/traefik"
+  source = "./modules/traefik"
 
   providers = {
     proxmox = proxmox
   }
+}
+
+# The K8s modules got count = 1 for k8s_enabled; keep their existing state
+moved {
+  from = module.talos
+  to   = module.talos[0]
+}
+
+moved {
+  from = module.proxmox
+  to   = module.proxmox[0]
+}
+
+moved {
+  from = module.proxmox_csi_plugin
+  to   = module.proxmox_csi_plugin[0]
+}
+
+moved {
+  from = module.sealed-secrets
+  to   = module.sealed-secrets[0]
 }
