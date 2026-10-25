@@ -111,7 +111,7 @@ These services provide foundational capabilities for the cluster.
 - **Integration**: Works with Cilium as implementation
 - **Features**:
   - HTTPRoute resources (TLSRoute supported via the `tls-passthrough` gateway, currently unused)
-  - Receives TLS passthrough from the Traefik edge for hostnames listed in `k8s-tcp-router`
+  - Receives TLS passthrough from the Komodo Traefik for hostnames listed in its `k8s` TCP router
   - Path-based and host-based routing
 
 #### Cert-Manager (TLS Certificates)

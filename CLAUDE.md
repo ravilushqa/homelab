@@ -44,24 +44,20 @@
   ```
 - **Networking**: Use Gateway API (HTTP/TLS routes) for ingress traffic
 
-## Traefik TCP Routing (terraform/modules/traefik/configs/tcp_routers.yaml)
-Traffic enters via a Traefik instance that does TLS passthrough to two backends:
-- **Komodo host** (`192.168.1.166:443`) — Docker Compose stacks managed by Komodo
-- **K8s cluster** (`192.168.1.222:443`) — Kubernetes-served services
-
-**Routing logic**: `komodo-tcp-router` is the catch-all (`HostSNI("*")`, priority 50).
-`k8s-tcp-router` has an explicit list of K8s domains (priority 100).
-
-- **Adding a new Komodo service**: no change needed in `tcp_routers.yaml`
-- **Adding a new K8s service**: add its hostname to `k8s-tcp-router` rule
+## Ingress (komodo/stacks/traefik/dynamic/external.yml)
+The router forwards `443/tcp` to the Komodo Traefik (`192.168.1.166:443`), the only public entry point:
+- **K8s hostnames**: the `k8s` TCP router matches them by `HostSNI` and passes TLS through to the
+  Cilium gateway (`192.168.1.222:443`), which terminates TLS itself. TCP routers win over HTTP routers.
+- **Everything else**: HTTP routes from Docker labels (Komodo stacks) or from `dynamic/external.yml`
+  (LXC/VM backends such as Home Assistant, Proxmox, PBS).
 
 K8s domains (as of last update): `argocd`, `glance`, `dozzle.k8s`, `it-tools`, `inbox-zero` (all `.ravil.space`)
 
 ## Adding a New K8s Service
 
 1. Create `k8s/apps/internal/{name}/` with a kustomization (the `internal-apps` ApplicationSet picks it up)
-2. Add an HTTPRoute on the `external` gateway and add the hostname to `k8s-tcp-router` in
-   `terraform/modules/traefik/configs/tcp_routers.yaml`
+2. Add an HTTPRoute on the `external` gateway and add the hostname to the `k8s` TCP router in
+   `komodo/stacks/traefik/dynamic/external.yml`
 
 Services running outside Docker/K8s (LXC, VM) are routed by Komodo's Traefik, not by K8s.
 
