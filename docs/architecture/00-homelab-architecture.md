@@ -347,8 +347,13 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
   Docker logs of every Komodo container (`job="integrations/docker"`, label `container`, read via
   `docker-socket-proxy` on `192.168.1.166:2375`), Proxmox metrics and Alloy self-monitoring (`job="integrations/alloy"`).
 - `/etc/alloy/config.alloy` on `pve01` additionally holds local pipelines that are not in Fleet Management, e.g. the
-  CrowdSec scrape (`grafana-cloud/crowdsec.alloy`, metrics on `komodo.lan:6060`, `job="crowdsec"`).
+  CrowdSec scrape (`grafana-cloud/crowdsec.alloy`, metrics on `komodo.lan:6060`, `job="crowdsec"`) and the Traefik
+  scrape (`grafana-cloud/traefik.alloy`, metrics on `komodo.lan:8081`, `job="traefik"`, per-service labels only).
 - Dashboards kept in git: `grafana-cloud/` (e.g. `crowdsec-dashboard.json`, uid `crowdsec-homelab`).
+- Alerts are Grafana-managed rules in the `alerts` folder (uid `f8sl7f`) sent to the `Botya` Telegram contact point.
+  `grafana-cloud/traefik-alerts.json` is the `traefik` rule group (certificate expiry, per-service 5xx ratio, missing
+  scrape), applied with `PUT /api/v1/provisioning/folder/f8sl7f/rule-groups/traefik` and `X-Disable-Provenance: true`
+  so the rules stay editable in the UI.
 
 ### Docker/Komodo
 
