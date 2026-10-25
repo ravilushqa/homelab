@@ -594,9 +594,21 @@ class TestDeployWorkflow(unittest.TestCase):
     def test_live_host_in_gate(self):
         self.assertIn("--live-host", self.wf)
 
-    def test_ssh_user_present(self):
-        # Gate should specify SSH user
-        self.assertIn("--ssh-user", self.wf)
+    def test_live_check_runs_locally(self):
+        # The runner shares the Docker host with Traefik and has no SSH key
+        self.assertIn("--live-host local", self.wf)
+
+    def test_local_extract_skips_ssh(self):
+        import importlib.util
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("privacy_gate_check", _GATE_SCRIPT)
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        with mock.patch.object(gate.subprocess, "run") as run:
+            run.return_value = mock.Mock(returncode=0, stdout="running=true\n")
+            ok, lines = gate._run_ssh_extract("claw", "local")
+        self.assertTrue(ok)
+        self.assertEqual(run.call_args.args[0], ["bash", "-s"])
 
 
 class TestTokenSecurity(unittest.TestCase):

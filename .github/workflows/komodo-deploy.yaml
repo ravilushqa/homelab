@@ -178,8 +178,7 @@ jobs:
           gate_privacy_check() {
             "$RUNNER_TEMP/gate_venv/bin/python" services/health-connect-bridge/privacy_gate_check.py \
               --source komodo/stacks/traefik/compose.yaml \
-              --live-host 192.168.1.166 \
-              --ssh-user claw \
+              --live-host local \
             || {
               echo "ABORT: privacy gate FAILED — health-connect paths must be excluded from Umami" >&2
               return 1
