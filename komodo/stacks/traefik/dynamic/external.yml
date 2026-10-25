@@ -69,3 +69,25 @@ http:
     health-connect-bridge:
       loadBalancer:
         servers: [{ url: "http://192.168.1.65:9121" }]
+
+# Kubernetes services: TLS passthrough to the cluster's Cilium gateway, which
+# terminates TLS itself (cert-manager). TCP routers with HostSNI are matched
+# before the HTTP routers on websecure; every other host falls through to them.
+# To expose a new K8s service, add its hostname here.
+tcp:
+  routers:
+    k8s:
+      entryPoints: [websecure]
+      rule: >-
+        HostSNI(`argocd.ravil.space`)
+        || HostSNI(`glance.ravil.space`)
+        || HostSNI(`dozzle.k8s.ravil.space`)
+        || HostSNI(`it-tools.ravil.space`)
+        || HostSNI(`inbox-zero.ravil.space`)
+      tls: { passthrough: true }
+      service: k8s
+
+  services:
+    k8s:
+      loadBalancer:
+        servers: [{ address: "192.168.1.222:443" }]
