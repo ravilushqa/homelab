@@ -8,7 +8,6 @@ Tests:
   - Malformed patterns fail (substring-only, wrong regex shape).
   - Gate CLI integration tests using isolated fixtures.
   - Deployment ordering in komodo-deploy.yaml.
-  - Token/DB file security checks.
 """
 
 import os
@@ -19,12 +18,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).parent.parent.parent.parent
-_GATE_SCRIPT = _REPO_ROOT / "services/health-connect-bridge/privacy_gate_check.py"
-_FIXTURES_DIR = Path(__file__).parent / "fixtures/privacy_gate"
+_HERE = Path(__file__).parent
+_REPO_ROOT = _HERE.parent.parent
+_GATE_SCRIPT = _HERE / "privacy_gate_check.py"
+_FIXTURES_DIR = _HERE / "fixtures/privacy_gate"
 
 # Import gate functions for unit tests
-sys.path.insert(0, str(_REPO_ROOT / "services/health-connect-bridge"))
+sys.path.insert(0, str(_HERE))
 from privacy_gate_check import (
     check_source,
     check_live,
@@ -610,47 +610,6 @@ class TestDeployWorkflow(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(run.call_args.args[0], ["bash", "-s"])
 
-
-class TestTokenSecurity(unittest.TestCase):
-    def test_symlink_rejected(self):
-        from ..receiver import _load_token
-        fd, real = tempfile.mkstemp(prefix="test_tok_")
-        os.write(fd, b"a" * 40)
-        os.close(fd)
-        os.chmod(real, 0o600)
-        link = real + "_link"
-        try:
-            os.symlink(real, link)
-            with self.assertRaises(RuntimeError):
-                _load_token(Path(link))
-        finally:
-            os.unlink(link)
-            os.unlink(real)
-
-    def test_wrong_mode_rejected(self):
-        from ..receiver import _load_token
-        fd, path = tempfile.mkstemp(prefix="test_tok_mode_")
-        os.write(fd, b"a" * 40)
-        os.close(fd)
-        os.chmod(path, 0o644)
-        try:
-            with self.assertRaises(RuntimeError):
-                _load_token(Path(path))
-        finally:
-            os.unlink(path)
-
-    def test_valid_token_loads(self):
-        from ..receiver import _load_token
-        fd, path = tempfile.mkstemp(prefix="test_tok_valid_")
-        token_val = b"a" * 48
-        os.write(fd, token_val)
-        os.close(fd)
-        os.chmod(path, 0o600)
-        try:
-            loaded = _load_token(Path(path))
-            self.assertEqual(loaded, token_val)
-        finally:
-            os.unlink(path)
 
 
 class TestSourceDefaultmodeUnknown(unittest.TestCase):

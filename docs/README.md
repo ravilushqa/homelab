@@ -6,7 +6,6 @@
 - [Bootstrap](runbooks/bootstrap.md) — rebuild the Talos cluster from scratch
 - [Troubleshooting](runbooks/troubleshooting.md) — where to look when something is down
 - [ADRs](adr/README.md) — recorded architecture decisions
-- [Health Profile Consultation](health-profile-consultation.md) — workflow of the health/nutrition tool
 
 ## Architecture at a glance
 

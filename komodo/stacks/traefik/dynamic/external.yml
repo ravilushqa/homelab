@@ -33,7 +33,7 @@ http:
     # routed, anything else gets Traefik's 404.
     # PRIVACY: these paths are excluded from the global umami@docker middleware
     # via ignoreURLs in ../compose.yaml; komodo-deploy.yaml checks that before
-    # every traefik deploy (services/health-connect-bridge/privacy_gate_check.py).
+    # every traefik deploy (.github/scripts/privacy_gate_check.py).
     health-connect-bridge:
       rule: Host(`health-connect.ravil.space`) && Path(`/ingest/health-connect`) && Method(`POST`)
       entryPoints: [websecure]
