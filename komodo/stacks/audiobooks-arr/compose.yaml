@@ -47,6 +47,8 @@ services:
       PUID: 1000
       PGID: 1000
       TZ: Europe/Berlin
+      # Login is done by the oidc-auth middleware; without this Prowlarr forces its own login setup
+      PROWLARR__AUTH__METHOD: External
     volumes:
       - prowlarr:/config
     networks:
