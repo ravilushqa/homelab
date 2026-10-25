@@ -35,7 +35,7 @@ flowchart TB
   LanBackends[LAN backends<br/>HA, Proxmox, PBS]
   K8sGW[Cilium Gateway<br/>192.168.1.222:443]
   Talos[Talos VMs 101/102<br/>192.168.1.210-211]
-  K8sApps[K8s apps<br/>ArgoCD, Glance, ...]
+  K8sApps[K8s infra<br/>ArgoCD, cert-manager, ...]
   Storage[(raid1 ZFS, nvme-thin,<br/>PBS, SMB)]
   Auth[PocketID OIDC]
 
@@ -67,7 +67,7 @@ flowchart TB
 - **ISP:** Deutsche Telekom AG
 - **Timezone:** Europe/Berlin
 - **WAN:** PPPoE directly to Telekom FTTH (VLAN 7, MTU 1492) via the Telekom Glasfaser-Modem 2; no Speedport, no double NAT.
-  Public IPv4 is dynamic, `cloudflare-ddns` (namespace `ddns`) keeps `*.ravil.space` pointed at it. IPv6 disabled.
+  Public IPv4 is dynamic, the Komodo `cloudflare-ddns` stack keeps `*.ravil.space` pointed at it. IPv6 disabled.
 - **LAN IP on gateway:** `192.168.1.1`
 - **Configuration counts:**
   - LAN configurations: 3
@@ -103,7 +103,7 @@ flowchart TB
 The public namespace is `*.ravil.space`.
 
 - Cloudflare DNS points public service names at the homelab edge.
-- `cloudflare-ddns` runs in Kubernetes namespace `ddns` and keeps DNS aligned with WAN changes.
+- The Komodo `cloudflare-ddns` stack keeps the `*.ravil.space` A record aligned with WAN changes.
 - Pi-hole exists as a Proxmox LXC for LAN DNS/ad-blocking.
 - Split DNS: Pi-hole answers `*.ravil.space` with `192.168.1.166` (`misc.dnsmasq_lines = ["address=/*.ravil.space/192.168.1.166"]`),
   so LAN clients reach the Komodo Traefik directly (K8s hostnames included, via the SNI passthrough) instead of hairpinning
@@ -128,10 +128,6 @@ the HTTP routes below.
 Kubernetes SNI hostnames currently routed:
 
 - `argocd.ravil.space`
-- `glance.ravil.space`
-- `dozzle.k8s.ravil.space`
-- `it-tools.ravil.space`
-- `inbox-zero.ravil.space`
 
 Operational rule:
 
@@ -233,28 +229,14 @@ Terraform manages the LXCs in `var.lxc` (`terraform/homelab.auto.tfvars`): 103, 
 - `cert-manager` — certificate automation
 - `cilium-secrets` and `kube-system` — Cilium/eBPF networking and Hubble
 - `csi-proxmox` — Proxmox CSI controller and node plugin
-- `ddns` — Cloudflare DDNS updater
 - `gateway` — Gateway API resources
 - `sealed-secrets` — encrypted Kubernetes secrets controller
 - `kubelet-serving-cert-approver` — approves kubelet serving certificates (Talos)
 
-### Application namespaces
-
-- `dozzle`
-- `glance`
-- `inbox-zero`
-- `isponsorblocktv`
-- `it-tools`
-
 ### Kubernetes app inventory
 
-Internal apps from `k8s/apps/internal/`:
-
-- `glance.ravil.space` — personal dashboard
-- `dozzle.k8s.ravil.space` — Kubernetes-side log viewer with oauth2-proxy
-- `it-tools.ravil.space` — utility toolbox
-- `inbox-zero.ravil.space` — email management
-- `isponsorblocktv` — internal worker/service without a public hostname
+`k8s/apps/internal/` is empty: the last apps (Glance, IT Tools, iSponsorBlockTV) moved to Komodo stacks in 2026-10,
+Inbox Zero and the Kubernetes Dozzle were removed. The cluster only runs its own infrastructure and ArgoCD.
 
 Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynamic/external.yml`), PocketID (`pocketid.ravil.space`) by the Komodo `pocketid` stack, Grafana (`grafana.ravil.space`) by the Komodo `grafana-lgtm` stack, and Change Detection (`changedetection.ravil.space`) by the Komodo `changedetection` stack, not Kubernetes.
 
@@ -281,10 +263,14 @@ Application stacks:
 - `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC)
 - `bytestash` — snippet manager at `bytestash.ravil.space`
 - `changedetection` — website change monitoring at `changedetection.ravil.space` (migrated from LXC 106)
+- `cloudflare-ddns` — keeps `*.ravil.space` on the dynamic public IPv4 (reuses the Traefik ACME token `CF_DNS_API_TOKEN`)
 - `dozzle` — Docker log viewer at `dozzle.ravil.space`
+- `glance` — personal dashboard at `glance.ravil.space`
 - `free-games-claimer` — free games claimer noVNC UI at `fgc.ravil.space`
 - `guest-door-access` — guest door access app at `guest-access.ravil.space` (currently scaled to 0)
 - `ha-wall-panel` — Home Assistant wall panel at `ha-dashboard.ravil.space`
+- `isponsorblocktv` — SponsorBlock for YouTube on TVs, no hostname (config in `komodo/stacks/isponsorblocktv/config.json`)
+- `it-tools` — utility toolbox at `it-tools.ravil.space`
 - `immich` — photo management at `immich.ravil.space`
 - `karakeep` — bookmarks/read-it-later at `karakeep.ravil.space`
 - `llm-council` — multi-model OpenRouter web app at `llm-council.ravil.space`
@@ -354,7 +340,7 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 
 - `grafana-lgtm` provides local Loki/Grafana/Tempo/Mimir style observability.
 - `cadvisor` and `docker-socket-proxy` expose container metrics safely.
-- `dozzle.ravil.space` and `dozzle.k8s.ravil.space` provide Docker and Kubernetes log viewing.
+- `dozzle.ravil.space` provides Docker log viewing (Dozzle can't mix Kubernetes and Docker modes; there is no Kubernetes log viewer).
 - Traefik access logs are the authoritative check for routed HTTP/TLS behavior; use them when verifying public services.
 
 ## Storage, data, and backups

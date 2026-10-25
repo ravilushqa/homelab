@@ -185,9 +185,9 @@ pages:
               - 302
               - 401
               - 403
-          - title: Dozzle K8s
-            url: https://dozzle.k8s.ravil.space
-            check-url: https://dozzle.k8s.ravil.space
+          - title: Dozzle
+            url: https://dozzle.ravil.space
+            check-url: https://dozzle.ravil.space
             icon: sh:dozzle
             alt-status-codes:
               - 302
@@ -259,7 +259,7 @@ pages:
         widgets:
           - type: monitor
             cache: 1m
-            title: K8s Apps
+            title: Apps
             style: compact
             sites:
               - title: ArgoCD
@@ -306,10 +306,10 @@ pages:
                     same-tab: true
                     description: this dashboard
                     icon: sh:glance
-                  - title: Dozzle K8s
-                    url: https://dozzle.k8s.ravil.space
+                  - title: Dozzle
+                    url: https://dozzle.ravil.space
                     same-tab: true
-                    description: Kubernetes log viewer
+                    description: Docker log viewer
                     icon: sh:dozzle
                   - title: Grafana
                     url: https://grafana.ravil.space

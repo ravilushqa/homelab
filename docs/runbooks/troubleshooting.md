@@ -11,7 +11,7 @@ ssh root@192.168.1.166 'docker logs --tail 100 traefik 2>&1 | grep <name>'
 
 Traefik access logs are the source of truth, not the `curl` status code.
 
-- **No log line:** DNS or the router. Check the Cloudflare record (`cloudflare-ddns` in namespace `ddns` keeps it on the
+- **No log line:** DNS or the router. Check the Cloudflare record (the Komodo `cloudflare-ddns` stack keeps it on the
   WAN IP) and the UniFi 443 port forward to `192.168.1.166`.
 - **K8s hostname:** it must be in the `k8s` TCP router in `komodo/stacks/traefik/dynamic/external.yml`; then check
   `kubectl get gateway,httproute -A` and `kubectl get certificates -A`.
@@ -58,6 +58,6 @@ PBS is LXC 103 (`pbs.ravil.space`), with the `pbs-s3-blackbaze` datastore.
 
 ## Logs and metrics
 
-- Docker: `dozzle.ravil.space`; Kubernetes: `dozzle.k8s.ravil.space`
+- Docker: `dozzle.ravil.space`; Kubernetes: `kubectl logs`
 - Metrics and logs: Grafana in the `grafana-lgtm` stack (`grafana.ravil.space`); Proxmox metrics via
   `prometheus-pve-exporter` (LXC 112)

@@ -36,14 +36,12 @@ flowchart LR
 
 ## Applications 📦
 
-### Kubernetes (`k8s/apps/internal/`)
+### Docker stacks — Komodo (`komodo/stacks/`)
 - [Glance](https://github.com/glanceapp/glance) — personal dashboard.
-- [Dozzle](https://dozzle.dev/) — Kubernetes log viewer.
+- [Dozzle](https://dozzle.dev/) — Docker log viewer.
 - [IT Tools](https://github.com/CorentinTh/it-tools) — IT utility toolbox.
 - [iSponsorBlockTV](https://github.com/dmunozv04/iSponsorBlockTV) — SponsorBlock for YouTube on TVs.
-- [Inbox Zero](https://www.inboxzero.com/) — email management.
-
-### Docker stacks — Komodo (`komodo/stacks/`)
+- [cloudflare-ddns](https://github.com/timothymiller/cloudflare-ddns) — keeps `*.ravil.space` on the dynamic public IP.
 - [Immich](https://immich.app/) — photos.
 - [Paperless-ngx](https://docs.paperless-ngx.com/) and [Paperless-GPT](https://github.com/icereed/paperless-gpt) — documents with OCR and LLM tagging.
 - [Audiobookshelf](https://www.audiobookshelf.org/) — audiobooks.
@@ -75,13 +73,13 @@ flowchart LR
 .
 ├── docs                  # architecture snapshot, runbooks, ADRs
 ├── k8s
-│   ├── apps/internal     # one directory per app, synced by the internal-apps ApplicationSet
+│   ├── apps/internal     # one directory per app, synced by the internal-apps ApplicationSet (empty now)
 │   ├── components        # reusable kustomize components (auth-middleware)
 │   ├── examples          # reference manifests, not deployed
 │   └── infra
 │       ├── argocd        # ArgoCD and its Applications
 │       ├── crds          # Gateway API CRDs
-│       ├── network       # cilium, gateway, coredns, cloudflare-ddns
+│       ├── network       # cilium, gateway, coredns
 │       ├── security      # cert-manager, sealed-secrets
 │       └── storage       # proxmox-csi
 ├── komodo

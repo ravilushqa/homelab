@@ -2,8 +2,6 @@
 DEFAULT_KUBECONFIG := ~/.kube/config
 .DEFAULT_GOAL := bootstrap
 
-include k8s/infra/network/cloudflare-ddns/Makefile
-
 bootstrap: terraform-init terraform-plan terraform-apply kubeconfig k8s-apply
 
 terraform-init:
@@ -25,7 +23,7 @@ kubeconfig:
 	@terraform -chdir=./terraform output -raw kubeconfig_content > $(DEFAULT_KUBECONFIG)
 	@echo "KUBECONFIG is set as the default at $(DEFAULT_KUBECONFIG)"
 
-k8s-apply: cloudflare-ddns-gen
+k8s-apply:
 	@echo "Patch the default storage class..."
 	kubectl patch storageclass proxmox-csi -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 	@echo "Applying critical bootstrap components..."
@@ -51,13 +49,3 @@ argocd-restart:
 	kubectl -n argocd delete pod -l app.kubernetes.io/part-of=argocd
 	kubectl kustomize --enable-helm ./k8s/infra/argocd | kubectl apply -f -
 
-glance-restart:
-	kubectl kustomize ./k8s/apps/internal/glance | kubectl apply -f -
-	kubectl delete pod -l app=glance -n glance
-
-cloudflare-ddns-gen:
-	#$(MAKE) -C k8s/infra/network/cloudflare-ddns gen
-
-isponsorblocktv-restart:
-	kubectl delete pod -l app=isponsorblocktv -n isponsorblocktv
-	kubectl kustomize ./k8s/apps/internal/isponsorblocktv | kubectl apply -f -

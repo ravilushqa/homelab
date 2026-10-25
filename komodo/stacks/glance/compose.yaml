@@ -1,0 +1,22 @@
+services:
+  glance:
+    image: glanceapp/glance:v0.8.7
+    container_name: glance
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ./glance.yml:/app/config/glance.yml:ro
+    networks:
+      - traefik_default
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.glance.rule=Host(`glance.ravil.space`)
+      - traefik.http.routers.glance.entrypoints=websecure
+      - traefik.http.routers.glance.tls.certresolver=cloudflare
+      - traefik.http.routers.glance.middlewares=oidc-auth@docker
+      - traefik.http.services.glance.loadbalancer.server.port=8080
+
+networks:
+  traefik_default:
+    external: true
