@@ -53,8 +53,18 @@ resource "proxmox_virtual_environment_container" "lxc" {
   start_on_boot = each.value.start_on_boot
   tags          = each.value.tags
 
-  cpu {
-    cores = each.value.cores
+  # Proxmox doesn't store the default cores = 1, so only set it when it differs
+  dynamic "cpu" {
+    for_each = each.value.cores == 1 ? [] : [each.value.cores]
+    content {
+      cores = cpu.value
+    }
+  }
+
+  console {
+    enabled   = true
+    type      = "tty"
+    tty_count = 2
   }
 
   memory {
@@ -123,6 +133,8 @@ resource "proxmox_virtual_environment_container" "lxc" {
     # Creation-only inputs: existing containers were imported, so these must
     # never force a replacement. Descriptions are left to the Proxmox UI.
     ignore_changes = [
+      vm_id, # not populated by import; still used on create
+      timeout_start,
       operating_system[0].template_file_id,
       initialization[0].user_account,
       network_interface[0].mac_address,
