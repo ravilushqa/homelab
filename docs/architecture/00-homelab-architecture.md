@@ -333,13 +333,22 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 
 - Cilium and Hubble provide network visibility.
 - Metrics Server is installed by the Talos control-plane config (`extraManifests`).
-- There is no in-cluster metrics/log shipping; Grafana Cloud and the Terraform `monitoring` module are gone.
+- There is no in-cluster metrics/log shipping; the Terraform `monitoring` module is gone.
 
 ### Proxmox
 
 - `prometheus-pve-exporter` LXC exports Proxmox metrics.
 - Proxmox API is available for live inventory and status checks.
 - PBS and storage backends provide backup state.
+
+### Grafana Cloud
+
+- Alloy runs on `pve01` (systemd `alloy`). Its pipelines come from Grafana Cloud Fleet Management (`remotecfg`):
+  Docker logs of every Komodo container (`job="integrations/docker"`, label `container`, read via
+  `docker-socket-proxy` on `192.168.1.166:2375`), Proxmox metrics and Alloy self-monitoring (`job="integrations/alloy"`).
+- `/etc/alloy/config.alloy` on `pve01` additionally holds local pipelines that are not in Fleet Management, e.g. the
+  CrowdSec scrape (`grafana-cloud/crowdsec.alloy`, metrics on `192.168.1.166:6060`, `job="crowdsec"`).
+- Dashboards kept in git: `grafana-cloud/` (e.g. `crowdsec-dashboard.json`, uid `crowdsec-homelab`).
 
 ### Docker/Komodo
 

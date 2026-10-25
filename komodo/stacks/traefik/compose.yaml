@@ -125,6 +125,9 @@ services:
       COLLECTIONS: crowdsecurity/traefik crowdsecurity/http-cve
       # Registers the "traefik" bouncer with this key on startup
       BOUNCER_KEY_TRAEFIK: ${CROWDSEC_BOUNCER_KEY:?CROWDSEC_BOUNCER_KEY is required}
+    # Prometheus metrics, scraped by Alloy on pve01 into Grafana Cloud (LAN only)
+    ports:
+      - "192.168.1.166:6060:6060"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro

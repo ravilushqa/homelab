@@ -1,0 +1,8 @@
+// Appended to /etc/alloy/config.alloy on pve01 (not managed by Fleet Management).
+// Ships CrowdSec metrics (traefik stack, published on the Komodo host) to Grafana Cloud.
+prometheus.scrape "crowdsec" {
+  targets         = [{"__address__" = "192.168.1.166:6060", "instance" = "komodo"}]
+  job_name        = "crowdsec"
+  scrape_interval = "60s"
+  forward_to      = [prometheus.remote_write.metrics_service.receiver]
+}
