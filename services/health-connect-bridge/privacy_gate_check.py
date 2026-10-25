@@ -428,16 +428,22 @@ def _run_ssh_extract(ssh_user: str, host: str) -> tuple:
     Returns (success: bool, output_lines: list[str]).
     Never logs or prints the raw SSH output.
     """
+    # host "local": Traefik runs on this machine (the CI runner shares the
+    # Docker host), so run the same extraction script without SSH.
+    if host == "local":
+        cmd = ["bash", "-s"]
+    else:
+        cmd = [
+            "ssh",
+            "-o", "StrictHostKeyChecking=yes",
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=10",
+            f"{ssh_user}@{host}",
+            "bash -s",
+        ]
     try:
         result = subprocess.run(
-            [
-                "ssh",
-                "-o", "StrictHostKeyChecking=yes",
-                "-o", "BatchMode=yes",
-                "-o", "ConnectTimeout=10",
-                f"{ssh_user}@{host}",
-                "bash -s",
-            ],
+            cmd,
             input=_SSH_EXTRACT_SCRIPT,
             capture_output=True,
             text=True,
@@ -589,7 +595,8 @@ def main(argv=None) -> int:
     p.add_argument("--source", required=True,
                    help="Path to traefik compose.yaml to verify")
     p.add_argument("--live-host", default=None,
-                   help="Traefik host for live SSH check (required for deployment gate)")
+                   help="Traefik host for live SSH check (required for deployment gate); "
+                        "'local' runs the check on this machine without SSH")
     p.add_argument("--ssh-user", default="root",
                    help="SSH user for live check (default: root)")
     p.add_argument("--ssh-fixture", default=None,
