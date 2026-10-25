@@ -81,9 +81,11 @@ module "sealed-secrets" {
   }
 
   // openssl req -x509 -days 365 -nodes -newkey rsa:4096 -keyout sealed-secrets.key -out sealed-secrets.cert -subj "/CN=sealed-secret/O=sealed-secret"
+  # The certs are gitignored; module arguments are evaluated even with count = 0,
+  # so only read them when the cluster is on
   cert = {
-    cert = file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.cert")
-    key  = file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.key")
+    cert = var.k8s_enabled ? file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.cert") : ""
+    key  = var.k8s_enabled ? file("${path.module}/modules/sealed-secrets/certs/sealed-secrets.key") : ""
   }
 
   helm_values = file("${path.module}/../k8s/infra/security/sealed-secrets/values.yaml")
