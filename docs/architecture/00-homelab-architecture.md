@@ -290,8 +290,6 @@ Application stacks:
 - `paperless-gpt` — AI assistant for Paperless at `paperless-gpt.ravil.space`
 - `rsshub` — RSS generator at `rsshub.ravil.space`
 - `umami` — web analytics at `umami.ravil.space`
-- `vova-medcenter` — delegated external app at `vova-medcenter.ravil.space`; stack lives on the `deploy/vova-medcenter` branch, deployed by `.github/workflows/vova-medcenter-deploy.yaml`
-  (every 10 min or on `repository_dispatch`, when the live build revision differs from `EXPECTED_REVISION`; Komodo is LAN-only, so no webhook)
 - `your_spotify` — Spotify stats at `spotify.ravil.space` and API at `spotify-server.ravil.space`
 
 Platform/support stacks:
@@ -405,7 +403,6 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 4. On merge, `.github/workflows/komodo-deploy.yaml` runs the resource sync, then deploys changed stacks one by one.
    Traefik deploys are wrapped in the health-connect Umami privacy gate (`.github/scripts/privacy_gate_check.py`),
    which `.github/workflows/privacy-gate.yaml` also runs nightly against the running Traefik.
-   Exception: `vova-medcenter` lives on its own branch and is deployed by `.github/workflows/vova-medcenter-deploy.yaml`.
 5. Verify container status, app logs, HTTPS status, and Docker Traefik access logs.
 
 ### Git workflow
