@@ -101,6 +101,8 @@ flowchart LR
 
 - **Kubernetes:** merge to `main`; ArgoCD auto-syncs `k8s/infra/*` and `k8s/apps/internal/*` (https://argocd.ravil.space).
 - **Docker stacks:** merge to `main`; the `Komodo Deploy` workflow runs the resource sync and deploys changed stacks one at a time.
+  `vova-medcenter` is the exception: it lives on the `deploy/vova-medcenter` branch and the `vova-medcenter Deploy`
+  workflow deploys it when the live revision falls behind that branch.
 - **Terraform:** the `Terraform` workflow plans on PRs and applies on `main` (self-hosted runner).
 - **From scratch:** `make bootstrap` (see the [bootstrap runbook](docs/runbooks/bootstrap.md)).
 
