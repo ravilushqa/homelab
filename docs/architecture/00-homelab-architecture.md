@@ -290,7 +290,6 @@ Application stacks:
 - `paperless-gpt` — AI assistant for Paperless at `paperless-gpt.ravil.space`
 - `rsshub` — RSS generator at `rsshub.ravil.space`
 - `umami` — web analytics at `umami.ravil.space`
-- `vova-medcenter` — delegated external app at `vova-medcenter.ravil.space`; stack lives on the `deploy/vova-medcenter` branch, deployed by Komodo webhook on push
 - `your_spotify` — Spotify stats at `spotify.ravil.space` and API at `spotify-server.ravil.space`
 
 Platform/support stacks:
