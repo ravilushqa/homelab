@@ -1,0 +1,84 @@
+name: Deploy vova-medcenter
+
+# Deploys the stack on every push to this branch: the self-hosted runner on the
+# homelab LAN calls Komodo DeployStack, then waits until the public frontend and
+# backend report EXPECTED_REVISION from compose.yaml.
+
+on:
+  push:
+    branches:
+      - deploy/vova-medcenter
+    paths:
+      - 'komodo/stacks/vova-medcenter/compose.yaml'
+      - '.github/workflows/deploy.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: vova-medcenter-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Deploy stack
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_URL: "http://komodo.lan:9120"
+        run: |
+          EXPECTED=$(awk '/^ *EXPECTED_REVISION:/ {print $2; exit}' komodo/stacks/vova-medcenter/compose.yaml)
+          if ! printf '%s' "$EXPECTED" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "EXPECTED_REVISION is not a full git SHA: '$EXPECTED'" >&2
+            exit 1
+          fi
+
+          # DeployStack returns an update whose _id.$oid is polled via GetUpdate
+          # until status Complete (same contract as homelab's komodo-deploy.yaml).
+          komodo() {
+            curl -fsS --connect-timeout 10 --max-time 30 -X POST "$KOMODO_URL/$1" \
+              -H "Content-Type: application/json" \
+              -H "X-Api-Key: $KOMODO_API_KEY" \
+              -H "X-Api-Secret: $KOMODO_API_SECRET" \
+              -d "$2"
+          }
+
+          echo "Deploying vova-medcenter at $EXPECTED"
+          UPDATE_ID=$(komodo execute '{"type":"DeployStack","params":{"stack":"vova-medcenter"}}' \
+            | jq -er '._id["$oid"]')
+
+          elapsed=0
+          while :; do
+            body=$(komodo read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$UPDATE_ID\"}}")
+            status=$(printf '%s' "$body" | jq -r '.status')
+            case "$status" in
+              Complete) break ;;
+              Queued|InProgress) ;;
+              *) echo "FAIL: unexpected update status: $status" >&2; exit 1 ;;
+            esac
+            [ "$elapsed" -ge 300 ] && { echo "FAIL: deploy timed out after 300s" >&2; exit 1; }
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          if [ "$(printf '%s' "$body" | jq -r '.success')" != "true" ]; then
+            echo "FAIL: Komodo reported success=false (see the stack's update log in Komodo)" >&2
+            exit 1
+          fi
+
+          # Compose doesn't wait for health; poll the public build revisions
+          # (same match as the stack's release-verifier and verify-deployment.sh).
+          for _ in $(seq 1 36); do
+            frontend=$(curl -fsS --max-time 10 https://vova-medcenter.ravil.space/build.json || true)
+            backend=$(curl -fsS --max-time 10 https://vova-medcenter.ravil.space/api/v1/health || true)
+            if printf '%s' "$frontend" | grep -Fq "\"build_revision\":\"$EXPECTED\"" \
+              && printf '%s' "$backend" | grep -Fq "\"build_revision\":\"$EXPECTED\""; then
+              echo "OK: vova-medcenter live at $EXPECTED"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FAIL: not live at $EXPECTED after 180s: frontend=${frontend:-?} backend=${backend:-?}" >&2
+          exit 1
