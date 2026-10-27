@@ -410,26 +410,6 @@ repo = "ravilushqa/homelab"
 branch = "deploy/vova-medcenter"
 run_directory = "komodo/stacks/vova-medcenter"
 
-# The Zent7/vova-medcenter release workflow pushes image bumps to the
-# deploy/vova-medcenter branch. Komodo is LAN-only, so no GitHub webhook
-# reaches it: this polls instead. DeployStackIfChanged pulls the branch and
-# redeploys only the services whose compose config changed (a no-op otherwise).
-[[procedure]]
-name = "vova-medcenter-autodeploy"
-description = "Deploys vova-medcenter when the deploy/vova-medcenter branch changes"
-tags = ["demo"]
-[procedure.config]
-schedule_format = "Cron"
-schedule = "0 */5 * * * ?"
-schedule_alert = false # runs every 5 min; failures still alert
-failure_alert = true
-
-[[procedure.config.stage]]
-name = "Deploy if changed"
-executions = [
-  { execution.type = "DeployStackIfChanged", execution.params.stack = "vova-medcenter", enabled = true },
-]
-
 [[stack]]
 name = "llm-council"
 description = "LLM Council multi-model OpenRouter web app"
