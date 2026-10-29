@@ -38,7 +38,8 @@ services:
     volumes:
       - qbittorrent:/config
       - type: bind
-        source: /mnt/raid1/torrents
+        # Fileserver's raid1 subvol (bind on the LXC): on the SMB share and not backed up
+        source: /mnt/torrents
         target: /data
         bind:
           create_host_path: false

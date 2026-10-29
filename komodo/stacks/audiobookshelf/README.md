@@ -11,8 +11,8 @@ Audiobook server at **https://audiobooks.ravil.space**. It runs on the Komodo ho
   live on local LXC disk. Never put them on SMB, because SQLite over CIFS corrupts.
 - Media: host `/mnt/audiobooks` (existing read-only CIFS bind on the LXC) → `/audiobooks:ro`.
   Compose uses `create_host_path: false`, so the container fails to start if the path is missing.
-- Downloads: host `/mnt/raid1/torrents/audiobooks` (local RAID, filled by the `audiobooks-arr`
-  stack) → `/downloads:ro`, a second folder of the same library.
+- Downloads: host `/mnt/torrents/audiobooks` (the fileserver's raid1 subvol, filled by the
+  `audiobooks-arr` stack) → `/downloads:ro`, a second folder of the same library.
 
 ## Healthcheck gates the public route
 

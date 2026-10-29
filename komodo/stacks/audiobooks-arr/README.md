@@ -6,7 +6,7 @@ Request an audiobook, get it from RuTracker over VLESS, and Audiobookshelf picks
 ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space) ──HTTPS, home IP──▶ rutracker.org
                                              ├──indexer proxy──▶ FlareSolverr ──HTTPS, home IP──▶ Cloudflare-protected indexers
                                              └──API──▶ qBittorrent ──SOCKS5──▶ xray ──VLESS/Reality──▶ peers, tracker
-/mnt/raid1/torrents/audiobooks ──ro bind──▶ Audiobookshelf (/downloads)
+/mnt/torrents/audiobooks ──ro bind──▶ Audiobookshelf (/downloads)
 ```
 
 - **AudioBookRequest** (`markbeep/audiobookrequest`): search UI. Audible search or *Manual request*
@@ -39,15 +39,23 @@ ABR uses native OIDC instead (`ABR_APP__FORCE_LOGIN_TYPE=oidc`), so family membe
 - Backup login: `/login?backup=1` with the root user (Komodo secrets `ABR_ROOT_USERNAME`,
   `ABR_ROOT_PASSWORD`; also `/root/.abr-root-password` on the LXC).
 
-Downloads live on local RAID (`/mnt/raid1/torrents`, owned by `1000:1000`), not on the SMB share,
-so books keep seeding from where Audiobookshelf reads them.
+Downloads live on `/mnt/torrents` (owned by `1000:1000`), a bind of
+`/raid1/subvol-117-disk-0/torrents` on the Proxmox host. That is the fileserver's (LXC 117) raid1
+subvol: the folder is on its SMB share as `torrents`, and it is not backed up (fileserver `mp0` has
+`backup=0`). qBittorrent writes to local ZFS, not over CIFS; books keep seeding from where
+Audiobookshelf reads them. The same qBittorrent also downloads games (category `games`), which the
+PC takes from the SMB share.
 
 ## First deploy
 
-The host dirs must exist (`create_host_path: false`). `/mnt/raid1` is not writable by the LXC
-root, so create them on the Proxmox host:
-`mkdir -p /raid1/subvol-122-disk-1/torrents/{incomplete,audiobooks} && chown -R 101000:101000 /raid1/subvol-122-disk-1/torrents`
-(`1000:1000` inside the LXC).
+The host dirs must exist (`create_host_path: false`). Create them and the LXC bind mount on the
+Proxmox host (a bind mount needs root@pam, so Terraform only keeps it):
+
+```bash
+mkdir -p /raid1/subvol-117-disk-0/torrents/{incomplete,audiobooks,games}
+chown -R 101000:101000 /raid1/subvol-117-disk-0/torrents   # 1000:1000 inside the LXCs
+pct set 122 -mp2 /raid1/subvol-117-disk-0/torrents,mp=/mnt/torrents
+```
 
 Generated passwords are in root-only files on the LXC: `/root/.qbittorrent-password` (qBittorrent
 user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if the login type changes).
@@ -55,8 +63,8 @@ user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if t
 1. **qBittorrent** (temporary password in `docker logs`): set a password, then
    - *Connection → Proxy*: SOCKS5 `xray` `1080`, enable *Use proxy for peer connections* and
      *Use proxy for hostname lookups* (the `vpn` network has no external DNS).
-   - *Downloads*: default path `/data/audiobooks`, incomplete path `/data/incomplete`; category
-     `audiobooks` → `/data/audiobooks`.
+   - *Downloads*: default path `/data/audiobooks`, incomplete path `/data/incomplete`; categories
+     `audiobooks` → `/data/audiobooks` and `games` → `/data/games`.
    - Check: *Execution log* shows the VLESS exit IP as external IP, trackers show *Working*.
 2. **Prowlarr**: add the qBittorrent client `qbittorrent:8080` (user `admin`), category
    `audiobooks`. Add the *RuTracker.org* indexer with your RuTracker login.

@@ -15,9 +15,9 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      # Finished torrents from the audiobooks-arr stack (local RAID, keeps seeding from here)
+      # Finished torrents from the audiobooks-arr stack (fileserver raid1 subvol, keeps seeding from here)
       - type: bind
-        source: /mnt/raid1/torrents/audiobooks
+        source: /mnt/torrents/audiobooks
         target: /downloads
         read_only: true
         bind:
