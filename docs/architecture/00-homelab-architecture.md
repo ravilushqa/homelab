@@ -265,8 +265,8 @@ Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynami
 
 Application stacks:
 
-- `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC); also reads finished downloads from `/mnt/raid1/torrents/audiobooks`
-- `audiobooks-arr` — AudioBookRequest (`abr.ravil.space`), Prowlarr (`prowlarr.ravil.space`), FlareSolverr (Cloudflare challenge solver reachable only by Prowlarr, no route) and qBittorrent (`qbit.ravil.space`); torrent traffic leaves only through an xray VLESS client (qBittorrent is on an internal-only network); the `VPN Gate` check (PRs and before deploy) and qBittorrent's `vpn-guard.sh` entrypoint (refuses to start with a route out) keep it that way
+- `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC); also reads finished downloads from `/mnt/torrents/audiobooks`
+- `audiobooks-arr` — AudioBookRequest (`abr.ravil.space`), Prowlarr (`prowlarr.ravil.space`), FlareSolverr (Cloudflare challenge solver reachable only by Prowlarr, no route) and qBittorrent (`qbit.ravil.space`); torrent traffic leaves only through an xray VLESS client (qBittorrent is on an internal-only network); downloads (audiobooks, games) go to `/mnt/torrents`, the fileserver's SMB-shared raid1 subvol; the `VPN Gate` check (PRs and before deploy) and qBittorrent's `vpn-guard.sh` entrypoint (refuses to start with a route out) keep it that way
 - `bytestash` — snippet manager at `bytestash.ravil.space`
 - `changedetection` — website change monitoring at `changedetection.ravil.space` (migrated from LXC 106)
 - `cloudflare-ddns` — keeps `*.ravil.space` on the dynamic public IPv4 (reuses the Traefik ACME token `CF_DNS_API_TOKEN`)
@@ -370,12 +370,18 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 - Docker stacks use named Docker volumes and bind mounts defined in `komodo/stacks/<name>/compose.yaml`.
 - Proxmox VMs/LXCs use `raid1`, `nvme-thin`, `local-lvm`, and related storage pools.
 - Fileserver and SMB storage provide shared/backup-oriented capacity.
+- `komodo` (122) mounts: `mp0` `raid1:subvol-122-disk-1` → `/mnt/raid1` (Immich, Paperless; backed up),
+  `mp1` bind `/mnt/pve/smb/audiobooks` → `/mnt/audiobooks` (read-only), `mp2` bind
+  `/raid1/subvol-117-disk-0/torrents` → `/mnt/torrents` (torrents, on the fileserver SMB share).
+  Bind mounts need root@pam: set them with `pct set` on the host, Terraform only keeps them.
 
 ### Backup posture
 
 - `proxmox-backup-server` runs as LXC `103`.
 - `pbs-s3-blackbaze` is configured as PBS storage.
 - `smb` storage is available for backup/image content.
+- LXC mount points are backed up only with `backup=1`: komodo `mp0` is, the fileserver's `mp0` (`/mnt/raid1`,
+  including `torrents`) and the bind mounts are not.
 - Critical app-level backups still depend on each stack's volume/database strategy; verify per stack before destructive changes.
 
 ## Deployment and GitOps flows

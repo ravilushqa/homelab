@@ -60,8 +60,10 @@ lxc = {
     features = { nesting = true, keyctl = true }
     mount_points = [
       { volume = "raid1:subvol-122-disk-1", path = "/mnt/raid1", size = "2000G", backup = true },
-      # Bind mount: changing it needs root@pam, so CI (API token) can only keep it as is
+      # Bind mounts: changing them needs root@pam, so CI (API token) can only keep them as is
       { volume = "/mnt/pve/smb/audiobooks", path = "/mnt/audiobooks", read_only = true },
+      # Torrents live on the fileserver's raid1 subvol: shared over SMB, and out of backups (its mp0 has backup=0)
+      { volume = "/raid1/subvol-117-disk-0/torrents", path = "/mnt/torrents" },
     ]
     tags = ["community-script", "docker"]
   }
