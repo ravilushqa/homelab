@@ -1,0 +1,123 @@
+---
+id: love-games
+name: Love-Games
+description: "Love-Games is a RUSSIAN public site for PC and console game torrents"
+language: ru-RU
+type: public
+encoding: UTF-8
+links:
+  - https://love-games1.net/
+
+caps:
+  # Section ids: the number at the end of the section link (/load/igry_dlja_pc/gonki_racing/4)
+  categorymappings:
+    # Игры для PC
+    - {id: 2, cat: PC/Games, desc: "Аркады/Arcade"}
+    - {id: 3, cat: PC/Games, desc: "Экшен/Action"}
+    - {id: 46, cat: PC/Games, desc: "Платформеры"}
+    - {id: 4, cat: PC/Games, desc: "Гонки/Racing"}
+    - {id: 10, cat: PC/Games, desc: "Стратегии/Strategy"}
+    - {id: 49, cat: PC/Games, desc: "Пошаговые стратегии"}
+    - {id: 11, cat: PC/Games, desc: "РПГ/RPG"}
+    - {id: 48, cat: PC/Games, desc: "Ролевые игры"}
+    - {id: 50, cat: PC/Games, desc: "Метроидвания"}
+    - {id: 12, cat: PC/Games, desc: "Драки/Fighting"}
+    - {id: 13, cat: PC/Games, desc: "Симуляторы/Simulator"}
+    - {id: 14, cat: PC/Games, desc: "Спортивные/Sport"}
+    - {id: 15, cat: PC/Games, desc: "Квесты/Quest"}
+    - {id: 16, cat: PC/Games, desc: "Квесты в стиле Поиск предметов"}
+    - {id: 17, cat: PC/Games, desc: "Ужасы/Horror"}
+    - {id: 18, cat: PC/Games, desc: "Приключения/Adventure"}
+    - {id: 19, cat: PC/Games, desc: "Логические/Logic"}
+    - {id: 20, cat: PC/Games, desc: "Cлэшер/Slasher"}
+    - {id: 22, cat: PC/Games, desc: "Демо версии"}
+    - {id: 41, cat: PC/Games, desc: "Интерактивное кино"}
+    - {id: 47, cat: PC/Games, desc: "Визуальные новеллы"}
+    # Самые популярные серии игр, репаки
+    - {id: 6, cat: PC/Games, desc: "Call of Duty"}
+    - {id: 7, cat: PC/Games, desc: "Need for Speed"}
+    - {id: 8, cat: PC/Games, desc: "FIFA"}
+    - {id: 9, cat: PC/Games, desc: "Assassin's Creed"}
+    - {id: 45, cat: PC/Games, desc: "Far Cry"}
+    - {id: 24, cat: PC/Games, desc: "RePack от R.G. Механики"}
+    - {id: 25, cat: PC/Games, desc: "RePack от xatab"}
+    # Игры для консолей
+    - {id: 28, cat: Console/XBox 360, desc: "XBox 360"}
+    - {id: 29, cat: Console/XBox 360, desc: "XBox360 JTAG (Freeboot)"}
+    - {id: 52, cat: Console/Other, desc: "Playstation 5"}
+    - {id: 42, cat: Console/PS4, desc: "Playstation 4"}
+    - {id: 43, cat: Console/PS4, desc: "Playstation 4 VR"}
+    - {id: 30, cat: Console/PS3, desc: "Playstation 3"}
+    - {id: 31, cat: Console/Other, desc: "Playstation 2"}
+    - {id: 32, cat: Console/PSP, desc: "PSP"}
+    - {id: 35, cat: Console/PS Vita, desc: "PS Vita"}
+    - {id: 33, cat: Console/NDS, desc: "Nintendo DS"}
+    - {id: 34, cat: Console/Wii, desc: "Wii"}
+    - {id: 44, cat: Console/Other, desc: "Nintendo Switch"}
+    # Разное
+    - {id: 37, cat: Books/Mags, desc: "Журнал Игромания"}
+    - {id: 38, cat: PC/Mac, desc: "Mac OS"}
+    - {id: 39, cat: PC/Games, desc: "VR"}
+    - {id: 40, cat: PC/Games, desc: "Linux"}
+
+  modes:
+    search: [q]
+
+settings: []
+
+search:
+  # uCoz file catalog search: the site's own form posts query + a=2 to /load/
+  paths:
+    - path: load/
+      method: post
+  inputs:
+    # Empty query (RSS, Prowlarr's test): this year's releases
+    query: "{{ if .Keywords }}{{ .Keywords }}{{ else }}{{ .Today.Year }}{{ end }}"
+    a: 2
+
+  rows:
+    selector: div[id^="entryID"]
+
+  fields:
+    # The section id is also in the entry link (/load/igry_dlja_pc/gonki_racing/4-1-0-20488 is section 4).
+    # Not div#cat a: the site never closes the title <a>, so the HTML parser clones it into div#cat
+    category:
+      selector: div.titl a
+      attribute: href
+      filters:
+        - name: regexp
+          args: (\d+)-\d+-\d+-\d+$
+    title:
+      selector: div.titl a
+    details:
+      selector: div.titl a
+      attribute: href
+    _id:
+      selector: div.titl a
+      attribute: href
+      filters:
+        - name: regexp
+          args: (\d+)$
+    # The "Скачать торрент" button on the details page
+    download:
+      text: "{{ .Config.sitelink }}load/0-0-0-{{ .Result._id }}-20"
+    size:
+      selector: div#status_b
+      filters:
+        - name: regexp
+          args: ([\d.,]+\s*[KMGT]?B)
+    grabs:
+      selector: div#info
+      filters:
+        - name: regexp
+          args: "Загрузки:\\s*(\\d+)"
+    # The site shows no peers; 1 keeps the releases from being dropped as dead
+    seeders:
+      text: 1
+    leechers:
+      text: 1
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+# engine uCoz
