@@ -57,6 +57,10 @@ services:
       PROWLARR__AUTH__METHOD: External
     volumes:
       - prowlarr:/config
+    configs:
+      # Custom Cardigann indexer (Prowlarr has none for this site); see README, Love-Games
+      - source: love-games
+        target: /config/Definitions/Custom/love-games.yml
     networks:
       - vpn
       - traefik
@@ -211,6 +215,8 @@ services:
 configs:
   vpn-guard:
     file: ./vpn-guard.sh
+  love-games:
+    file: ./prowlarr/love-games.yml
   xray:
     content: |
       {

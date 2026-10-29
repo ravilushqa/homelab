@@ -25,7 +25,10 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   the `questarr` named volume, not on the SMB share. Credentials it stores (Prowlarr API key,
   qBittorrent password) are encrypted with `QUESTARR_CREDENTIALS_KEY`.
 - **Prowlarr**: RuTracker indexer and the qBittorrent download client. It talks to RuTracker
-  directly (only search and `.torrent` files), not through the VPN.
+  directly (only search and `.torrent` files), not through the VPN. The exception is Love-Games
+  (`love-games1.net`, games): Prowlarr has no definition for it, so a custom Cardigann one is in
+  `prowlarr/love-games.yml` (mounted into `/config/Definitions/Custom/`), and it goes only through
+  `xray:1080`, see [Love-Games](#love-games-vpn-only).
 - **qBittorrent**: is only on the `vpn` network, which is `internal: true` (no gateway). Its only
   way out is `xray:1080`. Checked: a direct `curl` from the container fails, through the proxy it
   shows the VLESS exit IP. If xray or the VLESS server is down, torrents stall; they can't fall back
@@ -121,6 +124,28 @@ without it).
 6. Check: search a game, grab a release, it shows up in qBittorrent under `games` and later in
    `\\fileserver\torrents\games` on the PC.
 
+### Love-Games (VPN only)
+
+`love-games1.net` is a uCoz site: search is the site form (`POST /load/`, `query` + `a=2`), the
+`.torrent` is `/load/0-0-0-<id>-20`. It shows no peers, so every release has 1 seeder; sizes and
+grab counts are real. Sections map to Prowlarr categories: PC → *PC/Games* (`4050`), Mac → *PC/Mac*,
+PS4 → *Console/PS4*, Switch and PS5 → *Console/Other* (`1090`). The site is a mirror domain (the
+`1` in the name); when it moves, add the new address to `links` in the YAML.
+
+Prowlarr itself has a direct route out (`traefik_default`), so VPN-only is a Prowlarr setting, not
+something compose enforces. Every request for an indexer with a proxy tag (search and `.torrent`)
+goes through that proxy; an indexer without the tag goes direct from the home IP.
+
+1. *Settings → Indexers → Indexer Proxies → + → Socks5*: name `xray`, tag `vpn`, host `xray`,
+   port `1080`, no username/password. *Test*, *Save*.
+2. *Indexers → Add Indexer*: *Love-Games*, tag `vpn` (before the first *Test*: the test already
+   queries the site), *Test*, *Save*.
+3. Check it really uses the VPN: on the komodo LXC stop xray (`docker ps | grep xray`, then
+   `docker stop <name>`); *Test* on Love-Games must fail. `docker start <name>` and it passes again.
+   Torrents pause while xray is down.
+4. Questarr: *Indexers → Sync from Prowlarr* again; for Switch games add category `1000` to
+   Love-Games there.
+
 ## Keeping the kill switch
 
 - **Before merge and deploy**: `.github/scripts/vpn_gate_check.py` fails if `qbittorrent` is on any
@@ -135,6 +160,8 @@ without it).
   It runs only at start: a `docker network connect` to a running container is not caught.
 - Adding a service to `vpn`: check it can't forward traffic out directly (no proxy, no routing),
   then add it to `_VPN_ALLOWED_SERVICES` in the gate.
+- The gate covers qBittorrent only. Prowlarr indexers marked VPN-only (Love-Games) depend on the
+  `vpn` proxy tag in Prowlarr's own settings.
 
 ## Limits
 
