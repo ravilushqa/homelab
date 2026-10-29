@@ -189,6 +189,8 @@ Running LXCs:
 - `125` — `vless-gateway`, sing-box/VLESS gateway
 
 Terraform manages the LXCs in `var.lxc` (`terraform/homelab.auto.tfvars`): 103, 110, 112, 117, 122.
+They have `prevent_destroy`: a plan that would destroy or replace one (e.g. a mount point that
+differs from the host, which forces replacement) fails instead of applying.
 `hermes` (114) and `vless-gateway` (125) are intentionally unmanaged.
 
 ### Storage

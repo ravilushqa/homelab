@@ -130,6 +130,11 @@ resource "proxmox_virtual_environment_container" "lxc" {
   }
 
   lifecycle {
+    # Any plan that destroys an LXC fails instead: a mount point change forces replacement, and an
+    # apply on main once planned to replace komodo (122) with its data. To retire an LXC on
+    # purpose, drop it from var.lxc together with a `removed` block (destroy = false) or state rm.
+    prevent_destroy = true
+
     # Creation-only inputs: existing containers were imported, so these must
     # never force a replacement. Descriptions are left to the Proxmox UI.
     ignore_changes = [
