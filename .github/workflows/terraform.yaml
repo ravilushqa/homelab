@@ -18,7 +18,7 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     defaults:
       run:
-        working-directory: terraform
+        working-directory: homelab-main/terraform
 
     env:
       TF_TOKEN_app_terraform_io: "${{ secrets.TF_API_TOKEN }}"
@@ -28,7 +28,11 @@ jobs:
       TF_VAR_datastore_id: "${{ secrets.TF_VAR_DATASTORE_ID }}"
 
     steps:
+      # Own subfolder: deploy/vova-medcenter jobs check out their branch in the default workspace
+      # on the same runner, which left main's checkout there with missing files
       - uses: actions/checkout@v7
+        with:
+          path: homelab-main
 
       - name: Write sealed-secrets certs
         run: |
@@ -78,7 +82,7 @@ jobs:
     environment: production
     defaults:
       run:
-        working-directory: terraform
+        working-directory: homelab-main/terraform
 
     env:
       TF_TOKEN_app_terraform_io: "${{ secrets.TF_API_TOKEN }}"
@@ -88,7 +92,11 @@ jobs:
       TF_VAR_datastore_id: "${{ secrets.TF_VAR_DATASTORE_ID }}"
 
     steps:
+      # Own subfolder: deploy/vova-medcenter jobs check out their branch in the default workspace
+      # on the same runner, which left main's checkout there with missing files
       - uses: actions/checkout@v7
+        with:
+          path: homelab-main
 
       - name: Write sealed-secrets certs
         run: |
