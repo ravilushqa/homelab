@@ -17,6 +17,7 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   way out is `xray:1080`. Checked: a direct `curl` from the container fails, through the proxy it
   shows the VLESS exit IP. If xray or the VLESS server is down, torrents stall; they can't fall back
   to the home IP. The web UI is at `qbit.ravil.space` through xray's dokodemo-door inbound.
+  The kill switch is enforced twice, see [Keeping the kill switch](#keeping-the-kill-switch).
 - **xray**: VLESS (Reality, `xtls-rprx-vision`) client. Config is inline in `compose.yaml`; the
   server is from Komodo secrets `VLESS_HOST`, `VLESS_UUID`, `VLESS_SNI`, `VLESS_PBK`. For Trojan or
   Outline (shadowsocks) swap the `vless` outbound. The SOCKS port is open to every container on
@@ -69,6 +70,21 @@ user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if t
    Prowlarr API key, pick the RuTracker indexer. *Settings → Download*: enable auto-download.
 4. **Audiobookshelf**: *Libraries → Audiobooks → Edit*: add folder `/downloads`. The hourly scan
    picks up finished downloads.
+
+## Keeping the kill switch
+
+- **Before merge and deploy**: `.github/scripts/vpn_gate_check.py` fails if `qbittorrent` is on any
+  network but `vpn`, gets `ports`/`network_mode`/`cap_add`/`privileged`/`devices`, loses its guard
+  entrypoint, if `vpn` stops being `internal`, an unlisted service joins `vpn`, or xray routes the
+  socks inbound anywhere but VLESS. It runs on every PR (`VPN Gate` workflow) and in
+  `komodo-deploy.yaml` before this stack is deployed. Make `VPN Gate` a required check on `main`
+  (branch protection), or a failing PR can still be merged.
+- **At container start**: `vpn-guard.sh` is qBittorrent's entrypoint. It exits (no qBittorrent) if the
+  container has an IPv4/IPv6 default route or a direct connection to `1.1.1.1` works, then
+  `exec /init`. Docker only adds a default route for a non-internal network or `network_mode: host`.
+  It runs only at start: a `docker network connect` to a running container is not caught.
+- Adding a service to `vpn`: check it can't forward traffic out directly (no proxy, no routing),
+  then add it to `_VPN_ALLOWED_SERVICES` in the gate.
 
 ## Limits
 
