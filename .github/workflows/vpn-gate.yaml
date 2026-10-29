@@ -1,0 +1,27 @@
+name: VPN Gate
+
+# Blocks any change that gives qBittorrent (komodo/stacks/audiobooks-arr) a way to the internet
+# other than xray. Runs on every PR (no paths filter) so it can be a required check;
+# komodo-deploy.yaml runs the same check before deploying the stack.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  vpn-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install PyYAML
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gate_venv"
+          "$RUNNER_TEMP/gate_venv/bin/pip" install --quiet pyyaml
+
+      - name: Check compose
+        run: '"$RUNNER_TEMP/gate_venv/bin/python" .github/scripts/vpn_gate_check.py'
+
+      - name: Test the gate
+        run: '"$RUNNER_TEMP/gate_venv/bin/python" -m unittest discover -s .github/scripts -p test_vpn_gate.py -v'

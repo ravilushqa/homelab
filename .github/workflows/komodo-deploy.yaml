@@ -196,9 +196,23 @@ jobs:
             gate_privacy_check || exit 1
           fi
 
+          # VPN gate: qBittorrent must reach the internet only through xray. A failing
+          # compose is never deployed (Komodo only pulls the repo on deploy).
+          gate_vpn_check() {
+            "$RUNNER_TEMP/gate_venv/bin/python" .github/scripts/vpn_gate_check.py \
+            || {
+              echo "ABORT: VPN gate FAILED — not deploying audiobooks-arr" >&2
+              return 1
+            }
+          }
+
           # Deploy all other changed stacks (traefik already handled above).
           for STACK in $CHANGED; do
             [ "$STACK" = "traefik" ] && continue
+            if [ "$STACK" = "audiobooks-arr" ] && ! gate_vpn_check; then
+              FAILED=1
+              continue
+            fi
             deploy_and_wait "$STACK" || FAILED=1
           done
 

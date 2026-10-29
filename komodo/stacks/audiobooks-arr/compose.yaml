@@ -25,6 +25,11 @@ services:
     restart: unless-stopped
     depends_on:
       - xray
+    # Refuses to start qBittorrent if the container has a route out (see vpn-guard.sh)
+    entrypoint: ["/bin/sh", "/vpn-guard.sh"]
+    configs:
+      - source: vpn-guard
+        target: /vpn-guard.sh
     environment:
       PUID: 1000
       PGID: 1000
@@ -100,6 +105,8 @@ services:
       - "traefik.docker.network=traefik_default"
 
 configs:
+  vpn-guard:
+    file: ./vpn-guard.sh
   xray:
     content: |
       {
