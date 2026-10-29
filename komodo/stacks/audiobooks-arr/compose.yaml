@@ -105,6 +105,38 @@ services:
       - "traefik.http.services.audiobookrequest.loadbalancer.server.port=8000"
       - "traefik.docker.network=traefik_default"
 
+  # Games *arr: IGDB search, grabs through Prowlarr into qBittorrent (category `games`). Import is
+  # off (post-processing disabled by default): the PC takes games from the SMB share
+  questarr:
+    image: ghcr.io/doezer/questarr:v1.5.0
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Berlin
+      PUID: 1000
+      PGID: 1000
+      APP_URL: https://games.ravil.space
+      # Traefik is the only hop; makes the session cookie `Secure`
+      TRUST_PROXY: "1"
+      IGDB_CLIENT_ID: ${QUESTARR_IGDB_CLIENT_ID}
+      IGDB_CLIENT_SECRET: ${QUESTARR_IGDB_CLIENT_SECRET}
+      # Encrypts the stored Prowlarr API key and qBittorrent password; kept out of the DB volume
+      CREDENTIALS_ENCRYPTION_KEY: ${QUESTARR_CREDENTIALS_KEY}
+    volumes:
+      # SQLite: a named volume, not the SMB/CIFS share
+      - questarr:/app/data
+    networks:
+      # vpn: qbittorrent:8080 API; traefik: route + internet egress for IGDB
+      - vpn
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.questarr.rule=Host(`games.ravil.space`)"
+      - "traefik.http.routers.questarr.entrypoints=websecure"
+      - "traefik.http.routers.questarr.tls.certresolver=cloudflare"
+      - "traefik.http.routers.questarr.middlewares=oidc-auth@docker"
+      - "traefik.http.services.questarr.loadbalancer.server.port=5000"
+      - "traefik.docker.network=traefik_default"
+
 configs:
   vpn-guard:
     file: ./vpn-guard.sh
@@ -136,6 +168,7 @@ volumes:
   qbittorrent:
   prowlarr:
   audiobookrequest:
+  questarr:
 
 networks:
   # No gateway: containers only on this network can't reach the internet (kill switch for qBittorrent)

@@ -1,8 +1,12 @@
 # Audiobooks arr
 
 Request an audiobook, get it from RuTracker over VLESS, and Audiobookshelf picks it up.
+Search a game in Questarr, the same qBittorrent downloads it, and the PC takes it from the SMB share.
 
 ```
+Questarr (games.ravil.space) ──HTTPS──▶ IGDB (metadata, search)
+     ├──search (Torznab)──▶ Prowlarr
+     └──API (add torrent, category games)──▶ qBittorrent ──▶ /mnt/torrents/games ──SMB──▶ PC
 ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space) ──HTTPS, home IP──▶ rutracker.org
                                              ├──indexer proxy──▶ FlareSolverr ──HTTPS, home IP──▶ Cloudflare-protected indexers
                                              └──API──▶ qBittorrent ──SOCKS5──▶ xray ──VLESS/Reality──▶ peers, tracker
@@ -11,6 +15,14 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
 
 - **AudioBookRequest** (`markbeep/audiobookrequest`): search UI. Audible search or *Manual request*
   (Russian books are mostly not on Audible). Sends the request to Prowlarr.
+- **Questarr** (`ghcr.io/doezer/questarr`, [repo](https://github.com/Doezer/Questarr)): game
+  search UI at `games.ravil.space` (IGDB metadata). It pulls indexers from Prowlarr (*Sync from
+  Prowlarr*, not a Prowlarr *App*), searches them through Prowlarr's Torznab endpoints and sends the
+  release to qBittorrent's API with category `games`. Post-processing (import/move) is off by
+  default and stays off, so it doesn't need the downloads folder. It is on `vpn` (to reach
+  `qbittorrent:8080`) and on `traefik_default` (route, and internet for IGDB). State (SQLite) is in
+  the `questarr` named volume, not on the SMB share. Credentials it stores (Prowlarr API key,
+  qBittorrent password) are encrypted with `QUESTARR_CREDENTIALS_KEY`.
 - **Prowlarr**: RuTracker indexer and the qBittorrent download client. It talks to RuTracker
   directly (only search and `.torrent` files), not through the VPN.
 - **qBittorrent**: is only on the `vpn` network, which is `internal: true` (no gateway). Its only
@@ -26,7 +38,8 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   indexers. It shares only the stack-local `indexer` network with Prowlarr (not `vpn`, not
   `traefik_default`), has no ports or route, and goes out directly from the home IP.
 
-Prowlarr and qBittorrent are behind the `oidc-auth` middleware (Pocket ID group `ravil` only).
+Prowlarr, qBittorrent and Questarr are behind the `oidc-auth` middleware (Pocket ID group `ravil`
+only). Questarr has no OIDC or proxy-auth mode, so its own login (admin account) comes after Pocket ID.
 ABR uses native OIDC instead (`ABR_APP__FORCE_LOGIN_TYPE=oidc`), so family members can request books:
 
 - Pocket ID client `audiobookrequest`, callback `https://abr.ravil.space/auth/oidc`, allowed group `family`.
@@ -79,6 +92,30 @@ user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if t
 4. **Audiobookshelf**: *Libraries → Audiobooks → Edit*: add folder `/downloads`. The hourly scan
    picks up finished downloads.
 
+### Questarr (games)
+
+Komodo secrets (stack `audiobooks-arr`): `QUESTARR_IGDB_CLIENT_ID`, `QUESTARR_IGDB_CLIENT_SECRET`,
+`QUESTARR_CREDENTIALS_KEY` (`openssl rand -hex 32`; keep it, the stored credentials can't be read
+without it).
+
+1. **IGDB credentials**: [Twitch developer console](https://dev.twitch.tv/console) (2FA must be on)
+   → *Applications → Register Your Application*: name `questarr`, OAuth redirect
+   `http://localhost`, category *Application Integration*, client type *Confidential*. The Client ID
+   and a generated Client Secret go into the two `QUESTARR_IGDB_*` secrets.
+2. **Pocket ID**: nothing new; `games.ravil.space` uses the shared `oidc-auth` middleware (group
+   `ravil`).
+3. **Questarr** (`https://games.ravil.space`): create the admin account on first open.
+4. **Prowlarr**: Questarr reads indexers through Prowlarr's API, so there is no *Settings → Apps*
+   entry to add. Make sure the game indexers (e.g. RuTracker) have the *PC* (`4000`) / *PC Games*
+   (`4050`) categories, and copy the API key from *Settings → General*.
+   In Questarr *Indexers → Sync from Prowlarr*: URL `http://prowlarr:9696`, the API key, categories
+   `4000,4050`, enable *Allow insecure LAN connection* (plain HTTP inside the stack), *Sync*.
+5. **qBittorrent**: category `games` → `/data/games` must exist (see step 1 above). In Questarr
+   *Downloaders → Add → qBittorrent*: host `qbittorrent`, port `8080`, no SSL, user `admin` + the
+   password from `/root/.qbittorrent-password`, category `games`. Leave post-processing off.
+6. Check: search a game, grab a release, it shows up in qBittorrent under `games` and later in
+   `\\fileserver\torrents\games` on the PC.
+
 ## Keeping the kill switch
 
 - **Before merge and deploy**: `.github/scripts/vpn_gate_check.py` fails if `qbittorrent` is on any
@@ -98,5 +135,7 @@ user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if t
 
 - No incoming port through VLESS: seeding only reaches peers that accept connections. Watch the
   RuTracker ratio.
+- Questarr doesn't import or rename games here (post-processing off); installers stay in the
+  torrent's folder under `games` and keep seeding. Delete the torrent in qBittorrent to free space.
 - ABR doesn't rename or import. Book folders are named like the torrent; fix metadata with *Match*
   in Audiobookshelf.

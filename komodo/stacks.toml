@@ -228,7 +228,7 @@ run_directory = "komodo/stacks/audiobookshelf"
 
 [[stack]]
 name = "audiobooks-arr"
-description = "AudioBookRequest + Prowlarr + qBittorrent (torrents only via xray VLESS) feeding Audiobookshelf"
+description = "AudioBookRequest + Questarr (games) + Prowlarr + qBittorrent (torrents only via xray VLESS) feeding Audiobookshelf and the torrents SMB share"
 tags = ["media"]
 auto_update = true
 [stack.config]
@@ -243,6 +243,9 @@ VLESS_SNI = [[VLESS_SNI]]
 VLESS_PBK = [[VLESS_PBK]]
 ABR_ROOT_USERNAME = [[ABR_ROOT_USERNAME]]
 ABR_ROOT_PASSWORD = [[ABR_ROOT_PASSWORD]]
+QUESTARR_IGDB_CLIENT_ID = [[QUESTARR_IGDB_CLIENT_ID]]
+QUESTARR_IGDB_CLIENT_SECRET = [[QUESTARR_IGDB_CLIENT_SECRET]]
+QUESTARR_CREDENTIALS_KEY = [[QUESTARR_CREDENTIALS_KEY]]
 """
 
 # ─── Productivity ────────────────────────────────────────────────
