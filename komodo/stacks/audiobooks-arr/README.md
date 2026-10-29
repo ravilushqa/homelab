@@ -1,6 +1,7 @@
 # Audiobooks arr
 
-Request an audiobook, get it from RuTracker over VLESS, and Audiobookshelf picks it up.
+Request an audiobook, get it from RuTracker over VLESS, and Audiobookshelf (in this stack too, see
+[audiobookshelf.md](audiobookshelf.md)) picks it up.
 Search a game in Questarr, the same qBittorrent downloads it, and the PC takes it from the SMB share.
 
 ```
@@ -10,7 +11,7 @@ Questarr (games.ravil.space) ──HTTPS──▶ IGDB (metadata, search)
 ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space) ──HTTPS, home IP──▶ rutracker.org
                                              ├──indexer proxy──▶ FlareSolverr ──HTTPS, home IP──▶ Cloudflare-protected indexers
                                              └──API──▶ qBittorrent ──SOCKS5──▶ xray ──VLESS/Reality──▶ peers, tracker
-/mnt/torrents/audiobooks ──ro bind──▶ Audiobookshelf (/downloads)
+/mnt/torrents/audiobooks ──ro bind──▶ Audiobookshelf (audiobooks.ravil.space, /downloads)
 ```
 
 - **AudioBookRequest** (`markbeep/audiobookrequest`): search UI. Audible search or *Manual request*
@@ -34,6 +35,10 @@ ABR (abr.ravil.space) ──search/grab──▶ Prowlarr (prowlarr.ravil.space)
   server is from Komodo secrets `VLESS_HOST`, `VLESS_UUID`, `VLESS_SNI`, `VLESS_PBK`. For Trojan or
   Outline (shadowsocks) swap the `vless` outbound. The SOCKS port is open to every container on
   `traefik_default`.
+- **Audiobookshelf** (`ghcr.io/advplyr/audiobookshelf`): the audiobook server at
+  `audiobooks.ravil.space`, native OIDC (the mobile apps can't pass `oidc-auth`). It is only on
+  `traefik_default`, not on `vpn`. Its healthcheck keeps it off Traefik until it is safe to be
+  public. Setup, auth and recovery: [audiobookshelf.md](audiobookshelf.md).
 - **FlareSolverr** (`ghcr.io/flaresolverr/flaresolverr`): solves Cloudflare challenges for Prowlarr
   indexers. It shares only the stack-local `indexer` network with Prowlarr (not `vpn`, not
   `traefik_default`), has no ports or route, and goes out directly from the home IP.
@@ -89,8 +94,8 @@ user `admin`) and `/root/.abr-root-password` (ABR root `ravil`, only needed if t
      Cloudflare challenge; it is not a general proxy for all requests.
 3. **ABR**: create the root user on `/init`. *Settings → Prowlarr*: `http://prowlarr:9696` + the
    Prowlarr API key, pick the RuTracker indexer. *Settings → Download*: enable auto-download.
-4. **Audiobookshelf**: *Libraries → Audiobooks → Edit*: add folder `/downloads`. The hourly scan
-   picks up finished downloads.
+4. **Audiobookshelf**: see [audiobookshelf.md](audiobookshelf.md). The library has the folders
+   `/audiobooks` and `/downloads`; the hourly scan picks up finished downloads.
 
 ### Questarr (games)
 

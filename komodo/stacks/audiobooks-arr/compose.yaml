@@ -140,6 +140,74 @@ services:
       - "traefik.http.services.questarr.loadbalancer.server.port=5000"
       - "traefik.docker.network=traefik_default"
 
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:2.37.2
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Berlin
+    volumes:
+      # App state (SQLite) and metadata/covers stay on local volumes — never on SMB. They are the
+      # volumes of the former `audiobookshelf` stack (see the volumes section below)
+      - audiobookshelf-config:/config
+      - audiobookshelf-metadata:/metadata
+      # Existing read-only CIFS bind on the LXC; fail instead of creating an empty dir if missing
+      - type: bind
+        source: /mnt/audiobooks
+        target: /audiobooks
+        read_only: true
+        bind:
+          create_host_path: false
+      # Finished torrents from qBittorrent (fileserver raid1 subvol, keeps seeding from here)
+      - type: bind
+        source: /mnt/torrents/audiobooks
+        target: /downloads
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      # Healthy only when it is safe to be public. Traefik does not route to a starting or
+      # unhealthy container, so this also gates the public route (see audiobookshelf.md):
+      #   - /audiobooks is the CIFS share and readable (not the empty dir left when it's unmounted)
+      #   - root user exists (a fresh /config would let the first visitor claim root)
+      #   - native OIDC is the only active auth method (no password login on the internet)
+      # The image is node:24-alpine without curl.
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const fs = require("fs");
+          const fail = (msg) => { console.error(msg); process.exit(1); };
+          const media = fs.readFileSync("/proc/self/mountinfo", "utf8").split("\n").filter((l) => l.split(" ")[4] === "/audiobooks");
+          const [type, source] = (media[0] || "").split(" - ")[1]?.split(" ") || [];
+          if (media.length !== 1 || type !== "cifs" || source !== "//192.168.1.2/proxmox") fail("/audiobooks is not the CIFS share: " + type + " " + source);
+          fs.readdirSync("/audiobooks");
+          require("http").get("http://127.0.0.1/status", (res) => {
+            let body = "";
+            res.on("data", (chunk) => (body += chunk));
+            res.on("end", () => {
+              const status = JSON.parse(body);
+              if (!status.isInit) fail("root user not initialized");
+              if (status.authMethods.join() !== "openid") fail("auth methods " + status.authMethods + ", expected only openid");
+              process.exit(0);
+            });
+          }).on("error", (e) => fail(e.message));
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - traefik
+    labels:
+      # No oidc-auth middleware: the mobile apps can't pass it. Auth is Audiobookshelf's native
+      # OIDC against Pocket ID, enforced by the healthcheck above
+      - "traefik.enable=true"
+      - "traefik.http.routers.audiobookshelf.rule=Host(`audiobooks.ravil.space`)"
+      - "traefik.http.routers.audiobookshelf.entrypoints=websecure"
+      - "traefik.http.routers.audiobookshelf.tls.certresolver=cloudflare"
+      - "traefik.http.services.audiobookshelf.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik_default"
+
 configs:
   vpn-guard:
     file: ./vpn-guard.sh
@@ -172,6 +240,14 @@ volumes:
   prowlarr:
   audiobookrequest:
   questarr:
+  # Created by the former `audiobookshelf` stack (Compose project `audiobookshelf`). External, so a
+  # missing volume fails the deploy instead of starting with an empty DB that anyone could claim
+  audiobookshelf-config:
+    name: audiobookshelf_config
+    external: true
+  audiobookshelf-metadata:
+    name: audiobookshelf_metadata
+    external: true
 
 networks:
   # No gateway: containers only on this network can't reach the internet (kill switch for qBittorrent)

@@ -267,8 +267,7 @@ Home Assistant (`ha.ravil.space`) is routed by Komodo's Traefik (`traefik/dynami
 
 Application stacks:
 
-- `audiobookshelf` — audiobook server at `audiobooks.ravil.space` (native OIDC); also reads finished downloads from `/mnt/torrents/audiobooks`
-- `audiobooks-arr` — AudioBookRequest (`abr.ravil.space`), Questarr (games *arr at `games.ravil.space`: IGDB search, grabs through Prowlarr into qBittorrent category `games`, no import), Prowlarr (`prowlarr.ravil.space`), FlareSolverr (Cloudflare challenge solver reachable only by Prowlarr, no route) and qBittorrent (`qbit.ravil.space`); torrent traffic leaves only through an xray VLESS client (qBittorrent is on an internal-only network); downloads (audiobooks, games) go to `/mnt/torrents`, the fileserver's SMB-shared raid1 subvol; the `VPN Gate` check (PRs and before deploy) and qBittorrent's `vpn-guard.sh` entrypoint (refuses to start with a route out) keep it that way
+- `audiobooks-arr` — Audiobookshelf (audiobook server at `audiobooks.ravil.space`, native OIDC; reads the SMB library `/mnt/audiobooks` and finished downloads from `/mnt/torrents/audiobooks`), AudioBookRequest (`abr.ravil.space`), Questarr (games *arr at `games.ravil.space`: IGDB search, grabs through Prowlarr into qBittorrent category `games`, no import), Prowlarr (`prowlarr.ravil.space`), FlareSolverr (Cloudflare challenge solver reachable only by Prowlarr, no route) and qBittorrent (`qbit.ravil.space`); torrent traffic leaves only through an xray VLESS client (qBittorrent is on an internal-only network); downloads (audiobooks, games) go to `/mnt/torrents`, the fileserver's SMB-shared raid1 subvol; the `VPN Gate` check (PRs and before deploy) and qBittorrent's `vpn-guard.sh` entrypoint (refuses to start with a route out) keep it that way
 - `bytestash` — snippet manager at `bytestash.ravil.space`
 - `changedetection` — website change monitoring at `changedetection.ravil.space` (migrated from LXC 106)
 - `cloudflare-ddns` — keeps `*.ravil.space` on the dynamic public IPv4 (reuses the Traefik ACME token `CF_DNS_API_TOKEN`)
@@ -408,7 +407,7 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 1. Add or change `komodo/stacks/<name>/compose.yaml`.
 2. Add/update the stack entry in `komodo/stacks.toml` (never `deploy = true`).
 3. Keep secrets in Komodo variables/secrets or stack-local `.env` files on the host, not in Git.
-4. On merge, `.github/workflows/komodo-deploy.yaml` runs the resource sync, then deploys changed stacks one by one.
+4. On merge, `.github/workflows/komodo-deploy.yaml` runs the resource sync, destroys stacks removed from `stacks.toml` (`compose down`, volumes kept; the sync itself never deletes), then deploys changed stacks one by one.
    Traefik deploys are wrapped in the health-connect Umami privacy gate (`.github/scripts/privacy_gate_check.py`),
    which `.github/workflows/privacy-gate.yaml` also runs nightly against the running Traefik.
 5. Verify container status, app logs, HTTPS status, and Docker Traefik access logs.

@@ -33,7 +33,9 @@ jobs:
           # A stack is "changed" if files under komodo/stacks/<name>/ changed
           # or its [stack.config] in komodo/stacks.toml changed (env, repo, ...).
           # Only stacks declared in komodo/stacks.toml at HEAD are kept.
-          CHANGED=$(git diff --name-only HEAD~1 HEAD -- komodo/stacks/ \
+          # A stack declared at HEAD~1 but not at HEAD is "removed": the sync does not
+          # delete resources, so the deploy step destroys it (e.g. merged into another stack).
+          RESULT=$(git diff --name-only HEAD~1 HEAD -- komodo/stacks/ \
             | awk -F'/' '$1 == "komodo" && $2 == "stacks" && NF > 3 {print $3}' \
             | python3 -c '
           import subprocess, sys, tomllib
@@ -52,9 +54,14 @@ jobs:
           changed = {line.strip() for line in sys.stdin if line.strip()}
           changed |= {name for name, config in new.items() if old.get(name) != config}
           print(" ".join(sorted(name for name in changed if name in new)))
+          print(" ".join(sorted(name for name in old if name not in new)))
           ')
+          CHANGED=$(printf '%s\n' "$RESULT" | sed -n 1p)
+          REMOVED=$(printf '%s\n' "$RESULT" | sed -n 2p)
           echo "stacks=$CHANGED" >> $GITHUB_OUTPUT
+          echo "removed=$REMOVED" >> $GITHUB_OUTPUT
           echo "Changed stacks: $CHANGED"
+          echo "Removed stacks: $REMOVED"
 
       - name: Sync and deploy changed stacks
         env:
@@ -169,7 +176,27 @@ jobs:
           fi
 
           CHANGED="${{ steps.changed.outputs.stacks }}"
+          REMOVED="${{ steps.changed.outputs.removed }}"
           FAILED=0
+
+          # Removed stacks go down before anything is deployed: a stack merged into another
+          # one (audiobookshelf -> audiobooks-arr) reuses its volumes and Traefik routers, so
+          # both must never run at once. `compose down` keeps the volumes. Then the Komodo
+          # resource is deleted (the sync has no `delete = true`).
+          for STACK in $REMOVED; do
+            echo "Destroying removed stack: $STACK" >&2
+            if ! update_id=$(komodo_execute "$STACK" "{\"type\":\"DestroyStack\",\"params\":{\"stack\":\"$STACK\"}}") \
+              || ! wait_for_update "$update_id" "$STACK"; then
+              echo "ABORT: could not destroy removed stack $STACK — not deploying anything" >&2
+              exit 1
+            fi
+            curl -sSf --connect-timeout 10 --max-time 30 -o /dev/null -X POST "$KOMODO_URL/write" \
+              -H "Content-Type: application/json" \
+              -H "X-Api-Key: $KOMODO_API_KEY" \
+              -H "X-Api-Secret: $KOMODO_API_SECRET" \
+              -d "{\"type\":\"DeleteStack\",\"params\":{\"id\":\"$STACK\"}}" \
+            || echo "::warning::Stack $STACK is down but its Komodo resource was not deleted; delete it in Komodo"
+          done
 
           if [ -z "$CHANGED" ]; then
             echo "No changed stacks to deploy"

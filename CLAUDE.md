@@ -6,7 +6,7 @@
 - **ArgoCD** (deployed at bootstrap) handles all subsequent K8s app deployments via GitOps
 - **Komodo** auto-syncs Docker stacks from `komodo/stacks.toml` in this repo (see `komodo/sync.toml`)
   - Never set `deploy = true` in `stacks.toml`: the sync deploys all such stacks in parallel and saturates the host CPU.
-    Deploys are done sequentially by `.github/workflows/komodo-deploy.yaml` (runs the sync, then deploys changed stacks one by one)
+    Deploys are done sequentially by `.github/workflows/komodo-deploy.yaml` (runs the sync, destroys stacks removed from `stacks.toml`, then deploys changed stacks one by one)
 - New K8s apps: add to `k8s/apps/internal/` (picked up by the `internal-apps` ApplicationSet)
 - **Terraform** (state in Terraform Cloud `ravilushqa/homelab`): the `Terraform` workflow plans on PRs and applies on `main`.
   LXCs are entries in `var.lxc` (`terraform/homelab.auto.tfvars`); `var.k8s_enabled` gates the Talos/K8s modules
