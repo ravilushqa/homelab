@@ -112,8 +112,11 @@ services:
     restart: unless-stopped
     environment:
       TZ: Europe/Berlin
-      PUID: 1000
-      PGID: 1000
+      # The image's own questarr user (node:alpine's `node` already has 1000). With 1000 the
+      # entrypoint remaps the user but never chowns /app/data (BusyBox find has no -uid), so it
+      # can't write to the named volume. Questarr doesn't touch the SMB share, so the UID doesn't matter
+      PUID: 1001
+      PGID: 1001
       APP_URL: https://games.ravil.space
       # Traefik is the only hop; makes the session cookie `Secure`
       TRUST_PROXY: "1"
