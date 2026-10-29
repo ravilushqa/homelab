@@ -12,8 +12,15 @@ jobs:
   gate:
     # The runner shares the Docker host with Traefik, so --live-host local works
     runs-on: [self-hosted, homelab]
+    defaults:
+      run:
+        working-directory: homelab-main
     steps:
+      # Own subfolder: deploy/vova-medcenter jobs check out their branch in the default workspace
+      # on the same runner, which left main's checkout there with missing files
       - uses: actions/checkout@v7
+        with:
+          path: homelab-main
 
       - name: Run privacy gate
         run: |
