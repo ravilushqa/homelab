@@ -35,7 +35,7 @@ _DEFAULT_SOURCE = _REPO_ROOT / "komodo/stacks/audiobooks-arr/compose.yaml"
 
 # Services allowed on the vpn network. Adding one means checking it can't forward qBittorrent's
 # traffic out directly, then adding it here.
-_VPN_ALLOWED_SERVICES = {"xray", "qbittorrent", "prowlarr", "audiobookrequest"}
+_VPN_ALLOWED_SERVICES = {"xray", "qbittorrent", "prowlarr", "audiobookrequest", "questarr"}
 
 _FORBIDDEN_QBIT_KEYS = ("ports", "network_mode", "cap_add", "privileged", "devices")
 

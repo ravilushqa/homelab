@@ -131,6 +131,11 @@ class TestVpnNetwork(_GateCase):
         del self.doc["networks"]["vpn"]
         self.assertFails("networks.vpn is missing")
 
+    def test_allowlisted_apps_on_vpn(self):
+        for name in ("prowlarr", "audiobookrequest", "questarr"):
+            self.assertIn("vpn", self.doc["services"][name]["networks"], name)
+        self.assertEqual(self.check(), [])
+
     def test_unlisted_service_on_vpn(self):
         self.doc["services"]["socks-direct"] = {"image": "serjs/go-socks5-proxy", "networks": ["vpn", "traefik"]}
         self.assertFails("not allowlisted")
