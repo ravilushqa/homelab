@@ -16,6 +16,8 @@ jobs:
   plan:
     runs-on: [self-hosted, homelab]
     if: github.event_name == 'pull_request' || github.event_name == 'push'
+    # Read-only, so a hang (e.g. on releasing the Terraform Cloud lock) is safe to kill
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: homelab-main/terraform
@@ -53,8 +55,10 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      # PR plans are read-only and don't lock the state: they can't race each other or the
+      # plan/apply on main for the workspace lock, and a stuck lock doesn't block reviews
       - name: Terraform Plan
-        run: terraform plan -no-color -input=false
+        run: terraform plan -no-color -input=false ${{ github.event_name == 'pull_request' && '-lock=false' || '' }}
         id: plan
 
       - name: Comment Plan on PR
