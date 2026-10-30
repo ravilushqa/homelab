@@ -4,7 +4,7 @@ services:
     container_name: vova-medcenter-db
     mem_limit: 512m
     memswap_limit: 512m
-    cpus: 1
+    cpus: 0.5
     restart: unless-stopped
     environment:
       POSTGRES_DB: medcenters
@@ -24,7 +24,7 @@ services:
     container_name: vova-medcenter-backend
     mem_limit: 512m
     memswap_limit: 512m
-    cpus: 1
+    cpus: 0.5
     restart: unless-stopped
     depends_on:
       db:
@@ -47,7 +47,7 @@ services:
     container_name: vova-medcenter-frontend
     mem_limit: 128m
     memswap_limit: 128m
-    cpus: 0.5
+    cpus: 0.25
     restart: unless-stopped
     depends_on:
       backend:
