@@ -2,6 +2,9 @@ services:
   db:
     image: postgres:16
     container_name: vova-medcenter-db
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.4
     restart: unless-stopped
     environment:
       POSTGRES_DB: medcenters
@@ -19,6 +22,9 @@ services:
     image: ghcr.io/zent7/vova-medcenter-backend:15652234a25028f2466e98557f3735ad8c8cc935@sha256:f417521f771eb3c53f6296e74200fadcd116aeb3708c2bfb9c1fa2c3476e6e58
     pull_policy: always
     container_name: vova-medcenter-backend
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.4
     restart: unless-stopped
     depends_on:
       db:
@@ -39,6 +45,9 @@ services:
     image: ghcr.io/zent7/vova-medcenter-frontend:15652234a25028f2466e98557f3735ad8c8cc935@sha256:e2f3c63313457d86ad1a5c5fb2fc8c100e29cd77d0bc2e3813c2b0a6ae5ad013
     pull_policy: always
     container_name: vova-medcenter-frontend
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.15
     restart: unless-stopped
     depends_on:
       backend:
@@ -58,6 +67,9 @@ services:
     image: alpine:3.24
     pull_policy: always
     container_name: vova-medcenter-release-verifier
+    mem_limit: 32m
+    memswap_limit: 32m
+    cpus: 0.05
     restart: unless-stopped
     depends_on:
       backend:
