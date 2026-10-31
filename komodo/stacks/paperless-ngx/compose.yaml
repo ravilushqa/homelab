@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
 
   webserver:
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.0
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.1
     networks:
       - default
       - traefik
