@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
 
   webserver:
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.4
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.0
     networks:
       - default
       - traefik
@@ -62,7 +62,7 @@ services:
         {"openid_connect":{"SCOPE":["openid","profile","email"],"OAUTH_PKCE_ENABLED":true,"APPS":[{"provider_id":"pocket-id","name":"Pocket-ID","client_id":"${PAPERLESS_OIDC_CLIENT_ID}","secret":"${PAPERLESS_OIDC_CLIENT_SECRET}","settings":{"server_url":"https://pocketid.ravil.space"}}]}}
 
   gotenberg:
-    image: docker.io/gotenberg/gotenberg:8.38
+    image: docker.io/gotenberg/gotenberg:8.39
     restart: unless-stopped
     command:
       - "gotenberg"
@@ -70,7 +70,7 @@ services:
       - "--chromium-allow-list=file:///tmp/.*"
 
   tika:
-    image: docker.io/apache/tika:4.1.0
+    image: docker.io/apache/tika:4.2.0
     restart: unless-stopped
 
   paperless-gpt:

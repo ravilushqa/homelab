@@ -1,7 +1,7 @@
 services:
   changedetection:
     # Pinned to the version migrated from LXC 106; bump separately
-    image: ghcr.io/dgtlmoon/changedetection.io:0.60.9
+    image: ghcr.io/dgtlmoon/changedetection.io:0.60.10
     container_name: changedetection
     restart: unless-stopped
     volumes:

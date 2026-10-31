@@ -1,6 +1,6 @@
 services:
   github-runner:
-    image: myoung34/github-runner:2.338.1-ubuntu-noble
+    image: myoung34/github-runner:2.338.2-ubuntu-noble
     restart: always
     environment:
       REPO_URL: https://github.com/ravilushqa/homelab

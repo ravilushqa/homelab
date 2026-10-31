@@ -1,6 +1,6 @@
 services:
   dozzle:
-    image: amir20/dozzle:v11.3.5
+    image: amir20/dozzle:v11.4.0
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
