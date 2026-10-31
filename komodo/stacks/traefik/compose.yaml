@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.7.16
+    image: traefik:v3.7.17
     container_name: traefik
     restart: unless-stopped
     command:
@@ -125,7 +125,7 @@ services:
       - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.clientTrustedIPs=192.168.1.0/24,172.16.0.0/12,10.0.0.0/8"
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.8.1
+    image: crowdsecurity/crowdsec:v1.8.2
     container_name: crowdsec
     restart: unless-stopped
     environment:

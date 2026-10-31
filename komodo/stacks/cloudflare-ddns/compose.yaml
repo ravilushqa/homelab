@@ -1,7 +1,7 @@
 # Keeps *.ravil.space pointed at the dynamic public IPv4 (Telekom PPPoE).
 services:
   cloudflare-ddns:
-    image: timothyjmiller/cloudflare-ddns:2.3.0
+    image: timothyjmiller/cloudflare-ddns:2.3.1
     container_name: cloudflare-ddns
     restart: unless-stopped
     security_opt:
