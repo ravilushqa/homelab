@@ -1,7 +1,7 @@
 services:
   # VLESS client. qBittorrent's only way to the internet is this SOCKS5 proxy (see the vpn network)
   xray:
-    image: teddysun/xray:26.10.29
+    image: teddysun/xray:26.10.31
     restart: unless-stopped
     configs:
       - source: xray
