@@ -1,6 +1,6 @@
 services:
   lgtm:
-    image: grafana/otel-lgtm:0.38.0
+    image: grafana/otel-lgtm:0.39.0
     container_name: grafana-lgtm
     restart: unless-stopped
     deploy:
