@@ -1,0 +1,15 @@
+# vova-medcenter's failed logins (wrong password) must not ban its users via
+# LePresidente/http-generic-401-bf. Only that exact event is dropped: other statuses, verbs,
+# paths (including query strings) and routers still reach every scenario.
+# Tests: .github/scripts/test_crowdsec_whitelist.py
+name: homelab/vova-medcenter-login-401
+description: "Ignore failed vova-medcenter logins (POST 401 /api/v1/auth/login)"
+whitelist:
+  reason: "vova-medcenter failed login"
+  expression:
+    - >-
+      evt.Meta.log_type == 'http_access-log' &&
+      evt.Meta.traefik_router_name == 'vova-medcenter@docker' &&
+      evt.Meta.http_verb == 'POST' &&
+      evt.Meta.http_status == '401' &&
+      evt.Meta.http_path == '/api/v1/auth/login'
