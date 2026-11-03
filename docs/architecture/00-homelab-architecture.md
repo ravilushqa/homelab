@@ -145,6 +145,9 @@ Operational rule:
 - **Blocking:** CrowdSec (in the same stack) reads Traefik's access log from Docker and bans scanners; the
   `crowdsec@docker` bouncer middleware runs first on every `websecure` route and returns 403 for banned IPs
   (local decisions + community blocklist). It fails open, and LAN/Docker ranges are never banned.
+  One parser whitelist (`traefik/crowdsec/vova-medcenter-login-whitelist.yaml`) drops only vova-medcenter's
+  failed logins (`POST` `401` on exactly `/api/v1/auth/login`), so wrong passwords don't ban its users; tested
+  against the real CrowdSec image by `.github/scripts/test_crowdsec_whitelist.py`.
   Bouncer key: Komodo secret `CROWDSEC_BOUNCER_KEY`. Inspect with `docker exec crowdsec cscli decisions list` / `cscli alerts list`
 
 ### Kubernetes Gateway API

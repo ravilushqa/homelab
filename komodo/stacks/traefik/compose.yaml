@@ -141,6 +141,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro
+      # Only vova-medcenter's POST 401 /api/v1/auth/login is ignored (see the file)
+      - ./crowdsec/vova-medcenter-login-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/vova-medcenter-login-whitelist.yaml:ro
       - crowdsec-config:/etc/crowdsec
       - crowdsec-data:/var/lib/crowdsec/data
 
