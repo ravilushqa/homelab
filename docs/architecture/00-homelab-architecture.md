@@ -302,6 +302,9 @@ Platform/support stacks:
   to non-Docker backends: Home Assistant (`ha`, → `192.168.1.153:8123`), Proxmox VE (`proxmox`, OIDC, → `192.168.1.100:8006`),
   PBS (`pbs`, OIDC, → `192.168.1.121:8007`) and
   Health Connect ingest (`health-connect`, → `192.168.1.65:9121`)
+- `health-core` — Go core of the health agent (`ravilushqa/health-agent`), phase 1 shadow of the Health Connect ingest above:
+  the phone sends every sync to both; public only `POST health-core.ravil.space/ingest/health-connect` (exact route, no OIDC,
+  `X-Health-Token`), read API/MCP (`/v1/...`) LAN-only on `komodo.lan:8078`, with PostgreSQL; image tag pinned (`auto_update = false`)
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `pocketid` — PocketID OIDC provider at `pocketid.ravil.space` (migrated from LXC `104`)
@@ -412,7 +415,8 @@ and is referenced by the Traefik `oidc-auth` middleware, Komodo, Proxmox/PBS SSO
 3. Keep secrets in Komodo variables/secrets or stack-local `.env` files on the host, not in Git.
 4. On merge, `.github/workflows/komodo-deploy.yaml` runs the resource sync, destroys stacks removed from `stacks.toml` (`compose down`, volumes kept; the sync itself never deletes), then deploys changed stacks one by one.
    Traefik deploys are wrapped in the health-connect Umami privacy gate (`.github/scripts/privacy_gate_check.py`),
-   which `.github/workflows/privacy-gate.yaml` also runs nightly against the running Traefik.
+   which `.github/workflows/privacy-gate.yaml` also runs nightly against the running Traefik. `health-core` deploys run it too,
+   with `--routers`: every router in its compose must be an exact `Path` the Umami exclusions cover.
 5. Verify container status, app logs, HTTPS status, and Docker Traefik access logs.
 
 ### Git workflow

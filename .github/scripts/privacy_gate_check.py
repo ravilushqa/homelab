@@ -6,8 +6,11 @@ Usage:
   python3 privacy_gate_check.py --source komodo/stacks/traefik/compose.yaml
   python3 privacy_gate_check.py --source FILE --ssh-user USER --live-host HOST
   python3 privacy_gate_check.py --source FILE --ssh-fixture FILE  (tests only)
+  python3 privacy_gate_check.py --source FILE --live-host HOST --routers STACK_COMPOSE
 
 Both source and live checks are required; either failing blocks deployment.
+--routers (repeatable) adds a router check for a Docker stack that serves
+health-connect paths itself (komodo/stacks/health-core/compose.yaml).
 
 Source check:
   - Parses compose YAML using PyYAML safe_load with duplicate-key rejection
@@ -18,6 +21,15 @@ Source check:
   - Verifies accesslog query-parameter and header drop flags by exact match
   - Verifies no conflicting defaultmode=keep override is present
   - Invalid YAML, duplicate keys, or missing traefik service fail
+
+Router check (--routers):
+  - Parses the stack compose (duplicate keys rejected) and collects every
+    traefik.http.routers.<name>.rule label of every service
+  - Each rule must be a single conjunction (no ||, no negation) with exactly one
+    exact Path(`...`) (no PathPrefix/PathRegexp) and a Host(`...`)
+  - Each Path must be excluded from Umami by a required ignoreURLs pattern
+    (the Umami plugin matches the path, not the host, so any host is covered)
+  - No routers found: FAIL CLOSED
 
 Live check:
   - SSHes to the Traefik host (user@host)
@@ -304,6 +316,93 @@ def check_source(compose_path: str) -> tuple:
                     "(non-drop per-field setting contradicts defaultmode=drop)"
                 )
 
+    return passed, messages
+
+
+# ── Router check (Docker stacks that serve health-connect paths) ─────────────
+
+_ROUTER_RULE_LABEL = re.compile(r"^traefik\.http\.routers\.([^.]+)\.rule$")
+_MATCHER = re.compile(r"(\w+)\(`([^`]*)`\)")
+
+
+def _collect_router_rules(yaml_text: str) -> tuple:
+    """
+    Return ({router_name: rule}, error_or_None) from all services' labels.
+    A router defined twice is an error (ambiguous).
+    """
+    try:
+        doc = _yaml.load(yaml_text, Loader=_NoDupKeyLoader)
+    except _yaml.YAMLError as e:
+        return {}, f"YAML parse error: {e}"
+    if not isinstance(doc, dict) or not isinstance(doc.get("services"), dict):
+        return {}, "no services mapping"
+
+    rules: dict = {}
+    for svc in doc["services"].values():
+        if not isinstance(svc, dict):
+            continue
+        raw = svc.get("labels", [])
+        items = []
+        if isinstance(raw, list):
+            items = [i.partition("=")[::2] for i in raw if isinstance(i, str) and "=" in i]
+        elif isinstance(raw, dict):
+            items = [(str(k), str(v)) for k, v in raw.items()]
+        for key, value in items:
+            m = _ROUTER_RULE_LABEL.match(key.strip())
+            if not m:
+                continue
+            name = m.group(1)
+            if name in rules:
+                return {}, f"router {name!r} defined more than once"
+            rules[name] = value.strip()
+    return rules, None
+
+
+def _path_is_excluded(path: str) -> bool:
+    """True if a required Umami ignoreURLs pattern excludes this exact path."""
+    return any(re.match(expected, path) for _, expected, _, _ in _REQUIRED_IGNORE_URLS)
+
+
+def check_routers(compose_path: str) -> tuple:
+    """
+    Check that every Traefik router of a stack routes only exact paths that
+    the Umami exclusions cover. Returns (passed: bool, messages: list[str]).
+    """
+    try:
+        text = Path(compose_path).read_text(encoding="utf-8")
+    except OSError as e:
+        return False, [f"  FAIL cannot read router compose file: {e}"]
+
+    rules, err = _collect_router_rules(text)
+    if err:
+        return False, [f"  FAIL routers: {err}"]
+    if not rules:
+        return False, ["  FAIL CLOSED routers: no traefik router rules found"]
+
+    passed = True
+    messages = []
+    for name, rule in sorted(rules.items()):
+        # Strip the matchers; what remains must only join them with &&.
+        rest = _MATCHER.sub("", rule)
+        matchers = _MATCHER.findall(rule)
+        kinds = [k for k, _ in matchers]
+        paths = [v for k, v in matchers if k == "Path"]
+        problems = []
+        if rest.replace("&&", "").strip():
+            problems.append("rule is not a plain && of matchers")
+        if any(k.startswith("Path") and k != "Path" for k in kinds):
+            problems.append("only exact Path() is allowed")
+        if len(paths) != 1:
+            problems.append("needs exactly one Path()")
+        elif not _path_is_excluded(paths[0]):
+            problems.append("path is not excluded from Umami")
+        if "Host" not in kinds:
+            problems.append("needs a Host()")
+        if problems:
+            passed = False
+            messages.append(f"  FAIL router {name}: " + "; ".join(problems))
+        else:
+            messages.append(f"  OK  router {name}: exact path excluded from Umami")
     return passed, messages
 
 
@@ -601,6 +700,9 @@ def main(argv=None) -> int:
                    help="SSH user for live check (default: root)")
     p.add_argument("--ssh-fixture", default=None,
                    help="For tests only: file with simulated SSH KEY=VALUE output")
+    p.add_argument("--routers", action="append", default=[],
+                   help="Stack compose whose Traefik routers must only serve exact "
+                        "paths excluded from Umami (repeatable)")
     args = p.parse_args(argv)
 
     all_passed = True
@@ -612,6 +714,16 @@ def main(argv=None) -> int:
     print("Source check:", "PASSED" if src_ok else "FAILED")
     if not src_ok:
         all_passed = False
+
+    for compose in args.routers:
+        print()
+        print(f"=== Router check ({compose}) ===")
+        r_ok, r_msgs = check_routers(compose)
+        for m in r_msgs:
+            print(m)
+        print("Router check:", "PASSED" if r_ok else "FAILED")
+        if not r_ok:
+            all_passed = False
 
     print()
     print("=== Live check (running Traefik) ===")

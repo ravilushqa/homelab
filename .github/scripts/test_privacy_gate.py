@@ -8,6 +8,7 @@ Tests:
   - Malformed patterns fail (substring-only, wrong regex shape).
   - Gate CLI integration tests using isolated fixtures.
   - Deployment ordering in komodo-deploy.yaml.
+  - Router check for Docker stacks serving health-connect paths (health-core).
 """
 
 import os
@@ -33,6 +34,7 @@ from privacy_gate_check import (
     _validate_ignore_pattern,
     _REQUIRED_IGNORE_URLS,
     _NoDupKeyLoader,
+    check_routers,
 )
 import yaml as _yaml
 
@@ -871,6 +873,100 @@ fi
             )
         finally:
             os.unlink(fpath)
+
+
+class TestRouterCheck(unittest.TestCase):
+    """--routers: a stack's Traefik routers may only serve exact excluded paths."""
+
+    _HEALTH_CORE = _REPO_ROOT / "komodo/stacks/health-core/compose.yaml"
+
+    def _check(self, rule_or_labels):
+        labels = rule_or_labels if isinstance(rule_or_labels, list) else [
+            f"traefik.http.routers.r.rule={rule_or_labels}",
+        ]
+        doc = {"services": {"app": {"image": "x", "labels": labels}}}
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            _yaml.safe_dump(doc, f)
+            fpath = f.name
+        try:
+            return check_routers(fpath)
+        finally:
+            os.unlink(fpath)
+
+    def test_health_core_compose_passes(self):
+        passed, msgs = check_routers(str(self._HEALTH_CORE))
+        self.assertTrue(passed, msgs)
+        self.assertTrue(any("health-core-ingest" in m for m in msgs), msgs)
+
+    def test_exact_excluded_paths_pass(self):
+        for path in ("/ingest/health-connect", "/nutrition/queue", "/nutrition/ack"):
+            passed, msgs = self._check(
+                f"Host(`h.ravil.space`) && Path(`{path}`) && Method(`POST`)")
+            self.assertTrue(passed, (path, msgs))
+
+    def test_rejects_unsafe_rules(self):
+        bad = [
+            "Host(`h.ravil.space`)",                                      # no path
+            "Host(`h.ravil.space`) && Path(`/v1/status`)",                # path not excluded
+            "Host(`h.ravil.space`) && PathPrefix(`/ingest/health-connect`)",
+            "Host(`h.ravil.space`) && PathRegexp(`^/ingest/.*`)",
+            "Host(`h.ravil.space`) && Path(`/ingest/health-connect`) || Path(`/v1`)",
+            "Host(`h.ravil.space`) && !Path(`/ingest/health-connect`)",
+            "Host(`h.ravil.space`) && Path(`/ingest/health-connect`) && Path(`/nutrition/ack`)",
+            "Path(`/ingest/health-connect`)",                             # no host
+            "Host(`h.ravil.space`) && Path(`/ingest/health-connect/x`)",
+        ]
+        for rule in bad:
+            passed, msgs = self._check(rule)
+            self.assertFalse(passed, (rule, msgs))
+
+    def test_every_router_is_checked(self):
+        passed, _ = self._check([
+            "traefik.http.routers.ok.rule=Host(`h.ravil.space`) && Path(`/ingest/health-connect`)",
+            "traefik.http.routers.api.rule=Host(`h.ravil.space`) && PathPrefix(`/v1`)",
+        ])
+        self.assertFalse(passed)
+
+    def test_no_routers_fails_closed(self):
+        passed, msgs = self._check(["traefik.enable=true"])
+        self.assertFalse(passed)
+        self.assertTrue(any("CLOSED" in m for m in msgs), msgs)
+
+    def test_missing_file_fails(self):
+        passed, _ = check_routers("/nonexistent/compose.yaml")
+        self.assertFalse(passed)
+
+    def test_messages_do_not_echo_rules(self):
+        _, msgs = self._check("Host(`secret-host.ravil.space`) && PathPrefix(`/v1`)")
+        self.assertFalse(any("secret-host" in m or "/v1" in m for m in msgs), msgs)
+
+    def test_cli_router_failure_blocks_gate(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("services:\n  app:\n    labels:\n"
+                    "      - \"traefik.http.routers.r.rule=Host(`h`) && PathPrefix(`/`)\"\n")
+            fpath = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, str(_GATE_SCRIPT),
+                 "--source", str(_REPO_ROOT / "komodo/stacks/traefik/compose.yaml"),
+                 "--ssh-fixture", str(_FIXTURES_DIR / "ssh_ok.txt"),
+                 "--routers", fpath],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+        finally:
+            os.unlink(fpath)
+
+    def test_deploy_workflow_gates_health_core(self):
+        wf = (_REPO_ROOT / ".github/workflows/komodo-deploy.yaml").read_text()
+        gate = wf.find("gate_privacy_check --routers komodo/stacks/health-core/compose.yaml")
+        self.assertGreater(gate, -1)
+        # The gate result must skip the deploy: it sits before the generic deploy call
+        self.assertLess(gate, wf.find('deploy_and_wait "$STACK"'))
+
+    def test_nightly_workflow_checks_health_core_routers(self):
+        wf = (_REPO_ROOT / ".github/workflows/privacy-gate.yaml").read_text()
+        self.assertIn("--routers komodo/stacks/health-core/compose.yaml", wf)
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ flowchart LR
 - [Ntfy](https://ntfy.sh/) — push notifications.
 - [Umami](https://umami.is/) — web analytics.
 - [Dozzle](https://dozzle.dev/) — Docker log viewer.
-- HA wall panel, guest door access, Honcho (LAN-only memory API) — small custom apps.
+- HA wall panel, guest door access, Honcho (LAN-only memory API), health-core (Health Connect ingest + LAN read API) — small custom apps.
 - Platform: Traefik, PocketID, Grafana LGTM, GitHub Actions runner.
 
 ### Proxmox guests (routed by the Komodo Traefik file provider)

@@ -372,6 +372,24 @@ HONCHO_DB_PASSWORD = [[HONCHO_DB_PASSWORD]]
 """
 
 [[stack]]
+name = "health-core"
+description = "Health agent core: Health Connect ingest (phase 1 shadow of health-connect-bridge), LAN read API/MCP"
+tags = ["health", "apps"]
+# The image tag is pinned on purpose (HEALTH_CORE_IMAGE_TAG): bump it in this file
+auto_update = false
+[stack.config]
+server_id = "Local"
+repo = "ravilushqa/homelab"
+branch = "main"
+run_directory = "komodo/stacks/health-core"
+environment = """
+HEALTH_CORE_IMAGE_TAG = sha-ca2b2939f0850d387d79ca0b9a4459b5a25a74c8
+HEALTH_CORE_DB_PASSWORD = [[HEALTH_CORE_DB_PASSWORD]]
+HEALTH_CORE_INGEST_TOKEN = [[HEALTH_CORE_INGEST_TOKEN]]
+HEALTH_CORE_READ_TOKEN = [[HEALTH_CORE_READ_TOKEN]]
+"""
+
+[[stack]]
 name = "guest-door-access"
 description = "Public guest door access app for HomeExchange guests"
 tags = ["home-assistant", "guest-access"]

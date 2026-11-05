@@ -1,7 +1,8 @@
 name: Privacy Gate
 
 # Nightly check that the running Traefik still excludes the health-connect paths
-# from Umami (komodo-deploy.yaml checks it only around traefik deploys). This
+# from Umami and that health-core's routers only serve those paths (komodo-deploy.yaml
+# checks it only around traefik and health-core deploys). This
 # replaces the check the nutrition writeback used to run over SSH before every meal.
 on:
   schedule:
@@ -28,4 +29,5 @@ jobs:
           "$RUNNER_TEMP/gate_venv/bin/pip" install --quiet pyyaml
           "$RUNNER_TEMP/gate_venv/bin/python" .github/scripts/privacy_gate_check.py \
             --source komodo/stacks/traefik/compose.yaml \
-            --live-host local
+            --live-host local \
+            --routers komodo/stacks/health-core/compose.yaml
