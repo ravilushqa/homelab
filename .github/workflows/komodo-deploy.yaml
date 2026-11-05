@@ -203,8 +203,9 @@ jobs:
             exit 0
           fi
 
-          # Privacy gate: the health-connect routes live in komodo/stacks/traefik/dynamic/,
-          # so every traefik deploy can expose them. privacy_gate_check.py checks that the
+          # Privacy gate: the Umami exclusions for the health-connect paths (served by
+          # health-core) live in the traefik stack, so every traefik deploy can drop them.
+          # privacy_gate_check.py checks that the
           # Umami exclusions are in the traefik compose AND in the running Traefik; run it
           # before the deploy (Komodo only pulls the repo on deploy) and again after it.
           # Runbook if it fails: fix the traefik compose labels, redeploy traefik.
