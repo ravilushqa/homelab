@@ -303,8 +303,9 @@ Platform/support stacks:
   PBS (`pbs`, OIDC, → `192.168.1.121:8007`) and
   Health Connect ingest (`health-connect`, → `192.168.1.65:9121`)
 - `health-core` — Go core of the health agent (`ravilushqa/health-agent`), phase 1 shadow of the Health Connect ingest above:
-  the phone sends every sync to both; public only `POST health-core.ravil.space/ingest/health-connect` (exact route, no OIDC,
-  `X-Health-Token`), read API/MCP (`/v1/...`) LAN-only on `komodo.lan:8078`, with PostgreSQL; image tag pinned (`auto_update = false`).
+  the phone sends every sync to both; public only exact routes on `health-core.ravil.space` (no OIDC, pre-shared tokens):
+  `POST /ingest/health-connect` (`X-Health-Token`) and, for the nutrition app's cutover, `GET /nutrition/queue` and
+  `POST /nutrition/ack` (`X-Nutrition-Token`); read API/MCP (`/v1/...`) LAN-only on `komodo.lan:8078`, with PostgreSQL; image tag pinned (`auto_update = false`).
   Meals: auto-confirm mode (`HEALTH_CORE_MEAL_AUTOCONFIRM`, no Telegram bot): the agent token logs meals over MCP without a
   confirmation step; they wait in health-core's queue until the nutrition app is moved off the bridge
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy

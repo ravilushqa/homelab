@@ -1,8 +1,9 @@
 # health-core: Go core of the health agent (source of truth: ravilushqa/health-agent
 # deploy/komodo/compose.yaml, deploy/README.md). Phase 1 shadow: it runs next to
 # health-connect-bridge (LXC 114, routed in ../traefik/dynamic/external.yml), which
-# stays unchanged; the phone sends every sync to both. Only POST /ingest/health-connect
-# is public, on its own host; the nutrition routes stay on the bridge.
+# stays unchanged; the phone sends every sync to both. Public, on its own host: POST
+# /ingest/health-connect, and for the nutrition app (phase 2 cutover) GET /nutrition/queue
+# and POST /nutrition/ack. The bridge keeps its own routes until it is retired.
 services:
   health-core:
     # Pinned on purpose (auto_update = false in stacks.toml): bump the sha by hand.
@@ -19,7 +20,6 @@ services:
       # The phone's existing X-Health-Token (the bridge's), so the webhook config works unchanged at cutover
       HEALTH_CORE_INGEST_TOKEN: ${HEALTH_CORE_INGEST_TOKEN:?HEALTH_CORE_INGEST_TOKEN is required}
       # X-Nutrition-Token of the nutrition app; without it the nutrition routes answer 404.
-      # LAN-only (port 8078) until cutover adds public routes; the app still polls the bridge.
       HEALTH_CORE_NUTRITION_TOKEN: ${HEALTH_CORE_NUTRITION_TOKEN:-}
       # Bearer token of the LAN read API and MCP (/v1/...)
       HEALTH_CORE_READ_TOKEN: ${HEALTH_CORE_READ_TOKEN:-}
@@ -45,10 +45,11 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      # No OIDC: the Android HC Webhook app can't do OAuth; health-core checks X-Health-Token.
+      # No OIDC: the Android apps can't do OAuth; health-core checks X-Health-Token (ingest) and
+      # X-Nutrition-Token (nutrition; without HEALTH_CORE_NUTRITION_TOKEN those routes are 404).
       # Exact Host + Path + Method like the bridge routes; anything else gets Traefik's 404.
-      # PRIVACY: /ingest/health-connect is excluded from the global umami@docker middleware by
-      # path (ignoreURLs[0] in ../traefik/compose.yaml, any host). komodo-deploy.yaml runs
+      # PRIVACY: these paths are excluded from the global umami@docker middleware by path
+      # (ignoreURLs[0..2] in ../traefik/compose.yaml, any host). komodo-deploy.yaml runs
       # .github/scripts/privacy_gate_check.py --routers on this file before every deploy:
       # every router here must use an exact Path covered by those exclusions.
       - "traefik.http.routers.health-core-ingest.rule=Host(`health-core.ravil.space`) && Path(`/ingest/health-connect`) && Method(`POST`)"
@@ -56,6 +57,16 @@ services:
       - "traefik.http.routers.health-core-ingest.tls.certresolver=cloudflare"
       - "traefik.http.routers.health-core-ingest.priority=200"
       - "traefik.http.routers.health-core-ingest.service=health-core"
+      - "traefik.http.routers.health-core-nutrition-queue.rule=Host(`health-core.ravil.space`) && Path(`/nutrition/queue`) && Method(`GET`)"
+      - "traefik.http.routers.health-core-nutrition-queue.entrypoints=websecure"
+      - "traefik.http.routers.health-core-nutrition-queue.tls.certresolver=cloudflare"
+      - "traefik.http.routers.health-core-nutrition-queue.priority=200"
+      - "traefik.http.routers.health-core-nutrition-queue.service=health-core"
+      - "traefik.http.routers.health-core-nutrition-ack.rule=Host(`health-core.ravil.space`) && Path(`/nutrition/ack`) && Method(`POST`)"
+      - "traefik.http.routers.health-core-nutrition-ack.entrypoints=websecure"
+      - "traefik.http.routers.health-core-nutrition-ack.tls.certresolver=cloudflare"
+      - "traefik.http.routers.health-core-nutrition-ack.priority=200"
+      - "traefik.http.routers.health-core-nutrition-ack.service=health-core"
       - "traefik.http.services.health-core.loadbalancer.server.port=8080"
       - "traefik.docker.network=traefik_default"
 
