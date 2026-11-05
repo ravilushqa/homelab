@@ -27,32 +27,6 @@ http:
       middlewares: [oidc-auth@docker]
       service: pbs
 
-    # health-connect-bridge receiver on the Hermes host. No OIDC: the Android
-    # Health Connect app can't do OAuth; the receiver checks pre-shared tokens
-    # (X-Health-Token / X-Nutrition-Token). Only exact Host+Path+Method is
-    # routed, anything else gets Traefik's 404.
-    # PRIVACY: these paths are excluded from the global umami@docker middleware
-    # via ignoreURLs in ../compose.yaml; komodo-deploy.yaml checks that before
-    # every traefik deploy (.github/scripts/privacy_gate_check.py).
-    health-connect-bridge:
-      rule: Host(`health-connect.ravil.space`) && Path(`/ingest/health-connect`) && Method(`POST`)
-      entryPoints: [websecure]
-      tls: { certResolver: cloudflare }
-      priority: 200
-      service: health-connect-bridge
-    health-connect-nutrition-queue:
-      rule: Host(`health-connect.ravil.space`) && Path(`/nutrition/queue`) && Method(`GET`)
-      entryPoints: [websecure]
-      tls: { certResolver: cloudflare }
-      priority: 200
-      service: health-connect-bridge
-    health-connect-nutrition-ack:
-      rule: Host(`health-connect.ravil.space`) && Path(`/nutrition/ack`) && Method(`POST`)
-      entryPoints: [websecure]
-      tls: { certResolver: cloudflare }
-      priority: 200
-      service: health-connect-bridge
-
   services:
     ha:
       loadBalancer:
@@ -66,9 +40,6 @@ http:
         # PBS serves a self-signed cert too
         serversTransport: proxmox
         servers: [{ url: "https://192.168.1.121:8007" }]
-    health-connect-bridge:
-      loadBalancer:
-        servers: [{ url: "http://192.168.1.65:9121" }]
 
 # Kubernetes services: TLS passthrough to the cluster's Cilium gateway, which
 # terminates TLS itself (cert-manager). TCP routers with HostSNI are matched

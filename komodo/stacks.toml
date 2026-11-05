@@ -373,7 +373,7 @@ HONCHO_DB_PASSWORD = [[HONCHO_DB_PASSWORD]]
 
 [[stack]]
 name = "health-core"
-description = "Health agent core: Health Connect ingest (phase 1 shadow of health-connect-bridge), LAN read API/MCP"
+description = "Health agent core: Health Connect ingest, meal write-back queue, LAN read API/MCP"
 tags = ["health", "apps"]
 # The image tag is pinned on purpose (HEALTH_CORE_IMAGE_TAG): bump it in this file
 auto_update = false

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Privacy gate verification for health-connect-bridge deployment.
+Privacy gate verification for the Health Connect routes (health-core; formerly
+health-connect-bridge).
 
 Usage:
   python3 privacy_gate_check.py --source komodo/stacks/traefik/compose.yaml

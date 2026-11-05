@@ -69,7 +69,7 @@ PDF, it removes only that auto-OCR tag so Paperless GPT does not block on it.
 
 ### health-core
 - `HEALTH_CORE_DB_PASSWORD` (new, random; URL-safe, it goes into the Postgres URL)
-- `HEALTH_CORE_INGEST_TOKEN` (the bridge's existing ingest token, so the phone's webhook config works at cutover)
+- `HEALTH_CORE_INGEST_TOKEN` (the HC Webhook app's `X-Health-Token`; ≥ 32 chars)
 - `HEALTH_CORE_READ_TOKEN` (new, random, ≥ 32 chars)
 - `HEALTH_CORE_AGENT_TOKEN` (new, random, ≥ 32 chars; the agent's MCP token, logs meals in auto-confirm mode)
 - `HEALTH_CORE_NUTRITION_TOKEN` (new, random, ≥ 32 chars; the nutrition app's `X-Nutrition-Token` after cutover)
