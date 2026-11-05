@@ -18,12 +18,17 @@ services:
       HEALTH_CORE_DATABASE_URL: postgres://health:${HEALTH_CORE_DB_PASSWORD:?HEALTH_CORE_DB_PASSWORD is required}@postgres:5432/health?sslmode=disable
       # The phone's existing X-Health-Token (the bridge's), so the webhook config works unchanged at cutover
       HEALTH_CORE_INGEST_TOKEN: ${HEALTH_CORE_INGEST_TOKEN:?HEALTH_CORE_INGEST_TOKEN is required}
-      # Optional until phase 2: without it the nutrition routes answer 404
+      # X-Nutrition-Token of the nutrition app; without it the nutrition routes answer 404.
+      # LAN-only (port 8078) until cutover adds public routes; the app still polls the bridge.
       HEALTH_CORE_NUTRITION_TOKEN: ${HEALTH_CORE_NUTRITION_TOKEN:-}
       # Bearer token of the LAN read API and MCP (/v1/...)
       HEALTH_CORE_READ_TOKEN: ${HEALTH_CORE_READ_TOKEN:-}
-      # Phase 2: the agent's token (read + propose) and health-core's own Telegram bot
+      # Phase 2: the agent's token. With MEAL_AUTOCONFIRM=true it reads and logs meals over MCP
+      # without a confirmation step (health-agent ADR 0001, amendment 1; excludes the Telegram
+      # variables below); otherwise it reads and proposes, and health-core's own Telegram bot
+      # asks the user to confirm.
       HEALTH_CORE_AGENT_TOKEN: ${HEALTH_CORE_AGENT_TOKEN:-}
+      HEALTH_CORE_MEAL_AUTOCONFIRM: ${HEALTH_CORE_MEAL_AUTOCONFIRM:-false}
       HEALTH_CORE_TELEGRAM_TOKEN: ${HEALTH_CORE_TELEGRAM_TOKEN:-}
       HEALTH_CORE_TELEGRAM_CHAT_ID: ${HEALTH_CORE_TELEGRAM_CHAT_ID:-}
       HEALTH_CORE_TELEGRAM_ALLOWED_USERS: ${HEALTH_CORE_TELEGRAM_ALLOWED_USERS:-}
