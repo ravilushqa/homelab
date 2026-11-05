@@ -896,7 +896,8 @@ class TestRouterCheck(unittest.TestCase):
     def test_health_core_compose_passes(self):
         passed, msgs = check_routers(str(self._HEALTH_CORE))
         self.assertTrue(passed, msgs)
-        self.assertTrue(any("health-core-ingest" in m for m in msgs), msgs)
+        for router in ("health-core-ingest", "health-core-nutrition-queue", "health-core-nutrition-ack"):
+            self.assertTrue(any(router in m for m in msgs), (router, msgs))
 
     def test_exact_excluded_paths_pass(self):
         for path in ("/ingest/health-connect", "/nutrition/queue", "/nutrition/ack"):
