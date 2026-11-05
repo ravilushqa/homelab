@@ -208,10 +208,12 @@ jobs:
           # Umami exclusions are in the traefik compose AND in the running Traefik; run it
           # before the deploy (Komodo only pulls the repo on deploy) and again after it.
           # Runbook if it fails: fix the traefik compose labels, redeploy traefik.
+          # Extra args (e.g. --routers <compose>) add the router check for a stack.
           gate_privacy_check() {
             "$RUNNER_TEMP/gate_venv/bin/python" .github/scripts/privacy_gate_check.py \
               --source komodo/stacks/traefik/compose.yaml \
               --live-host local \
+              "$@" \
             || {
               echo "ABORT: privacy gate FAILED — health-connect paths must be excluded from Umami" >&2
               return 1
@@ -245,6 +247,15 @@ jobs:
             if [ "$STACK" = "audiobooks-arr" ] && ! gate_vpn_check; then
               FAILED=1
               continue
+            fi
+            # health-core serves /ingest/health-connect from its own Docker labels: its routers
+            # must only use exact paths that the running Traefik excludes from Umami.
+            if [ "$STACK" = "health-core" ]; then
+              echo "Running privacy gate check (before health-core deploy)..."
+              if ! gate_privacy_check --routers komodo/stacks/health-core/compose.yaml; then
+                FAILED=1
+                continue
+              fi
             fi
             deploy_and_wait "$STACK" || FAILED=1
           done

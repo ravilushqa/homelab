@@ -66,3 +66,9 @@ PDF, it removes only that auto-OCR tag so Paperless GPT does not block on it.
 - `GUEST_DOOR_HA_TOKEN`
 - `GUEST_DOOR_ACCESS_TOKEN`
 - `GUEST_DOOR_PIN` (required)
+
+### health-core
+- `HEALTH_CORE_DB_PASSWORD` (new, random; URL-safe, it goes into the Postgres URL)
+- `HEALTH_CORE_INGEST_TOKEN` (the bridge's existing ingest token, so the phone's webhook config works at cutover)
+- `HEALTH_CORE_READ_TOKEN` (new, random, ≥ 32 chars)
+- The image is private on GHCR: `docker login ghcr.io` on the Komodo host with a `read:packages` token

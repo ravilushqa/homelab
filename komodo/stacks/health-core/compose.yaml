@@ -1,0 +1,80 @@
+# health-core: Go core of the health agent (source of truth: ravilushqa/health-agent
+# deploy/komodo/compose.yaml, deploy/README.md). Phase 1 shadow: it runs next to
+# health-connect-bridge (LXC 114, routed in ../traefik/dynamic/external.yml), which
+# stays unchanged; the phone sends every sync to both. Only POST /ingest/health-connect
+# is public, on its own host; the nutrition routes stay on the bridge.
+services:
+  health-core:
+    # Pinned on purpose (auto_update = false in stacks.toml): bump the sha by hand.
+    # The GHCR package is private: the Komodo host needs `docker login ghcr.io`.
+    image: ghcr.io/ravilushqa/health-core:${HEALTH_CORE_IMAGE_TAG:?pin an image tag (sha-...)}
+    container_name: health-core
+    restart: unless-stopped
+    # Healthcheck comes from the image (`/health-core healthcheck`, distroless: no shell/curl)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HEALTH_CORE_DATABASE_URL: postgres://health:${HEALTH_CORE_DB_PASSWORD:?HEALTH_CORE_DB_PASSWORD is required}@postgres:5432/health?sslmode=disable
+      # The phone's existing X-Health-Token (the bridge's), so the webhook config works unchanged at cutover
+      HEALTH_CORE_INGEST_TOKEN: ${HEALTH_CORE_INGEST_TOKEN:?HEALTH_CORE_INGEST_TOKEN is required}
+      # Optional until phase 2: without it the nutrition routes answer 404
+      HEALTH_CORE_NUTRITION_TOKEN: ${HEALTH_CORE_NUTRITION_TOKEN:-}
+      # Bearer token of the LAN read API and MCP (/v1/...)
+      HEALTH_CORE_READ_TOKEN: ${HEALTH_CORE_READ_TOKEN:-}
+      # Phase 2: the agent's token (read + propose) and health-core's own Telegram bot
+      HEALTH_CORE_AGENT_TOKEN: ${HEALTH_CORE_AGENT_TOKEN:-}
+      HEALTH_CORE_TELEGRAM_TOKEN: ${HEALTH_CORE_TELEGRAM_TOKEN:-}
+      HEALTH_CORE_TELEGRAM_CHAT_ID: ${HEALTH_CORE_TELEGRAM_CHAT_ID:-}
+      HEALTH_CORE_TELEGRAM_ALLOWED_USERS: ${HEALTH_CORE_TELEGRAM_ALLOWED_USERS:-}
+      # Traefik reaches us over traefik_default; trust its X-Forwarded-For so rate limits key
+      # on the real client. 172.16.0.0/12 is Docker's default bridge pool (the repo does not
+      # pin traefik_default's subnet; the CrowdSec bouncer trusts the same range).
+      HEALTH_CORE_TRUSTED_PROXIES: ${HEALTH_CORE_TRUSTED_PROXIES:-172.16.0.0/12}
+    # Read API and MCP (/v1/...) for the agent and tools. LAN only without pinning an IP:
+    # the Komodo LXC's sole NIC is on the LAN (IPv6 is ULA) and the router forwards only 443.
+    ports:
+      - "8078:8080"
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      # No OIDC: the Android HC Webhook app can't do OAuth; health-core checks X-Health-Token.
+      # Exact Host + Path + Method like the bridge routes; anything else gets Traefik's 404.
+      # PRIVACY: /ingest/health-connect is excluded from the global umami@docker middleware by
+      # path (ignoreURLs[0] in ../traefik/compose.yaml, any host). komodo-deploy.yaml runs
+      # .github/scripts/privacy_gate_check.py --routers on this file before every deploy:
+      # every router here must use an exact Path covered by those exclusions.
+      - "traefik.http.routers.health-core-ingest.rule=Host(`health-core.ravil.space`) && Path(`/ingest/health-connect`) && Method(`POST`)"
+      - "traefik.http.routers.health-core-ingest.entrypoints=websecure"
+      - "traefik.http.routers.health-core-ingest.tls.certresolver=cloudflare"
+      - "traefik.http.routers.health-core-ingest.priority=200"
+      - "traefik.http.routers.health-core-ingest.service=health-core"
+      - "traefik.http.services.health-core.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
+
+  postgres:
+    image: postgres:16.10
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: health
+      POSTGRES_USER: health
+      POSTGRES_PASSWORD: ${HEALTH_CORE_DB_PASSWORD:?HEALTH_CORE_DB_PASSWORD is required}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U health -d health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      traefik.enable: "false"
+
+volumes:
+  postgres:
+
+networks:
+  traefik:
+    name: traefik_default
+    external: true
