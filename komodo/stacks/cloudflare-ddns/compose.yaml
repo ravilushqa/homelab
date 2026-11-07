@@ -4,6 +4,10 @@ services:
     image: timothyjmiller/cloudflare-ddns:2.3.1
     container_name: cloudflare-ddns
     restart: unless-stopped
+    # Infrastructure DDNS intentionally bypasses filtering DNS to repair external access during a Pi-hole outage.
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
     security_opt:
       - no-new-privileges:true
     environment:
