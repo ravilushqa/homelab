@@ -221,6 +221,11 @@ configs:
     content: |
       {
         "log": { "loglevel": "warning" },
+        "dns": {
+          "servers": ["https+local://1.1.1.1/dns-query", "https+local://8.8.8.8/dns-query"],
+          "queryStrategy": "UseIPv4",
+          "disableCache": false
+        },
         "inbounds": [
           { "tag": "socks", "listen": "0.0.0.0", "port": 1080, "protocol": "socks",
             "settings": { "auth": "noauth", "udp": true } },
@@ -232,6 +237,7 @@ configs:
             "settings": { "vnext": [ { "address": "${VLESS_HOST}", "port": 443,
               "users": [ { "id": "${VLESS_UUID}", "encryption": "none", "flow": "xtls-rprx-vision" } ] } ] },
             "streamSettings": { "network": "tcp", "security": "reality",
+              "sockopt": { "domainStrategy": "ForceIPv4" },
               "realitySettings": { "serverName": "${VLESS_SNI}", "fingerprint": "firefox",
                 "publicKey": "${VLESS_PBK}", "shortId": "" } } },
           { "tag": "direct", "protocol": "freedom" }
