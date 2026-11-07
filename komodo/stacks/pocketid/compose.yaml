@@ -1,7 +1,7 @@
 services:
   pocketid:
     # Pinned to the version migrated from LXC 104; bump separately
-    image: ghcr.io/pocket-id/pocket-id:v2.19.1
+    image: ghcr.io/pocket-id/pocket-id:v2.19.2
     container_name: pocketid
     restart: unless-stopped
     environment:

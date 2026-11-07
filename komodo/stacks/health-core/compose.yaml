@@ -70,7 +70,7 @@ services:
       - "traefik.docker.network=traefik_default"
 
   postgres:
-    image: postgres:16.10
+    image: postgres:16.15
     restart: unless-stopped
     environment:
       POSTGRES_DB: health
