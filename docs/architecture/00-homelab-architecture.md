@@ -306,7 +306,8 @@ Platform/support stacks:
   `POST /ingest/health-connect` (`X-Health-Token`, HC Webhook app), `GET /nutrition/queue` and
   `POST /nutrition/ack` (`X-Nutrition-Token`, nutrition app); read API/MCP (`/v1/...`) LAN-only on `komodo.lan:8078`, with PostgreSQL; image tag pinned (`auto_update = false`).
   Meals: auto-confirm mode (`HEALTH_CORE_MEAL_AUTOCONFIRM`, no Telegram bot): the agent token logs meals over MCP without a
-  confirmation step; the nutrition app polls health-core and writes them to Health Connect
+  confirmation step; the nutrition app polls health-core and writes them to Health Connect, with a meal type
+  (breakfast/lunch/dinner/snack, given by the agent or inferred from the local start time)
 - `grafana-lgtm` — local LGTM observability stack plus cAdvisor and Docker socket proxy
 - `github-runner` — ephemeral self-hosted GitHub Actions runner
 - `pocketid` — PocketID OIDC provider at `pocketid.ravil.space` (migrated from LXC `104`)
