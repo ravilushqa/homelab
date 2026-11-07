@@ -112,7 +112,7 @@ services:
   # Games *arr: IGDB search, grabs through Prowlarr into qBittorrent (category `games`). Import is
   # off (post-processing disabled by default): the PC takes games from the SMB share
   questarr:
-    image: ghcr.io/doezer/questarr:v1.5.0
+    image: ghcr.io/doezer/questarr:v1.6.0
     restart: unless-stopped
     environment:
       TZ: Europe/Berlin
