@@ -101,6 +101,8 @@ services:
       VISION_LLM_MODEL: "openai/gpt-6.1-terra"
       AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
       OCR_LIMIT_PAGES: "5"
+      IMAGE_MAX_TOTAL_PIXELS: "10000000"
+      VISION_LLM_MAX_TOKENS: "16384"
       LOG_LEVEL: "info"
       LLM_LANGUAGE: "German"
       CREATE_NEW_TAGS: "false"
