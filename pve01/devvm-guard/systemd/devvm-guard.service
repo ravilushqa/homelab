@@ -1,5 +1,5 @@
 [Unit]
-Description=devvm-guard: load scoped isolation for the single dev VM (no-op if never installed)
+Description=devvm-guard: verify (does NOT reload) the dev VM guard at boot; fails if the runtime state is gone
 Documentation=file:///usr/local/share/doc/devvm-guard/DESIGN-DRAFT-v3.md
 After=network-online.target
 Before=pve-guests.service

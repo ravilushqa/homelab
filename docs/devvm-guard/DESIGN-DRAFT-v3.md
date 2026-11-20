@@ -54,7 +54,7 @@ API `https://192.168.1.100:8006`, PVE `9.2.21`, single node `pve01`.
   the `snippets` content type**, and `local` is invisible to this token (permission-filtered, and
   earlier calls to `/storage/local/content|status` returned 403 rather than 404). Consequence:
   **the PVE hookscript path cannot be assumed**; the bundle therefore installs the hook only if an
-  admin confirms `pvesm status --content snippets`, and G3 works without it (`guardctl start` +
+  admin confirms `pvesm status --content snippets`, and G3 works without it (`devvm-guard start` +
   watchdog).
 - `net.ipv4.ip_forward=0`, `net.ipv6.conf.all.forwarding=0`; `nftables.service` inactive with an
   `ExecStop` that flushes the ruleset; both PVE firewall daemons active with unproven enforcement.
@@ -102,7 +102,7 @@ Latest run: **26 passed, 0 failed, 0 skipped.**
 | N9 | dev -> IPv6 | dropped, `denied_ipv6` +2 |
 | M-P1 | `192.168.1.65:22220` -> guest:22 via DNAT with `CONTROL_ENABLED=1` | connected, `accepted_control` +1 |
 | M-N1 | another LAN host -> same port | blocked |
-| M-N2 | dev -> LAN with M enabled | blocked |
+| M-N2 | dev -> LAN with M enabled | dropped silently (TimeoutError, no RST) |
 
 What this **does not** prove: qemu tap/bridge behaviour on the real `vmbr1`, the live
 `br_netfilter` state, PVE firewall interaction, or that `qm` attaches exactly one NIC. Those are
@@ -112,15 +112,37 @@ window.
 ## 5. Blocking gates before any production apply
 
 1. **Root console on pve01**, opened first and kept open as an independent rollback channel.
-2. `br_netfilter`: `net.bridge.bridge-nf-call-iptables` and `-ip6tables` must be `0`. If they are
-   `1`, bridged guest traffic would traverse the `inet forward` hook and the final drop would break
-   existing guests — `devvm-guard check` refuses to continue; the design then needs revision.
-3. `ip_forward=0` and no pre-existing routed forwarding. If the host already routes, this design's
-   "restore the original boundary" argument does not hold; re-plan.
+2. `br_netfilter`: `net.bridge.bridge-nf-call-iptables` and `-ip6tables` must be `0`. The kernel
+   reports `1` by default whenever `br_netfilter` is loaded (a fresh namespace on `pve01` shows `1`),
+   so this is a **real, unresolved precondition**, not a formality. If either is `1`, bridged guest
+   frames would traverse the `inet forward` hook and the blanket final drop would cut connectivity
+   for **existing** guests (105, LXC traffic, VLAN 50). `devvm-guard check` and `verify` both refuse
+   in that state. In that case, stop and choose one of:
+   - **Variant G2-scoped** (pre-planned fallback, *not yet lab-tested*): replace the blanket
+     `counter name denied_other_forward drop` with a drop matched on the bridge devices only
+     (`iifname { "vmbr0", "vmbr1" }`), which leaves bridged frames untouched because their `iif` is
+     the bridge *port*. Requires re-running the lab with a bridge-based LAN segment (the current
+     lab uses veths, whose `iif` is the veth, so the fallback cannot be validated with it);
+   - or disable `br_netfilter` host-wide — only with explicit approval, since it changes what
+     `pve-firewall`/iptables see.
+3. `ip_forward=0` and **no per-interface `forwarding=1`** anywhere except the dev bridge. If the host
+   already routes, this design's "restore the original boundary" argument does not hold; re-plan.
 4. Subnet `/30` confirmed free (host + router), VMID 130 free, `nvme-thin` capacity, MAC free.
 5. Snippets storage confirmed (only needed for the optional hook and for `--sshkeys`).
 6. Independent review of this bundle; `nft -c` on the rendered file plus the lab suite on the target
    host.
+
+### Emergency if `br_netfilter` flips to `1` while the guard is loaded
+
+The dev VM is quarantined by the watchdog automatically, but that does not restore other guests.
+On the root console, remove **only** the final drop rule (never the whole table, never a flush):
+
+```bash
+nft -a list chain inet devvm forward
+nft delete rule inet devvm forward handle <handle-of-the-final-drop>
+```
+
+Then `devvm-guard rollback`. Restoring the rule requires the G2-scoped variant above.
 
 ## 6. Residual risks (stated, not hidden)
 

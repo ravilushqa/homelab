@@ -13,7 +13,7 @@ Scoped, host-enforced isolation for exactly one dev VM on `pve01`. Design:
 | `devvm-guard` | Control script: `check`, `render`, `install`, `install-units`, `verify`, `status`, `start`, `quarantine`, `arm-deadline`, `disarm-deadline`, `rollback`, `destroy`, `watchdog`. |
 | `devvm-guard.conf.example` | Pinned parameters (no secrets). Copy to `/etc/devvm-guard.conf`. |
 | `pve-hook.sh` | Optional PVE `pre-start` hook. Only usable if a storage with `snippets` exists. |
-| `systemd/` | Boot unit loading/verifying the guard, and a 5 s watchdog that quarantines on drift. |
+| `systemd/` | Boot unit that only *verifies* the guard (it reloads nothing), and a 5 s watchdog that quarantines on drift. |
 | `tests/netns-isolation-test.sh` | Lab test in a disposable user+network namespace. Must pass on the target kernel. |
 
 ## Safety properties
@@ -24,6 +24,8 @@ Scoped, host-enforced isolation for exactly one dev VM on `pve01`. Design:
   is never reloaded.
 - Rollback always quarantines the guest before removing protection, and leaves the VM disk intact.
 - An independent systemd deadline rolls back even if the operator's session dies.
+- After a host reboot the bridge, table and sysctls are gone (runtime-only by design): verify
+  fails, `start` refuses. Recover with `devvm-guard rollback` then `devvm-guard install`.
 
 ## Test
 

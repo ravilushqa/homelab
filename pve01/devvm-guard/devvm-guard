@@ -39,8 +39,13 @@ load_conf() {
   set -a; . "$CONF"; set +a
   : "${DEV_VMID:?}" "${DEV_BRIDGE:?}" "${DEV_HOST_IP:?}" "${DEV_PREFIXLEN:?}" \
     "${DEV_GUEST_IP:?}" "${WAN_IFACE:?}" "${DNS_V4:?}" "${NTP_V4:?}"
-  : "${WAN_PUBLIC_IP:-}" "${CONTROL_ENABLED:-0}" "${DEADLINE_SECONDS:-0}" \
-    "${HEALTHCHECK_CMD:-}" "${CONTROL_SRC:-}" "${CONTROL_PORT:-}" "${GUEST_SSH_PORT:-22}"
+  # ':=' (not ':-') so optional keys are actually assigned; with set -u an omitted key
+  # would otherwise abort every verb, including the deadline rollback.
+  : "${WAN_PUBLIC_IP:=}" "${CONTROL_ENABLED:=0}" "${DEADLINE_SECONDS:=0}" \
+    "${HEALTHCHECK_CMD:=}" "${CONTROL_SRC:=}" "${CONTROL_PORT:=}" "${GUEST_SSH_PORT:=22}"
+  case "$DEADLINE_SECONDS" in
+    ''|*[!0-9]*) die "DEADLINE_SECONDS='$DEADLINE_SECONDS' is not a non-negative integer (would silently skip the deadline)" ;;
+  esac
   DEV_NAME="${DEV_NAME:-dev-vm}"
   if [ -z "$WAN_PUBLIC_IP" ]; then
     die "WAN_PUBLIC_IP is empty: pin the homelab public IPv4 at the apply window (hairpin deny needs it)"
@@ -52,6 +57,19 @@ load_conf() {
 
 vm_state() { qm status "$DEV_VMID" 2>/dev/null | awk -F': *' '/^status/{print $2}'; }
 vm_exists() { qm config "$DEV_VMID" >/dev/null 2>&1; }
+# Fail-closed: an empty/unknown state (qm error, pmxcfs hiccup, "paused") is NOT "stopped".
+# If the config is unreadable, fall back to the qemu pidfile so a qm failure cannot be
+# mistaken for "VM absent" while the process still runs.
+vm_stopped_proven() {
+  if vm_exists; then
+    [ "$(vm_state || true)" = "stopped" ]
+  else
+    local pidf="/var/run/qemu-server/$DEV_VMID.pid" pid
+    [ -s "$pidf" ] || return 0
+    pid="$(cat "$pidf" 2>/dev/null || true)"
+    ! { [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; }
+  fi
+}
 table_present() { nft list table $NFT_TABLE >/dev/null 2>&1; }
 quar_present() { nft list table $NFT_QUAR >/dev/null 2>&1; }
 bridge_exists() { ip link show dev "$DEV_BRIDGE" >/dev/null 2>&1; }
@@ -101,17 +119,31 @@ do_check() {
   local fwd; fwd="$(sysctl_get ipv4.ip_forward)"
   [ "$fwd" = "0" ] || die "net.ipv4.ip_forward=$fwd; this design assumes the host currently routes nothing. Re-plan instead of changing a pre-existing routed boundary."
 
-  local brnf; brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
-  case "$brnf" in
-    0|unreadable) : ;;
-    *) die "net.bridge.bridge-nf-call-iptables=$brnf: bridged guest traffic would traverse the ip forward hook and the final drop would break existing guests. Requires a different design." ;;
+  # Design gate 3: "nothing is routed" must hold per interface too, not only globally;
+  # otherwise the final forward drop would silently cut an existing routed path.
+  local f ifn
+  for f in /proc/sys/net/ipv4/conf/*/forwarding; do
+    ifn="${f%/forwarding}"; ifn="${ifn##*/}"
+    case "$ifn" in all|"$DEV_BRIDGE") continue ;; esac
+    [ "$(cat "$f" 2>/dev/null || echo 0)" = "0" ] \
+      || die "net.ipv4.conf.$ifn.forwarding=1 already: the host routes something today. Re-plan."
+  done
+
+  # Design gate 2: both families. The table is `inet`, so bridged IPv6 would hit it as well.
+  local brnf brnf6
+  brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
+  brnf6="$(sysctl_get bridge.bridge-nf-call-ip6tables)"
+  case "$brnf/$brnf6" in
+    0/0|0/unreadable|unreadable/0|unreadable/unreadable) : ;;
+    *) die "net.bridge.bridge-nf-call-iptables=$brnf ip6tables=$brnf6: bridged guest traffic would traverse the inet forward hook and the final drop would break existing guests. Requires a different design." ;;
   esac
 
   if vm_exists; then
-    local n; n="$(qm config "$DEV_VMID" | grep -c '^net[0-9]')"
+    local cfg n; cfg="$(qm config "$DEV_VMID")"
+    n="$(grep -c '^net[0-9]' <<<"$cfg" || true)"   # grep -c exits 1 on 0 matches (set -e)
     [ "$n" = "1" ] || die "VM $DEV_VMID already has $n NICs; expected exactly 1"
-    qm config "$DEV_VMID" | grep -q "bridge=$DEV_BRIDGE" || die "VM $DEV_VMID net0 is not on $DEV_BRIDGE"
-    if qm config "$DEV_VMID" | grep -Eq '^(onboot|autostart): *1'; then
+    grep -Eq "bridge=$DEV_BRIDGE(,|\$)" <<<"$cfg" || die "VM $DEV_VMID net0 is not on $DEV_BRIDGE"
+    if grep -Eq '^(onboot|autostart): *1' <<<"$cfg"; then
       die "VM $DEV_VMID has autostart enabled"
     fi
   fi
@@ -125,15 +157,18 @@ do_check() {
      && ! ip -o addr show dev "$DEV_BRIDGE" 2>/dev/null | grep -q " $DEV_HOST_IP/"; then
     die "$DEV_HOST_IP already configured on another interface"
   fi
-  if ip route show table all | grep -q "${DEV_HOST_IP%.*}\.0/$DEV_PREFIXLEN"; then
-    die "route for the dev /$DEV_PREFIXLEN already exists; subnet conflict"
-  fi
+  # Any route inside the /30 (root) or covering it other than default (match) is a conflict;
+  # the previous literal-string grep missed e.g. 10.203.255.0/24 or 10.203.0.0/16.
+  local net="${DEV_HOST_IP%.*}.0/$DEV_PREFIXLEN" rt
+  rt="$( { ip -4 route show table all root "$net"; ip -4 route show table all match "$net"; } \
+         | grep -Ev '^(default|unreachable default|throw default) ' || true)"
+  [ -z "$rt" ] || die "route(s) overlapping $net already exist; subnet conflict: $(head -3 <<<"$rt" | tr '\n' ';')"
 
   if [ -n "$HEALTHCHECK_CMD" ]; then
     log "healthcheck (pre-install): $HEALTHCHECK_CMD"
     sh -c "$HEALTHCHECK_CMD" || die "pre-install healthcheck failed; not continuing"
   fi
-  log "check OK (ip_forward=$fwd, br_netfilter iptables=$brnf, template syntax valid)"
+  log "check OK (ip_forward=$fwd, br_netfilter iptables=$brnf ip6tables=$brnf6, template syntax valid)"
 }
 
 # ---------------------------------------------------------------- install
@@ -158,11 +193,18 @@ HOST=$(hostname -s)
 EOF
   chmod 0600 "$STATE_DIR/baseline.env"
 
+  # A pre-existing table would be merged into by `nft -f` (old rules kept, new ones appended)
+  # and could satisfy verify with stale content. Refuse instead of adopting it.
+  table_present && die "nft table $NFT_TABLE already exists without $STATE_DIR/installed; inspect it, then 'devvm-guard rollback'"
+
   # Independent deadline FIRST, before any host change: if this run dies, the host
   # quarantines the guest and removes only our objects.
-  [ "${DEADLINE_SECONDS:-0}" -gt 0 ] && do_arm_deadline "$DEADLINE_SECONDS"
+  [ "$DEADLINE_SECONDS" -gt 0 ] && do_arm_deadline "$DEADLINE_SECONDS"
 
-  trap 'log "install failed: rolling back"; do_rollback --from-install-failure || true' ERR
+  # EXIT, not ERR: `die`/`exit 1` do not fire an ERR trap, so an ERR-only trap would skip
+  # rollback on exactly the verify/healthcheck failure paths below.
+  INSTALL_OK=0
+  trap '[ "$INSTALL_OK" = 1 ] || { trap - EXIT; log "install failed: rolling back"; do_rollback --from-install-failure || true; }' EXIT
 
   if ! bridge_exists; then
     ip link add name "$DEV_BRIDGE" type bridge
@@ -171,18 +213,19 @@ EOF
   fi
   ip link set dev "$DEV_BRIDGE" up
   ip addr replace "$DEV_HOST_IP/$DEV_PREFIXLEN" dev "$DEV_BRIDGE"
+  sysctl -qw "net.ipv6.conf.$DEV_BRIDGE.disable_ipv6=1"
+
+  # Load the table (with its final forward drop) BEFORE enabling forwarding on the WAN
+  # interface: the other order briefly lets the host route anything arriving on vmbr0.
+  nft -f "$RENDERED"
+  log "loaded table $NFT_TABLE"
 
   # Per-interface forwarding only (documented kernel feature); global ip_forward stays 0.
   sysctl -qw "net.ipv4.conf.$DEV_BRIDGE.forwarding=1"
   sysctl -qw "net.ipv4.conf.$WAN_IFACE.forwarding=1"
-  sysctl -qw "net.ipv6.conf.$DEV_BRIDGE.disable_ipv6=1"
-
-  nft -f "$RENDERED"
-  log "loaded table $NFT_TABLE"
 
   if ! do_verify; then
-    log "verification failed right after load"
-    exit 1
+    die "verification failed right after load"
   fi
 
   if [ -n "$HEALTHCHECK_CMD" ]; then
@@ -192,7 +235,8 @@ EOF
 
   printf 'installed_at=%s\nvmid=%s\nbridge=%s\n' "$(date -Is)" "$DEV_VMID" "$DEV_BRIDGE" > "$STATE_DIR/installed"
   chmod 0600 "$STATE_DIR/installed"
-  trap - ERR
+  INSTALL_OK=1
+  trap - EXIT
   log "install OK — dev VM may now be created/started; deadline stays armed until disarm-deadline"
 }
 
@@ -223,9 +267,18 @@ do_verify() {
 
   if table_present; then
     local dump; dump="$(nft list table $NFT_TABLE)"
-    for pat in "iifname \"$DEV_BRIDGE\"" "oifname \"$DEV_BRIDGE\"" "ip saddr $DEV_GUEST_IP masquerade" \
-               "10.203.255.0/30" "accepted_internet" "denied_internal"; do
-      grep -q -- "$pat" <<<"$dump" && ok "rule/element: $pat" || bad "rule/element missing: $pat"
+    # Match rule text as printed by `nft list` (counter names are quoted there), not bare
+    # counter names: those also appear in the counter declarations and would match even
+    # if every rule using them were gone.
+    for pat in "iifname \"$DEV_BRIDGE\" meta nfproto ipv6 counter name \"denied_ipv6\" drop" \
+               "iifname \"$DEV_BRIDGE\" counter name \"denied_host_input\" drop" \
+               "oifname \"$DEV_BRIDGE\" jump dev_ingress" \
+               "ip saddr != $DEV_GUEST_IP counter name \"denied_spoof\" drop" \
+               "ip daddr $WAN_PUBLIC_IP counter name \"denied_internal\" drop" \
+               "ip daddr @internal_v4 counter name \"denied_internal\" drop" \
+               "counter name \"denied_other_forward\" drop" \
+               "ip saddr $DEV_GUEST_IP masquerade"; do
+      grep -qF -- "$pat" <<<"$dump" && ok "rule: $pat" || bad "rule missing: $pat"
     done
     grep -q 'iifname "'"$DEV_BRIDGE"'" jump dev_egress' <<<"$dump" \
       && ok "forward chain dispatches dev egress" || bad "forward chain does not dispatch dev egress"
@@ -239,6 +292,17 @@ do_verify() {
     && ok "global ip_forward still 0 (unchanged)" || bad "global ip_forward changed"
   [ "$(sysctl_get "ipv6.conf.$DEV_BRIDGE.disable_ipv6")" = "1" ] \
     && ok "IPv6 disabled on $DEV_BRIDGE" || bad "IPv6 not disabled on $DEV_BRIDGE"
+
+  # The blanket final drop is only safe while bridged frames do not traverse the inet forward
+  # hook. If this flips while the guard is loaded, existing guests can lose connectivity:
+  # the watchdog quarantines the guest and the operator must remove that one rule (see runbook).
+  local brnf brnf6
+  brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
+  brnf6="$(sysctl_get bridge.bridge-nf-call-ip6tables)"
+  case "$brnf/$brnf6" in
+    0/0|0/unreadable|unreadable/0|unreadable/unreadable) ok "br_netfilter call-iptables=$brnf ip6tables=$brnf6 (bridged frames stay out of the forward hook)" ;;
+    *) bad "br_netfilter call-iptables=$brnf ip6tables=$brnf6: bridged traffic now traverses the inet forward hook; remove the final drop rule before other guests are affected" ;;
+  esac
   [ -z "$(ls /sys/class/net/"$DEV_BRIDGE"/brif 2>/dev/null)" ] \
     && ok "$DEV_BRIDGE has no bridge ports (no L2 uplink)" || bad "$DEV_BRIDGE has ports"
   ip -o addr show dev "$DEV_BRIDGE" | grep -q " $DEV_HOST_IP/$DEV_PREFIXLEN" \
@@ -247,7 +311,7 @@ do_verify() {
   if vm_exists; then
     local cfg; cfg="$(qm config "$DEV_VMID")"
     [ "$(grep -c '^net[0-9]' <<<"$cfg")" = "1" ] && ok "VM $DEV_VMID has exactly one NIC" || bad "VM $DEV_VMID NIC count != 1"
-    grep -q "bridge=$DEV_BRIDGE" <<<"$cfg" && ok "VM $DEV_VMID NIC on $DEV_BRIDGE" || bad "VM $DEV_VMID NIC not on $DEV_BRIDGE"
+    grep -Eq "bridge=$DEV_BRIDGE(,|\$)" <<<"$cfg" && ok "VM $DEV_VMID NIC on $DEV_BRIDGE" || bad "VM $DEV_VMID NIC not on $DEV_BRIDGE"
     grep -Eq '^(onboot|autostart): *1' <<<"$cfg" && bad "VM $DEV_VMID autostart enabled" || ok "VM $DEV_VMID autostart off"
   else
     ok "VM $DEV_VMID not created yet (guard-first, fail-closed ordering)"
@@ -292,12 +356,12 @@ table inet devvm_quarantine {
 }
 EOF
   fi
-  if [ "$(vm_state || true)" = "running" ]; then
+  if ! vm_stopped_proven; then
     qm stop "$DEV_VMID" --timeout 15 --skiplock || true
     sleep 1
   fi
-  if [ "$(vm_state || true)" = "running" ]; then
-    log "VIRTUAL MACHINE STILL RUNNING after qm stop — quarantine table retained, protection NOT removed"
+  if ! vm_stopped_proven; then
+    log "VM $DEV_VMID NOT PROVEN STOPPED after qm stop (state='$(vm_state || true)') — quarantine table retained, protection NOT removed"
     log "escalate on the root console: qm stop $DEV_VMID, then re-run 'devvm-guard quarantine'"
     return 2
   fi
@@ -334,23 +398,33 @@ do_rollback() {
     exit 3
   }
 
-  if table_present; then nft delete table $NFT_TABLE; log "deleted table $NFT_TABLE (only ours)"; fi
-  if quar_present;  then nft delete table $NFT_QUAR; log "deleted table $NFT_QUAR"; fi
-
+  # Restore WAN forwarding BEFORE deleting the table: the table's final forward drop is the
+  # only thing closing the routed path while vmbr0 forwarding is 1. do_rollback may run with
+  # errexit suppressed (from the install EXIT trap), so the guard below is explicit.
+  local wan_before=0
   if [ -r "$STATE_DIR/baseline.env" ]; then
     # shellcheck disable=SC1091
     . "$STATE_DIR/baseline.env"
     if [ -n "${WAN_FORWARDING_BEFORE:-}" ] && [ "$WAN_FORWARDING_BEFORE" != "unreadable" ]; then
-      local cur; cur="$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")"
-      if [ "$cur" = "1" ]; then
-        sysctl -qw "net.ipv4.conf.$WAN_IFACE.forwarding=$WAN_FORWARDING_BEFORE"
-        log "restored $WAN_IFACE.forwarding=$WAN_FORWARDING_BEFORE"
-      else
-        log "WAN forwarding already $cur (concurrent change): leaving it alone"
-      fi
+      wan_before="$WAN_FORWARDING_BEFORE"
     fi
-    log "global ip_forward left at $(sysctl_get ipv4.ip_forward) (never changed by this bundle)"
   fi
+  local cur; cur="$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")"
+  if [ "$cur" = "1" ] && [ "$wan_before" != "1" ]; then
+    sysctl -qw "net.ipv4.conf.$WAN_IFACE.forwarding=$wan_before" || true
+    cur="$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")"
+    if [ "$cur" != "$wan_before" ]; then
+      log "could not restore $WAN_IFACE.forwarding=$wan_before (now $cur): keeping $NFT_TABLE loaded (fail-closed)"
+      exit 3
+    fi
+    log "restored $WAN_IFACE.forwarding=$wan_before"
+  else
+    log "$WAN_IFACE.forwarding=$cur (baseline $wan_before): leaving it alone"
+  fi
+  log "global ip_forward left at $(sysctl_get ipv4.ip_forward) (never changed by this bundle)"
+
+  if table_present; then nft delete table $NFT_TABLE; log "deleted table $NFT_TABLE (only ours)"; fi
+  if quar_present;  then nft delete table $NFT_QUAR; log "deleted table $NFT_QUAR"; fi
 
   if [ -e "$STATE_DIR/owned-bridge" ] && bridge_exists; then
     ip addr del "$DEV_HOST_IP/$DEV_PREFIXLEN" dev "$DEV_BRIDGE" 2>/dev/null || true
@@ -378,7 +452,8 @@ do_destroy() {
 
 do_watchdog() {
   need_root; load_conf
-  [ "$(vm_state || true)" = "running" ] || exit 0
+  # Only a proven-stopped (or absent) VM skips the check; unknown state is treated as running.
+  vm_stopped_proven && exit 0
   if ! do_verify >/dev/null 2>&1; then
     log "watchdog: guard drift or loss detected while VM $DEV_VMID runs — quarantining"
     do_quarantine || exit 2
@@ -388,7 +463,7 @@ do_watchdog() {
 }
 
 case "${1:-}" in
-  check)            do_check ;;
+  check)            load_conf; do_check ;;
   render)           load_conf; render_nft ;;
   install)          load_conf; do_install ;;
   install-units)    do_install_units ;;

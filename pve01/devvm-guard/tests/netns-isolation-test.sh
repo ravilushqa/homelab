@@ -20,15 +20,23 @@ GUARD="$HERE/../devvm-guard"
 WORK="$(mktemp -d)"
 CHILDREN=()
 PASS=0; FAIL=0; SKIP=0
-cleanup() { for p in "${CHILDREN[@]:-}"; do kill "$p" 2>/dev/null; done; rm -rf "$WORK"; }
+cleanup() { for p in "${CHILDREN[@]:-}" ${NS_DEV:-} ${NS_WAN:-} ${NS_LAN:-}; do kill "$p" 2>/dev/null; done; rm -rf "$WORK"; }
 trap cleanup EXIT
 
 ok()   { PASS=$((PASS+1)); printf 'PASS  %s\n' "$*"; }
 bad()  { FAIL=$((FAIL+1)); printf 'FAIL  %s\n' "$*"; }
 skip() { SKIP=$((SKIP+1)); printf 'SKIP  %s\n' "$*"; }
 
+# What matters is a network namespace separate from the host's (PID 1). The uid_map check
+# alone refused real root running 'unshare -rn' (map is 0->0), i.e. the runbook's command.
 in_userns() { read -r _uid _lower _len < /proc/self/uid_map 2>/dev/null; [ "${_lower:-0}" != "0" ]; }
-if [ "$(id -u)" -eq 0 ] && ! in_userns && [ "${DEVVM_TEST_ALLOW_ROOT:-0}" != "1" ]; then
+HOST_NS="$(readlink /proc/1/ns/net 2>/dev/null || true)"
+SELF_NS="$(readlink /proc/self/ns/net)"
+if [ -n "$HOST_NS" ] && [ "$HOST_NS" = "$SELF_NS" ]; then
+  echo "refusing to run in the host network namespace: use 'unshare -rn --mount --propagation private bash $0'" >&2
+  exit 2
+fi
+if [ -z "$HOST_NS" ] && [ "$(id -u)" -eq 0 ] && ! in_userns && [ "${DEVVM_TEST_ALLOW_ROOT:-0}" != "1" ]; then
   echo "refusing to run as real root: use 'unshare -rn --mount --propagation private bash $0'" >&2
   exit 2
 fi
@@ -60,6 +68,10 @@ echo "--- rendered policy ($(wc -l < "$RENDERED") lines), syntax checked by rend
 ns_spawn() { unshare -n sleep 300 >/dev/null 2>&1 & local p=$!; CHILDREN+=("$p"); echo "$p"; }
 NS_DEV="$(ns_spawn)"; NS_WAN="$(ns_spawn)"; NS_LAN="$(ns_spawn)"
 sleep 0.4
+for p in "$NS_DEV" "$NS_WAN" "$NS_LAN"; do
+  [ "$(readlink "/proc/$p/ns/net" 2>/dev/null)" != "$(readlink /proc/self/ns/net)" ] \
+    || { echo "namespace child $p not in its own netns (race/unshare failure)" >&2; exit 1; }
+done
 ni() { local pid="$1"; shift; nsenter -t "$pid" -n "$@"; }
 
 ip link add dev0 type veth peer name hdev0 >/dev/null
@@ -166,19 +178,6 @@ assert_delta() { # counter before [min]
   [ "$now" -ge $(( $2 + ${3:-1} )) ] && ok "C:$1 +$((now-$2))" || bad "C:$1 did not increase (before=$2 now=$now)"
 }
 
-tcp_probe() { # host port expected(yes|no) label [src] [expect_err]
-  local host="$1" port="$2" expect="$3" label="$4" src="${5:-}" want="${6:-}"
-  local out
-  out="$(ni "$NS_DEV" timeout 5 python3 "$WORK/connect.py" "$host" "$port" $src 2>&1)"
-  if [ "$expect" = yes ]; then
-    [[ "$out" == connected* ]] && ok "$label" || bad "$label (got: $out)"
-  elif [ -n "$want" ]; then
-    [[ "$out" == *"$want"* ]] && ok "$label" || bad "$label (expected $want, got: $out)"
-  else
-    [[ "$out" == blocked:* ]] && ok "$label" || bad "$label (got: $out)"
-  fi
-}
-
 b=""
 # ---- positive cases ----
 b="$(cval accepted_internet)"
@@ -274,9 +273,8 @@ out="$(ni "$NS_LAN" timeout 4 python3 "$WORK/connect.py" 192.168.1.100 22220 192
 [[ "$out" == blocked:* ]] && ok "M-N1 other LAN host cannot use the control port" \
   || bad "M-N1 unexpected access from 192.168.1.66 (got: $out)"
 
-out="$(ni "$NS_DEV" timeout 4 python3 "$WORK/connect.py" 192.168.1.65 22 2>&1)"
-[[ "$out" == blocked:* ]] && ok "M-N2 dev still cannot open flows to the LAN" \
-  || bad "M-N2 dev reached the LAN (got: $out)"
+# Must be a silent drop (TimeoutError): a refused connection would mean the SYN was forwarded.
+tcp_probe 192.168.1.65 22 no "M-N2 dev still cannot open flows to the LAN (dropped, no RST)" "" TimeoutError
 
 kill "$GUEST_LISTENER" 2>/dev/null
 

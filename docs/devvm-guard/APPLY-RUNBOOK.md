@@ -29,6 +29,9 @@ Expected: `ip_forward=0`, `bridge-nf-call-iptables=0` (or the module unloaded), 
 no route/neighbour for `10.203.255.0/30`, VMID 130 absent, `nvme-thin` free space >= 20 GiB.
 
 If `bridge-nf-call-iptables=1` **stop**: bridged traffic would pass through the new forward hook.
+This is a real possibility — the kernel default is `1` whenever `br_netfilter` is loaded, and a fresh
+namespace on this host shows `1`. Do not continue; use the G2-scoped variant or get explicit approval
+to disable `br_netfilter` (see design §5).
 If `ip_forward=1` **stop**: the "restore the original boundary" argument in the design no longer
 holds.
 
@@ -46,7 +49,9 @@ bash -n devvm-guard && bash -n pve-hook.sh && bash -n tests/netns-isolation-test
 unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh
 ```
 
-The last command must print `RESULT: 26 passed, 0 failed, 0 skipped` **on this host**. A failure
+The last command must print `RESULT: 26 passed, 0 failed, 0 skipped` **on this host**. As root it
+runs because `unshare -rn` gives it a separate network namespace (the test refuses to run in the
+host netns); nothing outside that namespace is modified. A failure
 means the kernel behaves differently from the lab assumptions — stop and report, do not apply.
 
 ## 2. Install files and pin the configuration
@@ -89,7 +94,8 @@ qm config 130 >/dev/null 2>&1 && echo "VMID 130 ALREADY EXISTS - stop" || echo "
 ```
 
 This renders the policy, validates it with `nft -c`, and refuses on any precondition mismatch
-(`ip_forward`, `br_netfilter`, subnet route, existing bridge with ports, autostart VM).
+(`ip_forward` or any per-interface `forwarding=1`, `br_netfilter` iptables/ip6tables, any route
+inside or covering the `/30` other than default, existing bridge with ports, autostart VM).
 It also runs the configured `HEALTHCHECK_CMD` once. Record its output as evidence.
 
 ## 4. Apply the guard (guest still absent)
@@ -124,6 +130,7 @@ curl -fSLO https://cloud.debian.org/images/cloud/trixie/latest/SHA512SUMS
 grep 'debian-13-genericcloud-amd64.qcow2$' SHA512SUMS | sha512sum -c -
 qm importdisk 130 /var/lib/vz/template/iso/debian-13-genericcloud-amd64.qcow2 nvme-thin
 qm set 130 --scsi0 nvme-thin:vm-130-disk-0,discard=on,ssd=1
+qm disk resize 130 scsi0 20G   # the cloud image is ~3 GiB; S specifies 20 GiB
 qm set 130 --ide2 nvme-thin:cloudinit --boot order=scsi0
 qm set 130 --ciuser dev --ipconfig0 ip=10.203.255.2/30,gw=10.203.255.1 --nameserver 1.1.1.1
 qm config 130
@@ -172,11 +179,12 @@ ping -6 -c 1 -W 2 2606:4700:4700::1111
 Guest-root bypass attempts — add the route/address yourself and confirm it still fails:
 
 ```bash
+IF="$(ip -o -4 route show default | awk '{print $5; exit}')"   # e.g. ens18; do not assume a name
 ip route add 192.168.1.0/24 via 10.203.255.1
-ip addr add 192.168.1.99/24 dev enp0s18 2>/dev/null || true
+ip addr add 192.168.1.99/24 dev "$IF" 2>/dev/null || true
 ip route get 192.168.1.100
 ping -c 1 -W 2 192.168.1.100
-ip link set dev enp0s18 address 02:11:22:33:44:55
+ip link set dev "$IF" address 02:11:22:33:44:55
 ping -c 1 -W 2 192.168.1.100
 nft list ruleset
 ```
@@ -207,6 +215,9 @@ reachable:
 
 That removes the automatic rollback. Until then the host rolls back on its own if the session dies.
 
+After any host reboot the runtime bridge/table/sysctls are gone: `devvm-guard.service` (verify only)
+fails and `start` refuses. Recover in a window with `devvm-guard rollback` then `devvm-guard install`.
+
 ## 9. Rollback (any time, always in this order)
 
 ```bash
@@ -231,6 +242,14 @@ Emergency, if the guard is gone and the guest is still running:
 ```bash
 qm stop 130 --timeout 15 --skiplock
 nft list ruleset | grep -A5 devvm
+```
+
+Emergency, if `bridge-nf-call-iptables` flipped to `1` and other guests lost connectivity — remove
+only the final drop rule, never the table and never a flush:
+
+```bash
+nft -a list chain inet devvm forward
+nft delete rule inet devvm forward handle <handle-of-the-final-drop>
 ```
 
 Never `nft flush ruleset` and never delete `vmbr0` state.
