@@ -60,13 +60,17 @@ table inet devvm {
 	}
 
 	# Forwarding was disabled on this host before the change (ip_forward=0), so the original
-	# boundary is "nothing is routed". The final drop preserves exactly that boundary for every
-	# other path; only the dev guest gets an allow-list below.
+	# boundary is "nothing is routed". The final rule restores that boundary for every other
+	# path; only the dev guest gets an allow-list below.
+	# FORWARD_DROP_SCOPE=blanket : drop every other forwarded packet. Correct and strict, but only
+	#   safe while br_netfilter does not push bridged frames through this hook.
+	# FORWARD_DROP_SCOPE=bridge  : drop only packets whose ingress is the LAN/dev bridge device.
+	#   Bridged frames keep iif=<bridge port>, so they are untouched even with br_netfilter loaded.
 	chain forward {
 		type filter hook forward priority filter; policy accept;
 		iifname "@DEV_BRIDGE@" jump dev_egress
 		oifname "@DEV_BRIDGE@" jump dev_ingress
-		counter name denied_other_forward drop
+@FORWARD_FINAL_RULE@
 	}
 
 	chain dev_egress {

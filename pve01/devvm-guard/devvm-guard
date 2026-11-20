@@ -42,7 +42,8 @@ load_conf() {
   # ':=' (not ':-') so optional keys are actually assigned; with set -u an omitted key
   # would otherwise abort every verb, including the deadline rollback.
   : "${WAN_PUBLIC_IP:=}" "${CONTROL_ENABLED:=0}" "${DEADLINE_SECONDS:=0}" \
-    "${HEALTHCHECK_CMD:=}" "${CONTROL_SRC:=}" "${CONTROL_PORT:=}" "${GUEST_SSH_PORT:=22}"
+    "${HEALTHCHECK_CMD:=}" "${CONTROL_SRC:=}" "${CONTROL_PORT:=}" "${GUEST_SSH_PORT:=22}" \
+    "${FORWARD_DROP_SCOPE:=blanket}"
   case "$DEADLINE_SECONDS" in
     ''|*[!0-9]*) die "DEADLINE_SECONDS='$DEADLINE_SECONDS' is not a non-negative integer (would silently skip the deadline)" ;;
   esac
@@ -77,7 +78,12 @@ sysctl_get() { sysctl -n "net.$1" 2>/dev/null || echo "unreadable"; }
 
 render_nft() {
   [ -r "$TMPL" ] || die "template $TMPL not readable"
-  local control_rules prerouting_chain
+  local control_rules prerouting_chain forward_final
+  case "${FORWARD_DROP_SCOPE:-blanket}" in
+    blanket) forward_final="		counter name denied_other_forward drop" ;;
+    bridge)  forward_final="		iifname { \"$WAN_IFACE\", \"$DEV_BRIDGE\" } counter name denied_other_forward drop" ;;
+    *) die "FORWARD_DROP_SCOPE='${FORWARD_DROP_SCOPE}' must be blanket or bridge" ;;
+  esac
   if [ "$CONTROL_ENABLED" = "1" ]; then
     control_rules="		ip saddr $CONTROL_SRC ip daddr $DEV_GUEST_IP tcp dport $GUEST_SSH_PORT counter name accepted_control accept"
     prerouting_chain="
@@ -93,12 +99,13 @@ render_nft() {
   DEV_BRIDGE="$DEV_BRIDGE" DEV_GUEST_IP="$DEV_GUEST_IP" WAN_IFACE="$WAN_IFACE" \
   WAN_PUBLIC_IP="$WAN_PUBLIC_IP" DNS_V4="$DNS_V4" NTP_V4="$NTP_V4" \
   CONTROL_INGRESS_RULES="$control_rules" PREROUTING_CHAIN="$prerouting_chain" \
+  FORWARD_FINAL_RULE="$forward_final" FORWARD_DROP_SCOPE="${FORWARD_DROP_SCOPE:-blanket}" \
   python3 - "$TMPL" "$RENDERED" <<'PYR'
 import os, sys
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src, encoding="utf-8").read()
 keys = ["DEV_BRIDGE", "DEV_GUEST_IP", "WAN_IFACE", "WAN_PUBLIC_IP", "DNS_V4", "NTP_V4",
-        "CONTROL_INGRESS_RULES", "PREROUTING_CHAIN"]
+        "CONTROL_INGRESS_RULES", "PREROUTING_CHAIN", "FORWARD_FINAL_RULE"]
 for k in keys:
     text = text.replace("@%s@" % k, os.environ.get(k, ""))
 leftover = [ln for ln in text.splitlines() if "@" in ln and ln.split("@")[1].isupper()]
@@ -133,8 +140,9 @@ do_check() {
   local brnf brnf6
   brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
   brnf6="$(sysctl_get bridge.bridge-nf-call-ip6tables)"
-  case "$brnf/$brnf6" in
-    0/0|0/unreadable|unreadable/0|unreadable/unreadable) : ;;
+  case "${FORWARD_DROP_SCOPE:-blanket}:$brnf/$brnf6" in
+    blanket:0/0|blanket:0/unreadable|blanket:unreadable/0|blanket:unreadable/unreadable) : ;;
+    bridge:*) : ;;
     *) die "net.bridge.bridge-nf-call-iptables=$brnf ip6tables=$brnf6: bridged guest traffic would traverse the inet forward hook and the final drop would break existing guests. Requires a different design." ;;
   esac
 
@@ -296,12 +304,27 @@ do_verify() {
   # The blanket final drop is only safe while bridged frames do not traverse the inet forward
   # hook. If this flips while the guard is loaded, existing guests can lose connectivity:
   # the watchdog quarantines the guest and the operator must remove that one rule (see runbook).
-  local brnf brnf6
+  local brnf brnf6 want_final
+  if [ "${FORWARD_DROP_SCOPE:-blanket}" = "bridge" ]; then
+    want_final="iifname { \"$WAN_IFACE\", \"$DEV_BRIDGE\" } counter name \"denied_other_forward\" drop"
+  else
+    want_final="counter name \"denied_other_forward\" drop"
+  fi
+  if table_present && grep -qF -- "$want_final" <<<"$(nft list table $NFT_TABLE)"; then
+    ok "final forward rule matches FORWARD_DROP_SCOPE=${FORWARD_DROP_SCOPE:-blanket}"
+  else
+    bad "final forward rule does not match FORWARD_DROP_SCOPE=${FORWARD_DROP_SCOPE:-blanket}"
+  fi
   brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
   brnf6="$(sysctl_get bridge.bridge-nf-call-ip6tables)"
   case "$brnf/$brnf6" in
     0/0|0/unreadable|unreadable/0|unreadable/unreadable) ok "br_netfilter call-iptables=$brnf ip6tables=$brnf6 (bridged frames stay out of the forward hook)" ;;
-    *) bad "br_netfilter call-iptables=$brnf ip6tables=$brnf6: bridged traffic now traverses the inet forward hook; remove the final drop rule before other guests are affected" ;;
+    *)
+      if [ "${FORWARD_DROP_SCOPE:-blanket}" = "bridge" ]; then
+        ok "br_netfilter call-iptables=$brnf ip6tables=$brnf6 (scoped final rule: bridged frames unaffected)"
+      else
+        bad "br_netfilter call-iptables=$brnf ip6tables=$brnf6 with FORWARD_DROP_SCOPE=blanket: bridged traffic now traverses the inet forward hook"
+      fi ;;
   esac
   [ -z "$(ls /sys/class/net/"$DEV_BRIDGE"/brif 2>/dev/null)" ] \
     && ok "$DEV_BRIDGE has no bridge ports (no L2 uplink)" || bad "$DEV_BRIDGE has ports"

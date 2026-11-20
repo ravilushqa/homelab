@@ -30,7 +30,9 @@ Scoped, host-enforced isolation for exactly one dev VM on `pve01`. Design:
 ## Test
 
 ```bash
-unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh
+for scope in blanket bridge; do
+  unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh "$scope"
+done
 ```
 
-Current result on `7.0.14-25-pve` (the PVE host kernel): `RESULT: 26 passed, 0 failed, 0 skipped`.
+Current result on `7.0.14-25-pve` (the PVE host kernel): 26/26 for `blanket` and 26/26 for `bridge`.

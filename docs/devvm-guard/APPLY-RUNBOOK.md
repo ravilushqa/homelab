@@ -30,8 +30,9 @@ no route/neighbour for `10.203.255.0/30`, VMID 130 absent, `nvme-thin` free spac
 
 If `bridge-nf-call-iptables=1` **stop**: bridged traffic would pass through the new forward hook.
 This is a real possibility — the kernel default is `1` whenever `br_netfilter` is loaded, and a fresh
-namespace on this host shows `1`. Do not continue; use the G2-scoped variant or get explicit approval
-to disable `br_netfilter` (see design §5).
+namespace on this host shows `1`. If it is `1`, set `FORWARD_DROP_SCOPE=bridge` in
+`/etc/devvm-guard.conf` (lab-validated, 26/26) instead of the blanket drop, per the operator
+directive of 2026-11-20; do NOT proceed with `blanket`. `devvm-guard check` enforces this.
 If `ip_forward=1` **stop**: the "restore the original boundary" argument in the design no longer
 holds.
 
@@ -46,10 +47,12 @@ From the reviewed branch (adjust the checkout path; do not use a moving branch n
 git clone --branch draft/devvm-guard-v3 --depth 1 https://github.com/ravilushqa/homelab.git /root/devvm-guard-src
 cd /root/devvm-guard-src/pve01/devvm-guard
 bash -n devvm-guard && bash -n pve-hook.sh && bash -n tests/netns-isolation-test.sh
-unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh
+for scope in blanket bridge; do
+  unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh "$scope"
+done
 ```
 
-The last command must print `RESULT: 26 passed, 0 failed, 0 skipped` **on this host**. As root it
+Both must print `RESULT[<scope>]: 26 passed, 0 failed, 0 skipped` **on this host**. As root it
 runs because `unshare -rn` gives it a separate network namespace (the test refuses to run in the
 host netns); nothing outside that namespace is modified. A failure
 means the kernel behaves differently from the lab assumptions — stop and report, do not apply.

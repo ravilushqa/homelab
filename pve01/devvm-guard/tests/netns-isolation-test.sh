@@ -15,6 +15,9 @@
 # by other means. Those are separate gates in DESIGN-DRAFT-v3.md.
 set -uo pipefail
 
+SCOPE="${1:-blanket}"
+case "$SCOPE" in blanket|bridge) ;; *) echo "scope must be blanket or bridge" >&2; exit 2 ;; esac
+
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 GUARD="$HERE/../devvm-guard"
 WORK="$(mktemp -d)"
@@ -42,27 +45,28 @@ if [ -z "$HOST_NS" ] && [ "$(id -u)" -eq 0 ] && ! in_userns && [ "${DEVVM_TEST_A
 fi
 nft list ruleset >/dev/null 2>&1 || { echo "no CAP_NET_ADMIN in this namespace" >&2; exit 2; }
 
-cat > "$WORK/test.conf" <<'EOF'
+cat > "$WORK/test.conf" <<EOF
 DEV_VMID=130
 DEV_NAME=dev-vm-test
 DEV_GUEST_MAC=02:DE:AD:00:01:30
-DEV_BRIDGE=hdev0
+DEV_BRIDGE=bdev0
 DEV_HOST_IP=10.203.255.1
 DEV_PREFIXLEN=30
 DEV_GUEST_IP=10.203.255.2
-WAN_IFACE=hwan0
+WAN_IFACE=bwan0
 WAN_PUBLIC_IP=8.8.4.4
 DNS_V4="1.1.1.1, 9.9.9.9"
 NTP_V4="162.159.200.1, 162.159.200.123"
 CONTROL_ENABLED=0
 DEADLINE_SECONDS=0
 HEALTHCHECK_CMD=""
+FORWARD_DROP_SCOPE=$SCOPE
 EOF
 
 DEVVM_CONF="$WORK/test.conf" DEVVM_RENDER_DIR="$WORK" DEVVM_TMPL="$HERE/../devvm-guard.nft.tmpl" \
   "$GUARD" render >/dev/null 2>&1 || { echo "render failed" >&2; exit 1; }
 RENDERED="$WORK/devvm-guard.nft"
-echo "--- rendered policy ($(wc -l < "$RENDERED") lines), syntax checked by render"
+echo "--- SCOPE=$SCOPE rendered policy ($(wc -l < "$RENDERED") lines), syntax checked by render"
 
 # ---- namespaces (children keep their own netns; links are moved in by PID) ----
 ns_spawn() { unshare -n sleep 300 >/dev/null 2>&1 & local p=$!; CHILDREN+=("$p"); echo "$p"; }
@@ -78,6 +82,13 @@ ip link add dev0 type veth peer name hdev0 >/dev/null
 ip link add wan0 type veth peer name hwan0 >/dev/null
 ip link add lan0 type veth peer name hlan0 >/dev/null
 ip link set dev0 netns "$NS_DEV"; ip link set wan0 netns "$NS_WAN"; ip link set lan0 netns "$NS_LAN"
+
+# router side mirrors PVE: ONE LAN/uplink bridge (ports pwan0, plan0) + ONE private dev bridge.
+# A routed guest packet therefore arrives with iif=<bridge device>, a bridged frame keeps iif=<port>.
+ip link add bwan0 type bridge
+ip link add bdev0 type bridge
+for pair in "hwan0 bwan0" "hlan0 bwan0" "hdev0 bdev0"; do set -- $pair; ip link set "$1" master "$2"; ip link set "$1" up; done
+ip link set bwan0 up; ip link set bdev0 up
 
 # guest / "internet" / "LAN" ends
 ni "$NS_DEV" ip link set lo up
@@ -100,23 +111,22 @@ ni "$NS_LAN" ip link set lan0 up
 ni "$NS_LAN" ip addr add 192.168.1.3/24 dev lan0
 ni "$NS_LAN" ip route add default via 192.168.1.100
 
-# router (this namespace)
-ip link set hdev0 up; ip link set hwan0 up; ip link set hlan0 up
-ip addr add 10.203.255.1/30 dev hdev0
-ip addr add fd00:203::1/64 dev hdev0 nodad
-ip addr add 203.0.113.7/24 dev hwan0
-ip route add 8.8.8.8/32 via 203.0.113.8 dev hwan0
-ip route add default via 203.0.113.8 dev hwan0
-ip addr add 2001:db8::7/128 dev hwan0 nodad
-ip route add 2001:db8::8/128 dev hwan0
-ip addr add 192.168.1.100/24 dev hlan0
+# router L3 lives on the bridges, like vmbr0/vmbr1 on the PVE host
+ip addr add 10.203.255.1/30 dev bdev0
+ip addr add fd00:203::1/64 dev bdev0 nodad
+ip addr add 203.0.113.7/24 dev bwan0
+ip route add 8.8.8.8/32 via 203.0.113.8 dev bwan0
+ip route add default via 203.0.113.8 dev bwan0
+ip addr add 2001:db8::7/128 dev bwan0 nodad
+ip route add 2001:db8::8/128 dev bwan0
+ip addr add 192.168.1.100/24 dev bwan0
 
-sysctl -qw net.ipv4.conf.hdev0.forwarding=1
-sysctl -qw net.ipv4.conf.hwan0.forwarding=1
-sysctl -qw net.ipv4.conf.hlan0.forwarding=1
-sysctl -qw net.ipv6.conf.hdev0.forwarding=0
+sysctl -qw net.ipv4.conf.bdev0.forwarding=1
+sysctl -qw net.ipv4.conf.bwan0.forwarding=1
+sysctl -qw net.ipv6.conf.bdev0.forwarding=0
 sysctl -qw net.ipv4.conf.all.rp_filter=0
-sysctl -qw net.ipv4.conf.hdev0.rp_filter=0
+sysctl -qw net.ipv4.conf.bdev0.rp_filter=0
+sysctl -qw net.ipv4.conf.bwan0.rp_filter=0
 [ "$(sysctl -n net.ipv4.ip_forward)" = "0" ] && ok "global ip_forward stays 0 in this test" \
   || bad "global ip_forward was not 0 before the test"
 
@@ -281,5 +291,5 @@ kill "$GUEST_LISTENER" 2>/dev/null
 for p in "${LISTENERS[@]:-}"; do kill "$p" 2>/dev/null; done
 
 echo "---"
-printf 'RESULT: %d passed, %d failed, %d skipped\n' "$PASS" "$FAIL" "$SKIP"
+printf 'RESULT[%s]: %d passed, %d failed, %d skipped\n' "$SCOPE" "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

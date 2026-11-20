@@ -33,6 +33,11 @@ CONTROL_SRC=192.168.1.65
 CONTROL_PORT=22220
 GUEST_SSH_PORT=22
 
+# --- final forward rule (G2) ---
+# blanket: drop every non-dev forwarded packet (strict; requires br_netfilter call-iptables=0)
+# bridge : drop only packets arriving on the LAN/dev bridge devices (safe with br_netfilter=1)
+FORWARD_DROP_SCOPE=blanket
+
 # --- lifecycle (G3) ---
 # Independent rollback deadline armed before any host change in the apply window.
 DEADLINE_SECONDS=1800

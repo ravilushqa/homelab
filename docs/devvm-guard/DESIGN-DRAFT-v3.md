@@ -81,10 +81,14 @@ Command (unprivileged, disposable user+network namespace on the PVE host):
 
 ```bash
 cd pve01/devvm-guard
-unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh
+for scope in blanket bridge; do
+  unshare -rn --mount --propagation private bash tests/netns-isolation-test.sh "$scope"
+done
 ```
 
-Latest run: **26 passed, 0 failed, 0 skipped.**
+Latest run: **26 passed / 0 failed for `blanket` and 26 passed / 0 failed for `bridge`.** The lab
+uses a production-shaped topology (one LAN/uplink bridge with ports, one portless dev bridge), so
+the `bridge` fallback is validated, not just described.
 
 | Case | Assertion | Result |
 |---|---|---|
@@ -118,11 +122,10 @@ window.
    frames would traverse the `inet forward` hook and the blanket final drop would cut connectivity
    for **existing** guests (105, LXC traffic, VLAN 50). `devvm-guard check` and `verify` both refuse
    in that state. In that case, stop and choose one of:
-   - **Variant G2-scoped** (pre-planned fallback, *not yet lab-tested*): replace the blanket
-     `counter name denied_other_forward drop` with a drop matched on the bridge devices only
-     (`iifname { "vmbr0", "vmbr1" }`), which leaves bridged frames untouched because their `iif` is
-     the bridge *port*. Requires re-running the lab with a bridge-based LAN segment (the current
-     lab uses veths, whose `iif` is the veth, so the fallback cannot be validated with it);
+   - **Variant G2-scoped** (`FORWARD_DROP_SCOPE=bridge`, **lab-validated 26/26**): the final rule is
+     matched on the bridge devices only (`iifname { "vmbr0", "vmbr1" }`), so bridged frames are
+     untouched because their `iif` is the bridge *port*. Operator directive (2026-11-20): if
+     `bridge-nf-call-iptables=1` at the window, use this variant, not the blanket drop;
    - or disable `br_netfilter` host-wide — only with explicit approval, since it changes what
      `pve-firewall`/iptables see.
 3. `ip_forward=0` and **no per-interface `forwarding=1`** anywhere except the dev bridge. If the host
