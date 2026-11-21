@@ -1,0 +1,577 @@
+#!/bin/bash
+# devvm-guard — scoped host-side isolation for exactly one dev VM on pve01.
+#
+# Design: docs/devvm-guard/DESIGN-DRAFT-v3.md   Runbook: docs/devvm-guard/APPLY-RUNBOOK.md
+# DRAFT: this bundle has NOT been applied. It must be reviewed and packet-tested on the
+# target kernel before an apply window; see "Feasibility gates" in the design document.
+#
+# Verbs: check | render | install | install-units | verify | status | start | quarantine |
+#        arm-deadline | disarm-deadline | rollback | destroy (refuses) | watchdog
+#
+# The VM itself (definition, disk, NIC) is created by Terraform (terraform/modules/dev-vm);
+# this script owns only host network state and the start/stop lifecycle.
+#
+# Hard rules encoded here:
+#   * never flush the global ruleset, never touch another nft table;
+#   * never change net.ipv4.ip_forward or PVE firewall defaults/VLANs/routes/Tailscale;
+#   * the private bridge is runtime-only (absent from /etc/network/interfaces), no host reload;
+#   * rollback always quarantines the guest before removing protection.
+set -Eeuo pipefail
+
+CONF="${DEVVM_CONF:-/etc/devvm-guard.conf}"
+STATE_DIR="${DEVVM_STATE_DIR:-/var/lib/devvm-guard}"
+if [ -n "${DEVVM_TMPL:-}" ]; then
+  TMPL="$DEVVM_TMPL"
+else
+  _d="$(dirname "$(readlink -f "$0")")"
+  if [ -r "$_d/devvm-guard.nft.tmpl" ]; then TMPL="$_d/devvm-guard.nft.tmpl"
+  else TMPL=/usr/local/share/devvm-guard/devvm-guard.nft.tmpl; fi
+fi
+RENDER_DIR="${DEVVM_RENDER_DIR:-/run/devvm-guard}"
+RENDERED="$RENDER_DIR/devvm-guard.nft"
+NFT_TABLE="inet devvm"
+NFT_QUAR="inet devvm_quarantine"
+
+log()  { printf '%s devvm-guard[%s]: %s\n' "$(date -Is)" "$$" "$*" >&2; }
+die()  { log "ERROR: $*"; exit 1; }
+need_root() { [ "$(id -u)" -eq 0 ] || die "must run as root on pve01"; }
+
+load_conf() {
+  [ -r "$CONF" ] || die "config $CONF not readable (copy devvm-guard.conf.example and pin real values)"
+  # shellcheck disable=SC1090
+  set -a; . "$CONF"; set +a
+  : "${DEV_VMID:?}" "${DEV_BRIDGE:?}" "${DEV_HOST_IP:?}" "${DEV_PREFIXLEN:?}" \
+    "${DEV_GUEST_IP:?}" "${DEV_GUEST_MAC:?}" "${WAN_IFACE:?}" "${DNS_V4:?}" "${NTP_V4:?}"
+  # ':=' (not ':-') so optional keys are actually assigned; with set -u an omitted key
+  # would otherwise abort every verb, including the deadline rollback.
+  : "${WAN_PUBLIC_IP:=}" "${CONTROL_ENABLED:=0}" "${DEADLINE_SECONDS:=0}" \
+    "${HEALTHCHECK_CMD:=}" "${CONTROL_SRC:=}" "${CONTROL_PORT:=}" "${GUEST_SSH_PORT:=22}" \
+    "${FORWARD_DROP_SCOPE:=blanket}"
+  case "$DEADLINE_SECONDS" in
+    ''|*[!0-9]*) die "DEADLINE_SECONDS='$DEADLINE_SECONDS' is not a non-negative integer (would silently skip the deadline)" ;;
+  esac
+  DEV_NAME="${DEV_NAME:-dev-vm}"
+  if [ -z "$WAN_PUBLIC_IP" ]; then
+    die "WAN_PUBLIC_IP is empty: pin the homelab public IPv4 at the apply window (hairpin deny needs it)"
+  fi
+  if [ "$CONTROL_ENABLED" = "1" ]; then
+    : "${CONTROL_SRC:?}" "${CONTROL_PORT:?}"
+  fi
+}
+
+QEMU_PID_DIR="${DEVVM_QEMU_PID_DIR:-/var/run/qemu-server}"
+
+vm_state() { qm status "$DEV_VMID" 2>/dev/null | awk -F': *' '/^status/{print $2}'; }
+vm_exists() { qm config "$DEV_VMID" >/dev/null 2>&1; }
+
+# The reviewed NIC, exactly: only net0 (qemu-server names its tap tap<vmid>i0), model virtio with
+# the pinned MAC, on DEV_BRIDGE, PVE firewall off (firewall=1 would put fwbr<vmid>i0/fwpr<vmid>p0
+# between the guest and the bridge), no VLAN tag/trunks. Sets NET0_WHY on failure.
+net0_ok() { # <qm config text>
+  local cfg="$1" nets net0 kv model mac f bridge="" fw=0
+  nets="$(grep -Eo '^net[0-9]+:' <<<"$cfg" | tr -d ':' | tr '\n' ' ' || true)"
+  [ "$nets" = "net0 " ] || { NET0_WHY="NICs present: '${nets% }', expected exactly net0"; return 1; }
+  net0="$(sed -n 's/^net0: *//p' <<<"$cfg")"
+  IFS=, read -ra kv <<<"$net0"
+  model="${kv[0]%%=*}"; mac="${kv[0]#*=}"
+  [ "$model" = "virtio" ] || { NET0_WHY="net0 model '$model' is not virtio"; return 1; }
+  [ "${mac^^}" = "${DEV_GUEST_MAC^^}" ] || { NET0_WHY="net0 MAC $mac != DEV_GUEST_MAC $DEV_GUEST_MAC"; return 1; }
+  for f in "${kv[@]:1}"; do
+    case "$f" in
+      bridge=*)  bridge="${f#bridge=}" ;;
+      firewall=*) fw="${f#firewall=}" ;;
+      tag=*|trunks=*) NET0_WHY="net0 has VLAN option '$f'"; return 1 ;;
+    esac
+  done
+  [ "$bridge" = "$DEV_BRIDGE" ] || { NET0_WHY="net0 bridge '$bridge' != $DEV_BRIDGE"; return 1; }
+  [ "$fw" = "0" ] || { NET0_WHY="net0 firewall=$fw (must be 0: firewall bridges would be the ports)"; return 1; }
+  return 0
+}
+
+# The only device ever allowed on DEV_BRIDGE: tap<DEV_VMID>i0, a real TAP (not veth/VLAN/
+# physical/dummy) whose file descriptor is held by VM DEV_VMID's qemu process (pidfile, argv
+# '-id <vmid>', /proc/<pid>/fdinfo 'iff: <tap>'). Sets PORTS_WHY on failure.
+guest_tap_bound() {
+  local tap="$1" d="/sys/class/net/$1" flags pid fdi
+  [ -r "$d/tun_flags" ] || { PORTS_WHY="$tap is not a tun/tap device"; return 1; }
+  [ -e "$d/device" ] && { PORTS_WHY="$tap is backed by a hardware device"; return 1; }
+  flags="$(cat "$d/tun_flags" 2>/dev/null)"
+  [[ "$flags" =~ ^0x[0-9a-fA-F]+$ ]] && (( flags & 0x0002 )) || { PORTS_WHY="$tap is not in TAP mode (tun_flags=$flags)"; return 1; }
+  pid="$(cat "$QEMU_PID_DIR/$DEV_VMID.pid" 2>/dev/null || true)"
+  [[ "$pid" =~ ^[0-9]+$ ]] && [ -d "/proc/$pid" ] \
+    || { PORTS_WHY="$tap present but VM $DEV_VMID has no live qemu pid ($QEMU_PID_DIR/$DEV_VMID.pid)"; return 1; }
+  [[ " $(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null) " == *" -id $DEV_VMID "* ]] \
+    || { PORTS_WHY="pid $pid from the VM $DEV_VMID pidfile is not 'qemu -id $DEV_VMID'"; return 1; }
+  for fdi in /proc/"$pid"/fdinfo/*; do
+    grep -qsxF $'iff:\t'"$tap" "$fdi" && return 0   # tun_chr_show_fdinfo format
+  done
+  PORTS_WHY="$tap is not held open by VM $DEV_VMID's qemu (pid $pid)"
+  return 1
+}
+
+# Ports on DEV_BRIDGE. allow_tap=0 (adoption by check/install): none at all. allow_tap=1
+# (verify): none, or exactly the bound guest tap of a VM whose net0 is the reviewed NIC.
+# Never a pattern like tap*: any other port (uplink, VLAN, veth, fwpr, a foreign VM's tap,
+# tap<vmid>i1) is an L2 path out of the private segment. Sets PORTS_WHY.
+dev_bridge_ports_ok() { # <allow_tap 0|1> [qm config text]
+  local allow="$1" cfg="${2:-}" p ports=() tap="tap${DEV_VMID}i0"
+  for p in /sys/class/net/"$DEV_BRIDGE"/brif/*; do [ -e "$p" ] && ports+=("${p##*/}"); done
+  if [ "${#ports[@]}" -eq 0 ]; then PORTS_WHY="none (no L2 uplink)"; return 0; fi
+  [ "$allow" = 1 ] || { PORTS_WHY="has port(s) ${ports[*]}"; return 1; }
+  if [ "${#ports[@]}" -ne 1 ] || [ "${ports[0]}" != "$tap" ]; then
+    PORTS_WHY="unexpected port(s) ${ports[*]}: only $tap may be attached"; return 1
+  fi
+  [ -n "$cfg" ] || { PORTS_WHY="$tap attached but VM $DEV_VMID does not exist"; return 1; }
+  net0_ok "$cfg" || { PORTS_WHY="$tap attached but $NET0_WHY"; return 1; }
+  guest_tap_bound "$tap" || return 1
+  PORTS_WHY="only $tap (VM $DEV_VMID net0, held by its qemu)"
+  return 0
+}
+# Fail-closed: an empty/unknown state (qm error, pmxcfs hiccup, "paused") is NOT "stopped".
+# If the config is unreadable, fall back to the qemu pidfile so a qm failure cannot be
+# mistaken for "VM absent" while the process still runs.
+vm_stopped_proven() {
+  if vm_exists; then
+    [ "$(vm_state || true)" = "stopped" ]
+  else
+    local pidf="/var/run/qemu-server/$DEV_VMID.pid" pid
+    [ -s "$pidf" ] || return 0
+    pid="$(cat "$pidf" 2>/dev/null || true)"
+    ! { [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; }
+  fi
+}
+table_present() { nft list table $NFT_TABLE >/dev/null 2>&1; }
+quar_present() { nft list table $NFT_QUAR >/dev/null 2>&1; }
+bridge_exists() { ip link show dev "$DEV_BRIDGE" >/dev/null 2>&1; }
+sysctl_get() { sysctl -n "net.$1" 2>/dev/null || echo "unreadable"; }
+
+render_nft() {
+  [ -r "$TMPL" ] || die "template $TMPL not readable"
+  local control_rules prerouting_chain forward_final
+  case "${FORWARD_DROP_SCOPE:-blanket}" in
+    blanket) forward_final="		counter name denied_other_forward drop" ;;
+    bridge)  forward_final="		iifname { \"$WAN_IFACE\", \"$DEV_BRIDGE\" } counter name denied_other_forward drop" ;;
+    *) die "FORWARD_DROP_SCOPE='${FORWARD_DROP_SCOPE}' must be blanket or bridge" ;;
+  esac
+  if [ "$CONTROL_ENABLED" = "1" ]; then
+    control_rules="		ip saddr $CONTROL_SRC ip daddr $DEV_GUEST_IP tcp dport $GUEST_SSH_PORT counter name accepted_control accept"
+    prerouting_chain="
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		ip saddr $CONTROL_SRC tcp dport $CONTROL_PORT dnat ip to $DEV_GUEST_IP:$GUEST_SSH_PORT
+	}"
+  else
+    control_rules="		# control path M disabled (CONTROL_ENABLED=0): console-only management"
+    prerouting_chain=""
+  fi
+  mkdir -p "$RENDER_DIR"
+  DEV_BRIDGE="$DEV_BRIDGE" DEV_GUEST_IP="$DEV_GUEST_IP" WAN_IFACE="$WAN_IFACE" \
+  WAN_PUBLIC_IP="$WAN_PUBLIC_IP" DNS_V4="$DNS_V4" NTP_V4="$NTP_V4" \
+  CONTROL_INGRESS_RULES="$control_rules" PREROUTING_CHAIN="$prerouting_chain" \
+  FORWARD_FINAL_RULE="$forward_final" FORWARD_DROP_SCOPE="${FORWARD_DROP_SCOPE:-blanket}" \
+  python3 - "$TMPL" "$RENDERED" <<'PYR'
+import os, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+keys = ["DEV_BRIDGE", "DEV_GUEST_IP", "WAN_IFACE", "WAN_PUBLIC_IP", "DNS_V4", "NTP_V4",
+        "CONTROL_INGRESS_RULES", "PREROUTING_CHAIN", "FORWARD_FINAL_RULE"]
+for k in keys:
+    text = text.replace("@%s@" % k, os.environ.get(k, ""))
+leftover = [ln for ln in text.splitlines() if "@" in ln and ln.split("@")[1].isupper()]
+if leftover:
+    sys.exit("unrendered placeholders: %r" % leftover[:3])
+open(dst, "w", encoding="utf-8").write(text)
+PYR
+  chmod 0640 "$RENDERED"
+  nft -c -f "$RENDERED" || die "nft syntax check failed for $RENDERED"
+  log "rendered $RENDERED (control_path_M=$CONTROL_ENABLED)"
+}
+
+# ---------------------------------------------------------------- check
+do_check() {
+  need_root
+  render_nft
+
+  local fwd; fwd="$(sysctl_get ipv4.ip_forward)"
+  [ "$fwd" = "0" ] || die "net.ipv4.ip_forward=$fwd; this design assumes the host currently routes nothing. Re-plan instead of changing a pre-existing routed boundary."
+
+  # Design gate 3: "nothing is routed" must hold per interface too, not only globally;
+  # otherwise the final forward drop would silently cut an existing routed path.
+  local f ifn
+  for f in /proc/sys/net/ipv4/conf/*/forwarding; do
+    ifn="${f%/forwarding}"; ifn="${ifn##*/}"
+    case "$ifn" in all|"$DEV_BRIDGE") continue ;; esac
+    [ "$(cat "$f" 2>/dev/null || echo 0)" = "0" ] \
+      || die "net.ipv4.conf.$ifn.forwarding=1 already: the host routes something today. Re-plan."
+  done
+
+  # Design gate 2: both families. The table is `inet`, so bridged IPv6 would hit it as well.
+  local brnf brnf6
+  brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
+  brnf6="$(sysctl_get bridge.bridge-nf-call-ip6tables)"
+  case "${FORWARD_DROP_SCOPE:-blanket}:$brnf/$brnf6" in
+    blanket:0/0|blanket:0/unreadable|blanket:unreadable/0|blanket:unreadable/unreadable) : ;;
+    bridge:*) : ;;
+    *) die "net.bridge.bridge-nf-call-iptables=$brnf ip6tables=$brnf6: bridged guest traffic would traverse the inet forward hook and the final drop would break existing guests. Requires a different design." ;;
+  esac
+
+  if vm_exists; then
+    local cfg; cfg="$(qm config "$DEV_VMID")"
+    net0_ok "$cfg" || die "VM $DEV_VMID NIC is not the reviewed one: $NET0_WHY"
+    if grep -Eq '^(onboot|autostart): *1' <<<"$cfg"; then
+      die "VM $DEV_VMID has autostart enabled"
+    fi
+  fi
+
+  # Adoption allows NO port, not even the guest tap: a tap means the guest runs without the
+  # guard. Stop it first ('qm stop'), then install; verify (allow_tap=1) handles the running VM.
+  if bridge_exists; then
+    dev_bridge_ports_ok 0 \
+      || die "$DEV_BRIDGE exists and $PORTS_WHY; refusing to adopt a bridge with an L2 port"
+  fi
+
+  if ip -o addr show | grep -q " $DEV_HOST_IP/" \
+     && ! ip -o addr show dev "$DEV_BRIDGE" 2>/dev/null | grep -q " $DEV_HOST_IP/"; then
+    die "$DEV_HOST_IP already configured on another interface"
+  fi
+  # Any route inside the /30 (root) or covering it other than default (match) is a conflict;
+  # the previous literal-string grep missed e.g. 10.203.255.0/24 or 10.203.0.0/16.
+  local net="${DEV_HOST_IP%.*}.0/$DEV_PREFIXLEN" rt
+  rt="$( { ip -4 route show table all root "$net"; ip -4 route show table all match "$net"; } \
+         | grep -Ev '^(default|unreachable default|throw default) ' || true)"
+  [ -z "$rt" ] || die "route(s) overlapping $net already exist; subnet conflict: $(head -3 <<<"$rt" | tr '\n' ';')"
+
+  if [ -n "$HEALTHCHECK_CMD" ]; then
+    log "healthcheck (pre-install): $HEALTHCHECK_CMD"
+    sh -c "$HEALTHCHECK_CMD" || die "pre-install healthcheck failed; not continuing"
+  fi
+  log "check OK (ip_forward=$fwd, br_netfilter iptables=$brnf ip6tables=$brnf6, template syntax valid)"
+}
+
+# ---------------------------------------------------------------- install
+do_install() {
+  need_root
+  do_check
+  mkdir -p "$STATE_DIR"
+  [ -e "$STATE_DIR/installed" ] && die "$STATE_DIR/installed exists: already installed (run verify/status or rollback first)"
+
+  local fwd brnf vmbr0_before bridge_before
+  fwd="$(sysctl_get ipv4.ip_forward)"
+  brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
+  vmbr0_before="$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")"
+  bridge_before=absent; bridge_exists && bridge_before=present
+  cat > "$STATE_DIR/baseline.env" <<EOF
+IP_FORWARD_BEFORE=$fwd
+BR_NF_IPTABLES_BEFORE=$brnf
+WAN_FORWARDING_BEFORE=$vmbr0_before
+DEV_BRIDGE_BEFORE=$bridge_before
+CREATED_AT=$(date -Is)
+HOST=$(hostname -s)
+EOF
+  chmod 0600 "$STATE_DIR/baseline.env"
+
+  # A pre-existing table would be merged into by `nft -f` (old rules kept, new ones appended)
+  # and could satisfy verify with stale content. Refuse instead of adopting it.
+  table_present && die "nft table $NFT_TABLE already exists without $STATE_DIR/installed; inspect it, then 'devvm-guard rollback'"
+
+  # Independent deadline FIRST, before any host change: if this run dies, the host
+  # quarantines the guest and removes only our objects.
+  [ "$DEADLINE_SECONDS" -gt 0 ] && do_arm_deadline "$DEADLINE_SECONDS"
+
+  # EXIT, not ERR: `die`/`exit 1` do not fire an ERR trap, so an ERR-only trap would skip
+  # rollback on exactly the verify/healthcheck failure paths below.
+  INSTALL_OK=0
+  trap '[ "$INSTALL_OK" = 1 ] || { trap - EXIT; log "install failed: rolling back"; do_rollback --from-install-failure || true; }' EXIT
+
+  if ! bridge_exists; then
+    ip link add name "$DEV_BRIDGE" type bridge
+    echo "$DEV_BRIDGE" > "$STATE_DIR/owned-bridge"
+    log "created private bridge $DEV_BRIDGE (no ports, runtime-only)"
+  fi
+  ip link set dev "$DEV_BRIDGE" up
+  ip addr replace "$DEV_HOST_IP/$DEV_PREFIXLEN" dev "$DEV_BRIDGE"
+  sysctl -qw "net.ipv6.conf.$DEV_BRIDGE.disable_ipv6=1"
+
+  # Load the table (with its final forward drop) BEFORE enabling forwarding on the WAN
+  # interface: the other order briefly lets the host route anything arriving on vmbr0.
+  nft -f "$RENDERED"
+  log "loaded table $NFT_TABLE"
+
+  # Per-interface forwarding only (documented kernel feature); global ip_forward stays 0.
+  sysctl -qw "net.ipv4.conf.$DEV_BRIDGE.forwarding=1"
+  sysctl -qw "net.ipv4.conf.$WAN_IFACE.forwarding=1"
+
+  if ! do_verify; then
+    die "verification failed right after load"
+  fi
+
+  if [ -n "$HEALTHCHECK_CMD" ]; then
+    log "healthcheck (post-install): $HEALTHCHECK_CMD"
+    sh -c "$HEALTHCHECK_CMD" || die "post-install healthcheck failed (existing management/guest path broken)"
+  fi
+
+  printf 'installed_at=%s\nvmid=%s\nbridge=%s\n' "$(date -Is)" "$DEV_VMID" "$DEV_BRIDGE" > "$STATE_DIR/installed"
+  chmod 0600 "$STATE_DIR/installed"
+  INSTALL_OK=1
+  trap - EXIT
+  log "install OK — dev VM may now be started with devvm-guard start; deadline stays armed until disarm-deadline"
+}
+
+do_install_units() {
+  need_root
+  local here; here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+  install -m 0755 "$here/devvm-guard" /usr/local/sbin/devvm-guard
+  install -m 0644 "$here/devvm-guard.nft.tmpl" /usr/local/share/devvm-guard/devvm-guard.nft.tmpl 2>/dev/null || {
+    install -d -m 0755 /usr/local/share/devvm-guard
+    install -m 0644 "$here/devvm-guard.nft.tmpl" /usr/local/share/devvm-guard/devvm-guard.nft.tmpl
+  }
+  install -m 0755 "$here/pve-hook.sh" /usr/local/sbin/devvm-guard-pve-hook
+  install -m 0644 "$here/systemd/devvm-guard.service" /etc/systemd/system/devvm-guard.service
+  install -m 0644 "$here/systemd/devvm-guard-watchdog.service" /etc/systemd/system/devvm-guard-watchdog.service
+  install -m 0644 "$here/systemd/devvm-guard-watchdog.timer" /etc/systemd/system/devvm-guard-watchdog.timer
+  systemctl daemon-reload
+  log "units installed (not enabled; enable only inside the apply window)"
+}
+
+# ---------------------------------------------------------------- verify
+do_verify() {
+  need_root
+  local rc=0
+  ok()   { printf 'PASS  %s\n' "$*"; }
+  bad()  { printf 'FAIL  %s\n' "$*"; rc=1; }
+
+  if table_present; then ok "nft table $NFT_TABLE present"; else bad "nft table $NFT_TABLE missing"; fi
+
+  if table_present; then
+    local dump; dump="$(nft list table $NFT_TABLE)"
+    # Match rule text as printed by `nft list` (counter names are quoted there), not bare
+    # counter names: those also appear in the counter declarations and would match even
+    # if every rule using them were gone.
+    for pat in "iifname \"$DEV_BRIDGE\" meta nfproto ipv6 counter name \"denied_ipv6\" drop" \
+               "iifname \"$DEV_BRIDGE\" counter name \"denied_host_input\" drop" \
+               "oifname \"$DEV_BRIDGE\" jump dev_ingress" \
+               "ip saddr != $DEV_GUEST_IP counter name \"denied_spoof\" drop" \
+               "ip daddr $WAN_PUBLIC_IP counter name \"denied_internal\" drop" \
+               "ip daddr @internal_v4 counter name \"denied_internal\" drop" \
+               "counter name \"denied_other_forward\" drop" \
+               "ip saddr $DEV_GUEST_IP masquerade"; do
+      grep -qF -- "$pat" <<<"$dump" && ok "rule: $pat" || bad "rule missing: $pat"
+    done
+    grep -q 'iifname "'"$DEV_BRIDGE"'" jump dev_egress' <<<"$dump" \
+      && ok "forward chain dispatches dev egress" || bad "forward chain does not dispatch dev egress"
+  fi
+
+  [ "$(sysctl_get "ipv4.conf.$DEV_BRIDGE.forwarding")" = "1" ] \
+    && ok "per-interface forwarding on $DEV_BRIDGE" || bad "forwarding not enabled on $DEV_BRIDGE"
+  [ "$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")" = "1" ] \
+    && ok "per-interface forwarding on $WAN_IFACE" || bad "forwarding not enabled on $WAN_IFACE"
+  [ "$(sysctl_get ipv4.ip_forward)" = "0" ] \
+    && ok "global ip_forward still 0 (unchanged)" || bad "global ip_forward changed"
+  [ "$(sysctl_get "ipv6.conf.$DEV_BRIDGE.disable_ipv6")" = "1" ] \
+    && ok "IPv6 disabled on $DEV_BRIDGE" || bad "IPv6 not disabled on $DEV_BRIDGE"
+
+  # The blanket final drop is only safe while bridged frames do not traverse the inet forward
+  # hook. If this flips while the guard is loaded, existing guests can lose connectivity:
+  # the watchdog quarantines the guest and the operator must remove that one rule (see runbook).
+  local brnf brnf6 want_final
+  if [ "${FORWARD_DROP_SCOPE:-blanket}" = "bridge" ]; then
+    want_final="iifname { \"$WAN_IFACE\", \"$DEV_BRIDGE\" } counter name \"denied_other_forward\" drop"
+  else
+    want_final="counter name \"denied_other_forward\" drop"
+  fi
+  if table_present && grep -qF -- "$want_final" <<<"$(nft list table $NFT_TABLE)"; then
+    ok "final forward rule matches FORWARD_DROP_SCOPE=${FORWARD_DROP_SCOPE:-blanket}"
+  else
+    bad "final forward rule does not match FORWARD_DROP_SCOPE=${FORWARD_DROP_SCOPE:-blanket}"
+  fi
+  brnf="$(sysctl_get bridge.bridge-nf-call-iptables)"
+  brnf6="$(sysctl_get bridge.bridge-nf-call-ip6tables)"
+  case "$brnf/$brnf6" in
+    0/0|0/unreadable|unreadable/0|unreadable/unreadable) ok "br_netfilter call-iptables=$brnf ip6tables=$brnf6 (bridged frames stay out of the forward hook)" ;;
+    *)
+      if [ "${FORWARD_DROP_SCOPE:-blanket}" = "bridge" ]; then
+        ok "br_netfilter call-iptables=$brnf ip6tables=$brnf6 (scoped final rule: bridged frames unaffected)"
+      else
+        bad "br_netfilter call-iptables=$brnf ip6tables=$brnf6 with FORWARD_DROP_SCOPE=blanket: bridged traffic now traverses the inet forward hook"
+      fi ;;
+  esac
+  local vmcfg=""
+  vm_exists && vmcfg="$(qm config "$DEV_VMID" 2>/dev/null || true)"
+  if dev_bridge_ports_ok 1 "$vmcfg"; then ok "$DEV_BRIDGE ports: $PORTS_WHY"
+  else bad "$DEV_BRIDGE ports: $PORTS_WHY"; fi
+  ip -o addr show dev "$DEV_BRIDGE" | grep -q " $DEV_HOST_IP/$DEV_PREFIXLEN" \
+    && ok "$DEV_BRIDGE has $DEV_HOST_IP/$DEV_PREFIXLEN" || bad "$DEV_BRIDGE address missing"
+
+  if [ -n "$vmcfg" ]; then
+    if net0_ok "$vmcfg"; then ok "VM $DEV_VMID net0 is the reviewed NIC (virtio $DEV_GUEST_MAC on $DEV_BRIDGE, firewall=0, no VLAN)"
+    else bad "VM $DEV_VMID net0: $NET0_WHY"; fi
+    grep -Eq '^(onboot|autostart): *1' <<<"$vmcfg" && bad "VM $DEV_VMID autostart enabled" || ok "VM $DEV_VMID autostart off"
+  elif vm_exists; then
+    bad "VM $DEV_VMID config unreadable"
+  else
+    ok "VM $DEV_VMID not created yet (Terraform creates it stopped; nothing to start)"
+  fi
+
+  return "$rc"
+}
+
+do_status() {
+  load_conf
+  printf 'vmid=%s state=%s bridge=%s table=%s quarantine=%s default_route=%s\n' \
+    "$DEV_VMID" "$(vm_exists && vm_state || echo absent)" "$DEV_BRIDGE" \
+    "$(table_present && echo loaded || echo missing)" \
+    "$(quar_present && echo active || echo none)" "$(ip route show default | head -1)"
+  table_present && nft list counters table $NFT_TABLE
+}
+
+# ---------------------------------------------------------------- lifecycle
+do_start() {
+  need_root; load_conf
+  do_verify || die "refusing to start: guard not verified"
+  if vm_exists; then
+    # The pre-start hookscript makes every other start path (UI/API/qm) fail closed too; without
+    # it this verb would be the only gate, so it refuses (runbook step 7 attaches it, root-only).
+    qm config "$DEV_VMID" | grep -Eq '^hookscript: *[A-Za-z0-9_.-]+:snippets/devvm-guard-pve-hook\.sh$' \
+      || die "refusing to start: VM $DEV_VMID has no devvm-guard pre-start hookscript attached (APPLY-RUNBOOK step 7)"
+    qm start "$DEV_VMID" || die "qm start failed"
+    sleep 3
+    do_verify || { log "post-start verification failed: quarantining"; do_quarantine; exit 1; }
+    log "started VM $DEV_VMID with verified guard"
+  else
+    die "VM $DEV_VMID does not exist yet"
+  fi
+}
+
+do_quarantine() {
+  need_root; load_conf
+  # 1) block the dev interface at the host, independent of the firewall state, before/while stopping
+  if ! quar_present; then
+    nft -f - <<EOF
+table inet devvm_quarantine {
+	chain forward { type filter hook forward priority -10; policy accept;
+		iifname "$DEV_BRIDGE" drop; oifname "$DEV_BRIDGE" drop; }
+	chain input { type filter hook input priority -10; policy accept;
+		iifname "$DEV_BRIDGE" drop; }
+}
+EOF
+  fi
+  if ! vm_stopped_proven; then
+    qm stop "$DEV_VMID" --timeout 15 --skiplock || true
+    sleep 1
+  fi
+  if ! vm_stopped_proven; then
+    log "VM $DEV_VMID NOT PROVEN STOPPED after qm stop (state='$(vm_state || true)') — quarantine table retained, protection NOT removed"
+    log "escalate on the root console: qm stop $DEV_VMID, then re-run 'devvm-guard quarantine'"
+    return 2
+  fi
+  log "dev VM stopped and dev interface dropped at the host"
+}
+
+do_arm_deadline() {
+  need_root
+  local secs="${1:-${DEADLINE_SECONDS:-1800}}"
+  systemctl stop devvm-guard-deadline.timer >/dev/null 2>&1 || true
+  systemctl reset-failed devvm-guard-deadline.service >/dev/null 2>&1 || true
+  systemd-run --unit=devvm-guard-deadline --on-active="$secs" --collect \
+    /usr/local/sbin/devvm-guard rollback --from-deadline >/dev/null
+  systemctl is-active --quiet devvm-guard-deadline.timer || die "deadline timer did not arm"
+  log "independent rollback deadline armed: ${secs}s (unit devvm-guard-deadline.timer)"
+}
+
+do_disarm_deadline() {
+  need_root
+  systemctl stop devvm-guard-deadline.timer 2>/dev/null || true
+  systemctl reset-failed devvm-guard-deadline.service 2>/dev/null || true
+  log "rollback deadline disarmed (only valid after acceptance probes PASS)"
+}
+
+# ---------------------------------------------------------------- rollback
+do_rollback() {
+  need_root; load_conf
+  local from_deadline=0
+  [ "${1:-}" = "--from-deadline" ] && from_deadline=1
+
+  log "rollback start (from_deadline=$from_deadline)"
+  do_quarantine || {
+    log "quarantine could not prove the guest stopped: keeping all protection, not rolling back network"
+    exit 3
+  }
+
+  # Restore WAN forwarding BEFORE deleting the table: the table's final forward drop is the
+  # only thing closing the routed path while vmbr0 forwarding is 1. do_rollback may run with
+  # errexit suppressed (from the install EXIT trap), so the guard below is explicit.
+  local wan_before=0
+  if [ -r "$STATE_DIR/baseline.env" ]; then
+    # shellcheck disable=SC1091
+    . "$STATE_DIR/baseline.env"
+    if [ -n "${WAN_FORWARDING_BEFORE:-}" ] && [ "$WAN_FORWARDING_BEFORE" != "unreadable" ]; then
+      wan_before="$WAN_FORWARDING_BEFORE"
+    fi
+  fi
+  local cur; cur="$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")"
+  if [ "$cur" = "1" ] && [ "$wan_before" != "1" ]; then
+    sysctl -qw "net.ipv4.conf.$WAN_IFACE.forwarding=$wan_before" || true
+    cur="$(sysctl_get "ipv4.conf.$WAN_IFACE.forwarding")"
+    if [ "$cur" != "$wan_before" ]; then
+      log "could not restore $WAN_IFACE.forwarding=$wan_before (now $cur): keeping $NFT_TABLE loaded (fail-closed)"
+      exit 3
+    fi
+    log "restored $WAN_IFACE.forwarding=$wan_before"
+  else
+    log "$WAN_IFACE.forwarding=$cur (baseline $wan_before): leaving it alone"
+  fi
+  log "global ip_forward left at $(sysctl_get ipv4.ip_forward) (never changed by this bundle)"
+
+  if table_present; then nft delete table $NFT_TABLE; log "deleted table $NFT_TABLE (only ours)"; fi
+  if quar_present;  then nft delete table $NFT_QUAR; log "deleted table $NFT_QUAR"; fi
+
+  if [ -e "$STATE_DIR/owned-bridge" ] && bridge_exists; then
+    ip addr del "$DEV_HOST_IP/$DEV_PREFIXLEN" dev "$DEV_BRIDGE" 2>/dev/null || true
+    ip link del "$DEV_BRIDGE"
+    log "deleted owned bridge $DEV_BRIDGE"
+  fi
+
+  rm -f "$STATE_DIR/owned-bridge" "$STATE_DIR/installed"
+  do_disarm_deadline >/dev/null 2>&1 || true
+  do_status || true
+  log "rollback complete: guest stopped, only owned objects removed, VM disk untouched"
+}
+
+# The VM, its disk and NIC are owned by Terraform (terraform/modules/dev-vm). Deleting them here
+# would leave Terraform state pointing at a missing VM and bypass the reviewed plan, so the legacy
+# verb refuses without side effects. Host-side removal is `rollback` (stops the guest, removes only
+# the owned network state, leaves the VM and its disk alone).
+do_destroy() {
+  die "destroy is disabled: the dev VM and its disk are owned by Terraform (terraform/modules/dev-vm).
+  1) 'devvm-guard rollback' stops the guest and removes only the guard-owned host network state;
+  2) deleting the VM/disk is a separately authorized Terraform change (docs/devvm-guard/APPLY-RUNBOOK.md, 'Full removal')."
+}
+
+do_watchdog() {
+  need_root; load_conf
+  # Only a proven-stopped (or absent) VM skips the check; unknown state is treated as running.
+  vm_stopped_proven && exit 0
+  if ! do_verify >/dev/null 2>&1; then
+    log "watchdog: guard drift or loss detected while VM $DEV_VMID runs — quarantining"
+    do_quarantine || exit 2
+    exit 1
+  fi
+  exit 0
+}
+
+case "${1:-}" in
+  check)            load_conf; do_check ;;
+  render)           load_conf; render_nft ;;
+  install)          load_conf; do_install ;;
+  install-units)    do_install_units ;;
+  verify)           load_conf; do_verify ;;
+  status)           do_status ;;
+  start)            do_start ;;
+  quarantine)       do_quarantine ;;
+  arm-deadline)     load_conf; do_arm_deadline "${2:-}" ;;
+  disarm-deadline)  load_conf; do_disarm_deadline ;;
+  rollback)         shift || true; do_rollback "${1:-}" ;;
+  destroy)          do_destroy ;;
+  watchdog)         do_watchdog ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

@@ -1,0 +1,11 @@
+[Unit]
+Description=devvm-guard watchdog: quarantine the dev VM if its host guard disappears
+Documentation=file:///usr/local/share/doc/devvm-guard/DESIGN-DRAFT-v3.md
+ConditionPathExists=/var/lib/devvm-guard/installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/devvm-guard watchdog
+# A failed watchdog run must never be silently retried forever without visibility.
+StandardOutput=journal
+StandardError=journal

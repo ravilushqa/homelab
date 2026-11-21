@@ -1,0 +1,11 @@
+[Unit]
+Description=devvm-guard watchdog tick (5s)
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5s
+AccuracySec=1s
+Unit=devvm-guard-watchdog.service
+
+[Install]
+WantedBy=timers.target

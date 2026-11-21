@@ -19,7 +19,7 @@ flowchart LR
 
 ## Core Technologies 🛠️
 - [Proxmox VE](https://www.proxmox.com/) and [Proxmox Backup Server](https://www.proxmox.com/en/proxmox-backup-server) — virtualization and backups.
-- [Terraform](https://www.terraform.io/) — Talos VMs, LXCs, Proxmox CSI and sealed-secrets (state in Terraform Cloud, CI plan/apply).
+- [Terraform](https://www.terraform.io/) — Talos VMs, LXCs, the opt-in isolated dev VM (`dev_vm_enabled`, off), Proxmox CSI and sealed-secrets (state in Terraform Cloud, CI plan/apply).
 - [Talos Linux](https://www.talos.dev/) — Kubernetes OS.
 - [Cilium](https://cilium.io/) — CNI, L2 load balancer and [Gateway API](https://gateway-api.sigs.k8s.io/) implementation.
 - [ArgoCD](https://argo-cd.readthedocs.io/) — GitOps for everything under `k8s/`.

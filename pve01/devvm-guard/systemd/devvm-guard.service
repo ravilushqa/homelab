@@ -1,0 +1,17 @@
+[Unit]
+Description=devvm-guard: verify (does NOT reload) the dev VM guard at boot; fails if the runtime state is gone
+Documentation=file:///usr/local/share/doc/devvm-guard/DESIGN-DRAFT-v3.md
+After=network-online.target
+Before=pve-guests.service
+ConditionPathExists=/var/lib/devvm-guard/installed
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/devvm-guard verify
+ExecReload=/usr/local/sbin/devvm-guard verify
+# Never unload protection implicitly: stopping this unit must not flush rules.
+ExecStop=/bin/true
+
+[Install]
+WantedBy=multi-user.target
