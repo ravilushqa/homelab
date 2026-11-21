@@ -1,8 +1,8 @@
 #!/bin/bash
 # PVE hookscript pre-start gate for the dev VM (phase: pre-start).
-# Install as a snippets volume (needs a storage with content type `snippets`) or point
-# qm's hookscript at it; until that storage is confirmed, `devvm-guard start` is the only
-# sanctioned start path and the watchdog enforces the same invariant.
+# REQUIRED before any guest start: installed as a snippets volume on a storage that already has
+# the `snippets` content type and attached by root@pam (`qm set 130 --hookscript ...`, runbook
+# step 7). `devvm-guard start` refuses while it is not attached.
 set -u
 # PVE calls hookscripts as: <script> <vmid> <phase>  (vmid FIRST).
 VMID="${1:-}"; PHASE="${2:-}"

@@ -9,7 +9,7 @@
 # What it proves (and what it does not):
 #   * the rendered ruleset parses and its per-chain semantics behave as intended on THIS kernel;
 #   * per-interface forwarding (ip_forward=0) actually forwards on this kernel;
-#   * allowed egress (TCP 443, ICMP) works and denied destinations, source spoofing, IPv6,
+#   * allowed egress (TCP 443 only, ICMP) works; plain HTTP (TCP 80) is dropped and denied destinations, source spoofing, IPv6,
 #     host-INPUT and non-dev forwarded paths are dropped with the expected counters.
 # It does NOT prove PVE/qemu tap behaviour, br_netfilter state, or that the guest cannot escape
 # by other means. Those are separate gates in DESIGN-DRAFT-v3.md.
@@ -176,7 +176,7 @@ echo "--- policy loaded; counters:"; nft list counters table inet devvm | sed 's
 
 # ---- listeners on the "internet" side keep drop vs refusal distinguishable ----
 LISTENERS=()
-for target in 8.8.8.8:443 8.8.4.4:443 8.8.8.8:22; do
+for target in 8.8.8.8:443 8.8.4.4:443 8.8.8.8:22 8.8.8.8:80; do
   ni "$NS_WAN" python3 "$WORK/listen.py" "${target%:*}" "${target##*:}" >/dev/null 2>&1 &
   LISTENERS+=($!)
 done
@@ -216,6 +216,11 @@ assert_delta denied_host_input "$b"
 
 b="$(cval denied_egress_other)"
 tcp_probe 8.8.8.8 22 no "N4 dev -> internet port outside allow-list dropped (silent, no RST)" "" TimeoutError
+assert_delta denied_egress_other "$b"
+
+# HTTP is not on the allow-list: apt/netinst must use HTTPS mirrors (see APPLY-RUNBOOK step 7).
+b="$(cval denied_egress_other)"
+tcp_probe 8.8.8.8 80 no "N4b dev -> internet TCP/80 (plain HTTP) dropped: HTTPS-only egress" "" TimeoutError
 assert_delta denied_egress_other "$b"
 
 b="$(cval denied_internal)"

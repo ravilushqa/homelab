@@ -81,7 +81,8 @@ table inet devvm {
 		ip daddr @dns_v4 udp dport 53 counter name accepted_internet accept
 		ip daddr @dns_v4 tcp dport 53 counter name accepted_internet accept
 		ip daddr @ntp_v4 udp dport 123 counter name accepted_internet accept
-		meta l4proto tcp tcp dport { 80, 443 } counter name accepted_internet accept
+		# HTTPS only: plain HTTP (80) is not allowed, apt/netinst use https:// mirrors
+		meta l4proto tcp tcp dport 443 counter name accepted_internet accept
 		meta l4proto icmp icmp type { echo-request, destination-unreachable, time-exceeded } \
 			limit rate 20/second counter name accepted_internet accept
 		counter name denied_egress_other drop

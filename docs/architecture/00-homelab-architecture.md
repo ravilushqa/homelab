@@ -196,6 +196,12 @@ They have `prevent_destroy`: a plan that would destroy or replace one (e.g. a mo
 differs from the host, which forces replacement) fails instead of applying.
 `hermes` (114) and `vless-gateway` (125) are intentionally unmanaged.
 
+Planned, not created: `130` — `dev-vm`, an isolated dev VM in `terraform/modules/dev-vm`, gated by
+`dev_vm_enabled` (off). Terraform creates it stopped on the runtime-only private bridge `vmbr1`;
+the host guard in `pve01/devvm-guard` owns that bridge, the nft policy and start/stop
+(`docs/devvm-guard/`). Apply is blocked by an unimplemented pre-apply gate: a `nftables.service`
+stop/reload globally flushes the ruleset before the guard can stop the guest (design section 5a).
+
 ### Storage
 
 - `raid1`

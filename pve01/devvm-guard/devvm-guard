@@ -6,7 +6,10 @@
 # target kernel before an apply window; see "Feasibility gates" in the design document.
 #
 # Verbs: check | render | install | install-units | verify | status | start | quarantine |
-#        arm-deadline | disarm-deadline | rollback | destroy | watchdog
+#        arm-deadline | disarm-deadline | rollback | destroy (refuses) | watchdog
+#
+# The VM itself (definition, disk, NIC) is created by Terraform (terraform/modules/dev-vm);
+# this script owns only host network state and the start/stop lifecycle.
 #
 # Hard rules encoded here:
 #   * never flush the global ruleset, never touch another nft table;
@@ -38,7 +41,7 @@ load_conf() {
   # shellcheck disable=SC1090
   set -a; . "$CONF"; set +a
   : "${DEV_VMID:?}" "${DEV_BRIDGE:?}" "${DEV_HOST_IP:?}" "${DEV_PREFIXLEN:?}" \
-    "${DEV_GUEST_IP:?}" "${WAN_IFACE:?}" "${DNS_V4:?}" "${NTP_V4:?}"
+    "${DEV_GUEST_IP:?}" "${DEV_GUEST_MAC:?}" "${WAN_IFACE:?}" "${DNS_V4:?}" "${NTP_V4:?}"
   # ':=' (not ':-') so optional keys are actually assigned; with set -u an omitted key
   # would otherwise abort every verb, including the deadline rollback.
   : "${WAN_PUBLIC_IP:=}" "${CONTROL_ENABLED:=0}" "${DEADLINE_SECONDS:=0}" \
@@ -56,8 +59,74 @@ load_conf() {
   fi
 }
 
+QEMU_PID_DIR="${DEVVM_QEMU_PID_DIR:-/var/run/qemu-server}"
+
 vm_state() { qm status "$DEV_VMID" 2>/dev/null | awk -F': *' '/^status/{print $2}'; }
 vm_exists() { qm config "$DEV_VMID" >/dev/null 2>&1; }
+
+# The reviewed NIC, exactly: only net0 (qemu-server names its tap tap<vmid>i0), model virtio with
+# the pinned MAC, on DEV_BRIDGE, PVE firewall off (firewall=1 would put fwbr<vmid>i0/fwpr<vmid>p0
+# between the guest and the bridge), no VLAN tag/trunks. Sets NET0_WHY on failure.
+net0_ok() { # <qm config text>
+  local cfg="$1" nets net0 kv model mac f bridge="" fw=0
+  nets="$(grep -Eo '^net[0-9]+:' <<<"$cfg" | tr -d ':' | tr '\n' ' ' || true)"
+  [ "$nets" = "net0 " ] || { NET0_WHY="NICs present: '${nets% }', expected exactly net0"; return 1; }
+  net0="$(sed -n 's/^net0: *//p' <<<"$cfg")"
+  IFS=, read -ra kv <<<"$net0"
+  model="${kv[0]%%=*}"; mac="${kv[0]#*=}"
+  [ "$model" = "virtio" ] || { NET0_WHY="net0 model '$model' is not virtio"; return 1; }
+  [ "${mac^^}" = "${DEV_GUEST_MAC^^}" ] || { NET0_WHY="net0 MAC $mac != DEV_GUEST_MAC $DEV_GUEST_MAC"; return 1; }
+  for f in "${kv[@]:1}"; do
+    case "$f" in
+      bridge=*)  bridge="${f#bridge=}" ;;
+      firewall=*) fw="${f#firewall=}" ;;
+      tag=*|trunks=*) NET0_WHY="net0 has VLAN option '$f'"; return 1 ;;
+    esac
+  done
+  [ "$bridge" = "$DEV_BRIDGE" ] || { NET0_WHY="net0 bridge '$bridge' != $DEV_BRIDGE"; return 1; }
+  [ "$fw" = "0" ] || { NET0_WHY="net0 firewall=$fw (must be 0: firewall bridges would be the ports)"; return 1; }
+  return 0
+}
+
+# The only device ever allowed on DEV_BRIDGE: tap<DEV_VMID>i0, a real TAP (not veth/VLAN/
+# physical/dummy) whose file descriptor is held by VM DEV_VMID's qemu process (pidfile, argv
+# '-id <vmid>', /proc/<pid>/fdinfo 'iff: <tap>'). Sets PORTS_WHY on failure.
+guest_tap_bound() {
+  local tap="$1" d="/sys/class/net/$1" flags pid fdi
+  [ -r "$d/tun_flags" ] || { PORTS_WHY="$tap is not a tun/tap device"; return 1; }
+  [ -e "$d/device" ] && { PORTS_WHY="$tap is backed by a hardware device"; return 1; }
+  flags="$(cat "$d/tun_flags" 2>/dev/null)"
+  [[ "$flags" =~ ^0x[0-9a-fA-F]+$ ]] && (( flags & 0x0002 )) || { PORTS_WHY="$tap is not in TAP mode (tun_flags=$flags)"; return 1; }
+  pid="$(cat "$QEMU_PID_DIR/$DEV_VMID.pid" 2>/dev/null || true)"
+  [[ "$pid" =~ ^[0-9]+$ ]] && [ -d "/proc/$pid" ] \
+    || { PORTS_WHY="$tap present but VM $DEV_VMID has no live qemu pid ($QEMU_PID_DIR/$DEV_VMID.pid)"; return 1; }
+  [[ " $(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null) " == *" -id $DEV_VMID "* ]] \
+    || { PORTS_WHY="pid $pid from the VM $DEV_VMID pidfile is not 'qemu -id $DEV_VMID'"; return 1; }
+  for fdi in /proc/"$pid"/fdinfo/*; do
+    grep -qsxF $'iff:\t'"$tap" "$fdi" && return 0   # tun_chr_show_fdinfo format
+  done
+  PORTS_WHY="$tap is not held open by VM $DEV_VMID's qemu (pid $pid)"
+  return 1
+}
+
+# Ports on DEV_BRIDGE. allow_tap=0 (adoption by check/install): none at all. allow_tap=1
+# (verify): none, or exactly the bound guest tap of a VM whose net0 is the reviewed NIC.
+# Never a pattern like tap*: any other port (uplink, VLAN, veth, fwpr, a foreign VM's tap,
+# tap<vmid>i1) is an L2 path out of the private segment. Sets PORTS_WHY.
+dev_bridge_ports_ok() { # <allow_tap 0|1> [qm config text]
+  local allow="$1" cfg="${2:-}" p ports=() tap="tap${DEV_VMID}i0"
+  for p in /sys/class/net/"$DEV_BRIDGE"/brif/*; do [ -e "$p" ] && ports+=("${p##*/}"); done
+  if [ "${#ports[@]}" -eq 0 ]; then PORTS_WHY="none (no L2 uplink)"; return 0; fi
+  [ "$allow" = 1 ] || { PORTS_WHY="has port(s) ${ports[*]}"; return 1; }
+  if [ "${#ports[@]}" -ne 1 ] || [ "${ports[0]}" != "$tap" ]; then
+    PORTS_WHY="unexpected port(s) ${ports[*]}: only $tap may be attached"; return 1
+  fi
+  [ -n "$cfg" ] || { PORTS_WHY="$tap attached but VM $DEV_VMID does not exist"; return 1; }
+  net0_ok "$cfg" || { PORTS_WHY="$tap attached but $NET0_WHY"; return 1; }
+  guest_tap_bound "$tap" || return 1
+  PORTS_WHY="only $tap (VM $DEV_VMID net0, held by its qemu)"
+  return 0
+}
 # Fail-closed: an empty/unknown state (qm error, pmxcfs hiccup, "paused") is NOT "stopped".
 # If the config is unreadable, fall back to the qemu pidfile so a qm failure cannot be
 # mistaken for "VM absent" while the process still runs.
@@ -147,18 +216,18 @@ do_check() {
   esac
 
   if vm_exists; then
-    local cfg n; cfg="$(qm config "$DEV_VMID")"
-    n="$(grep -c '^net[0-9]' <<<"$cfg" || true)"   # grep -c exits 1 on 0 matches (set -e)
-    [ "$n" = "1" ] || die "VM $DEV_VMID already has $n NICs; expected exactly 1"
-    grep -Eq "bridge=$DEV_BRIDGE(,|\$)" <<<"$cfg" || die "VM $DEV_VMID net0 is not on $DEV_BRIDGE"
+    local cfg; cfg="$(qm config "$DEV_VMID")"
+    net0_ok "$cfg" || die "VM $DEV_VMID NIC is not the reviewed one: $NET0_WHY"
     if grep -Eq '^(onboot|autostart): *1' <<<"$cfg"; then
       die "VM $DEV_VMID has autostart enabled"
     fi
   fi
 
+  # Adoption allows NO port, not even the guest tap: a tap means the guest runs without the
+  # guard. Stop it first ('qm stop'), then install; verify (allow_tap=1) handles the running VM.
   if bridge_exists; then
-    [ -z "$(ls /sys/class/net/"$DEV_BRIDGE"/brif 2>/dev/null)" ] \
-      || die "$DEV_BRIDGE exists and has ports; refusing to adopt a bridge with L2 uplink"
+    dev_bridge_ports_ok 0 \
+      || die "$DEV_BRIDGE exists and $PORTS_WHY; refusing to adopt a bridge with an L2 port"
   fi
 
   if ip -o addr show | grep -q " $DEV_HOST_IP/" \
@@ -245,7 +314,7 @@ EOF
   chmod 0600 "$STATE_DIR/installed"
   INSTALL_OK=1
   trap - EXIT
-  log "install OK — dev VM may now be created/started; deadline stays armed until disarm-deadline"
+  log "install OK — dev VM may now be started with devvm-guard start; deadline stays armed until disarm-deadline"
 }
 
 do_install_units() {
@@ -326,18 +395,21 @@ do_verify() {
         bad "br_netfilter call-iptables=$brnf ip6tables=$brnf6 with FORWARD_DROP_SCOPE=blanket: bridged traffic now traverses the inet forward hook"
       fi ;;
   esac
-  [ -z "$(ls /sys/class/net/"$DEV_BRIDGE"/brif 2>/dev/null)" ] \
-    && ok "$DEV_BRIDGE has no bridge ports (no L2 uplink)" || bad "$DEV_BRIDGE has ports"
+  local vmcfg=""
+  vm_exists && vmcfg="$(qm config "$DEV_VMID" 2>/dev/null || true)"
+  if dev_bridge_ports_ok 1 "$vmcfg"; then ok "$DEV_BRIDGE ports: $PORTS_WHY"
+  else bad "$DEV_BRIDGE ports: $PORTS_WHY"; fi
   ip -o addr show dev "$DEV_BRIDGE" | grep -q " $DEV_HOST_IP/$DEV_PREFIXLEN" \
     && ok "$DEV_BRIDGE has $DEV_HOST_IP/$DEV_PREFIXLEN" || bad "$DEV_BRIDGE address missing"
 
-  if vm_exists; then
-    local cfg; cfg="$(qm config "$DEV_VMID")"
-    [ "$(grep -c '^net[0-9]' <<<"$cfg")" = "1" ] && ok "VM $DEV_VMID has exactly one NIC" || bad "VM $DEV_VMID NIC count != 1"
-    grep -Eq "bridge=$DEV_BRIDGE(,|\$)" <<<"$cfg" && ok "VM $DEV_VMID NIC on $DEV_BRIDGE" || bad "VM $DEV_VMID NIC not on $DEV_BRIDGE"
-    grep -Eq '^(onboot|autostart): *1' <<<"$cfg" && bad "VM $DEV_VMID autostart enabled" || ok "VM $DEV_VMID autostart off"
+  if [ -n "$vmcfg" ]; then
+    if net0_ok "$vmcfg"; then ok "VM $DEV_VMID net0 is the reviewed NIC (virtio $DEV_GUEST_MAC on $DEV_BRIDGE, firewall=0, no VLAN)"
+    else bad "VM $DEV_VMID net0: $NET0_WHY"; fi
+    grep -Eq '^(onboot|autostart): *1' <<<"$vmcfg" && bad "VM $DEV_VMID autostart enabled" || ok "VM $DEV_VMID autostart off"
+  elif vm_exists; then
+    bad "VM $DEV_VMID config unreadable"
   else
-    ok "VM $DEV_VMID not created yet (guard-first, fail-closed ordering)"
+    ok "VM $DEV_VMID not created yet (Terraform creates it stopped; nothing to start)"
   fi
 
   return "$rc"
@@ -357,6 +429,10 @@ do_start() {
   need_root; load_conf
   do_verify || die "refusing to start: guard not verified"
   if vm_exists; then
+    # The pre-start hookscript makes every other start path (UI/API/qm) fail closed too; without
+    # it this verb would be the only gate, so it refuses (runbook step 7 attaches it, root-only).
+    qm config "$DEV_VMID" | grep -Eq '^hookscript: *[A-Za-z0-9_.-]+:snippets/devvm-guard-pve-hook\.sh$' \
+      || die "refusing to start: VM $DEV_VMID has no devvm-guard pre-start hookscript attached (APPLY-RUNBOOK step 7)"
     qm start "$DEV_VMID" || die "qm start failed"
     sleep 3
     do_verify || { log "post-start verification failed: quarantining"; do_quarantine; exit 1; }
@@ -461,16 +537,14 @@ do_rollback() {
   log "rollback complete: guest stopped, only owned objects removed, VM disk untouched"
 }
 
+# The VM, its disk and NIC are owned by Terraform (terraform/modules/dev-vm). Deleting them here
+# would leave Terraform state pointing at a missing VM and bypass the reviewed plan, so the legacy
+# verb refuses without side effects. Host-side removal is `rollback` (stops the guest, removes only
+# the owned network state, leaves the VM and its disk alone).
 do_destroy() {
-  need_root; load_conf
-  [ "${1:-}" = "--yes" ] || die "destroy deletes VM $DEV_VMID and its disk; re-run with --yes"
-  do_quarantine || die "could not stop the guest; refusing to destroy"
-  if vm_exists; then
-    qm destroy "$DEV_VMID" --purge
-    log "destroyed VM $DEV_VMID and its disks"
-  else
-    log "VM $DEV_VMID does not exist"
-  fi
+  die "destroy is disabled: the dev VM and its disk are owned by Terraform (terraform/modules/dev-vm).
+  1) 'devvm-guard rollback' stops the guest and removes only the guard-owned host network state;
+  2) deleting the VM/disk is a separately authorized Terraform change (docs/devvm-guard/APPLY-RUNBOOK.md, 'Full removal')."
 }
 
 do_watchdog() {
@@ -497,7 +571,7 @@ case "${1:-}" in
   arm-deadline)     load_conf; do_arm_deadline "${2:-}" ;;
   disarm-deadline)  load_conf; do_disarm_deadline ;;
   rollback)         shift || true; do_rollback "${1:-}" ;;
-  destroy)          shift || true; do_destroy "${1:-}" ;;
+  destroy)          do_destroy ;;
   watchdog)         do_watchdog ;;
   *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
