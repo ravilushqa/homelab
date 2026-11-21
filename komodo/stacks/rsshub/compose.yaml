@@ -1,6 +1,6 @@
 services:
   rsshub:
-    image: diygod/rsshub:latest@sha256:5067296d6fafdc95024fb0da4123f399339b399299bb0a56360e38459944003d
+    image: diygod/rsshub:latest@sha256:844c2f98e579f461f1f845724f25bae3719de84596fe78c73e2c9a5aabf9328b
     container_name: rsshub
     restart: unless-stopped
     ports:
