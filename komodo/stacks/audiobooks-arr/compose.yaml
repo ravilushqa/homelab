@@ -88,7 +88,7 @@ services:
       - "traefik.enable=false"
 
   audiobookrequest:
-    image: markbeep/audiobookrequest:1.11.0
+    image: markbeep/audiobookrequest:2.0.1
     restart: unless-stopped
     environment:
       # Native OIDC (Pocket ID client `audiobookrequest`, group `family`) instead of oidc-auth, so
