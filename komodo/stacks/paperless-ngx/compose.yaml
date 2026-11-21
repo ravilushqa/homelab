@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
 
   webserver:
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.2
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.5.1
     networks:
       - default
       - traefik
@@ -101,6 +101,10 @@ services:
       VISION_LLM_MODEL: "openai/gpt-6.1-terra"
       AUTO_OCR_TAG: "paperless-gpt-ocr-auto"
       OCR_LIMIT_PAGES: "5"
+      OCR_MAX_RETRIES: "1"
+      AUTO_TAG_MAX_RETRIES: "1"
+      VISION_LLM_MAX_RETRIES: "0"
+      LLM_MAX_RETRIES: "1"
       IMAGE_MAX_TOTAL_PIXELS: "10000000"
       VISION_LLM_MAX_TOKENS: "16384"
       LOG_LEVEL: "info"
