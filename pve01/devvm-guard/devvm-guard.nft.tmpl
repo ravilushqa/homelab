@@ -1,0 +1,102 @@
+# devvm-guard.nft.tmpl — rendered by `devvm-guard render`; never edited on the host.
+# Scope: exactly one dev guest on @DEV_BRIDGE@, host-routed IPv4 egress.
+# The table is owned by this operation. Nothing here flushes or rewrites another table,
+# the global forwarding sysctl, PVE firewall defaults, VLANs, Tailscale or existing NAT.
+#
+# Enforcement lives in the PVE host kernel, outside the guest. Guest root can change its own
+# addresses, routes, firewall or MAC and still cannot remove these rules.
+
+table inet devvm {
+	set internal_v4 {
+		type ipv4_addr
+		flags interval
+		elements = {
+			0.0.0.0/8,
+			10.0.0.0/8,
+			100.64.0.0/10,
+			127.0.0.0/8,
+			169.254.0.0/16,
+			172.16.0.0/12,
+			192.0.0.0/24,
+			192.0.2.0/24,
+			192.168.0.0/16,
+			198.18.0.0/15,
+			198.51.100.0/24,
+			203.0.113.0/24,
+			224.0.0.0/4,
+			240.0.0.0/4
+		}
+	}
+
+	set dns_v4 {
+		type ipv4_addr
+		flags interval
+		elements = { @DNS_V4@ }
+	}
+
+	set ntp_v4 {
+		type ipv4_addr
+		flags interval
+		elements = { @NTP_V4@ }
+	}
+
+	counter accepted_internet {}
+	counter accepted_control {}
+	counter accepted_return {}
+	counter denied_internal {}
+	counter denied_spoof {}
+	counter denied_ipv6 {}
+	counter denied_host_input {}
+	counter denied_other_forward {}
+	counter denied_egress_other {}
+
+	# Guest -> host (PVE API, SSH, exporter, anything bound on the host): always dropped.
+	# No host service is exposed to the dev guest; management is console-only unless M is on.
+	chain input {
+		type filter hook input priority filter; policy accept;
+		iifname "@DEV_BRIDGE@" meta nfproto ipv6 counter name denied_ipv6 drop
+		iifname "@DEV_BRIDGE@" ip saddr != @DEV_GUEST_IP@ counter name denied_spoof drop
+		iifname "@DEV_BRIDGE@" counter name denied_host_input drop
+	}
+
+	# Forwarding was disabled on this host before the change (ip_forward=0), so the original
+	# boundary is "nothing is routed". The final rule restores that boundary for every other
+	# path; only the dev guest gets an allow-list below.
+	# FORWARD_DROP_SCOPE=blanket : drop every other forwarded packet. Correct and strict, but only
+	#   safe while br_netfilter does not push bridged frames through this hook.
+	# FORWARD_DROP_SCOPE=bridge  : drop only packets whose ingress is the LAN/dev bridge device.
+	#   Bridged frames keep iif=<bridge port>, so they are untouched even with br_netfilter loaded.
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		iifname "@DEV_BRIDGE@" jump dev_egress
+		oifname "@DEV_BRIDGE@" jump dev_ingress
+@FORWARD_FINAL_RULE@
+	}
+
+	chain dev_egress {
+		ct state established,related counter name accepted_return accept
+		ip saddr != @DEV_GUEST_IP@ counter name denied_spoof drop
+		ip daddr @WAN_PUBLIC_IP@ counter name denied_internal drop
+		ip daddr @internal_v4 counter name denied_internal drop
+		ip daddr @dns_v4 udp dport 53 counter name accepted_internet accept
+		ip daddr @dns_v4 tcp dport 53 counter name accepted_internet accept
+		ip daddr @ntp_v4 udp dport 123 counter name accepted_internet accept
+		# HTTPS only: plain HTTP (80) is not allowed, apt/netinst use https:// mirrors
+		meta l4proto tcp tcp dport 443 counter name accepted_internet accept
+		meta l4proto icmp icmp type { echo-request, destination-unreachable, time-exceeded } \
+			limit rate 20/second counter name accepted_internet accept
+		counter name denied_egress_other drop
+	}
+
+	chain dev_ingress {
+		ct state established,related counter name accepted_return accept
+@CONTROL_INGRESS_RULES@
+		counter name denied_other_forward drop
+	}
+
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		oifname "@WAN_IFACE@" ip saddr @DEV_GUEST_IP@ masquerade
+	}
+@PREROUTING_CHAIN@
+}

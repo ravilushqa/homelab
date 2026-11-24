@@ -1,0 +1,46 @@
+# devvm-guard.conf.example — copy to /etc/devvm-guard.conf during the agreed apply window.
+# Every value must be re-verified against live state at apply time; nothing here is reserved.
+# No secrets belong in this file.
+
+# --- guest identity (S) ---
+DEV_VMID=130
+DEV_NAME=dev-vm
+DEV_GUEST_MAC=02:DE:AD:00:01:30      # pinned in the VM config; confirm it is free at allocation
+
+# --- private segment (S/G1) ---
+# Bridge is created at runtime with NO ports; it is deliberately absent from
+# /etc/network/interfaces so host networking/management is never reloaded.
+DEV_BRIDGE=vmbr1
+DEV_HOST_IP=10.203.255.1
+DEV_PREFIXLEN=30
+DEV_GUEST_IP=10.203.255.2
+
+# --- uplink (G1/G2) ---
+WAN_IFACE=vmbr0
+# Mandatory: the homelab's own public IPv4. Guest egress to it (hairpin) is denied.
+# Re-check at the window; a consumer line can change it.
+WAN_PUBLIC_IP=
+
+# --- allow-list (G2) ---
+DNS_V4="1.1.1.1, 9.9.9.9"
+NTP_V4="162.159.200.1, 162.159.200.123"
+
+# --- control path M (optional, default off until packet-tested) ---
+# When CONTROL_ENABLED=1 the host DNATs 192.168.1.65:22220 -> guest:22, source-limited.
+# This is a narrow control exception, not guest access to host/PVE. Leave 0 to ship console-only.
+CONTROL_ENABLED=0
+CONTROL_SRC=192.168.1.65
+CONTROL_PORT=22220
+GUEST_SSH_PORT=22
+
+# --- final forward rule (G2) ---
+# blanket: drop every non-dev forwarded packet (strict; requires br_netfilter call-iptables=0)
+# bridge : drop only packets arriving on the LAN/dev bridge devices (safe with br_netfilter=1)
+FORWARD_DROP_SCOPE=blanket
+
+# --- lifecycle (G3) ---
+# Independent rollback deadline armed before any host change in the apply window.
+DEADLINE_SECONDS=1800
+# Optional health probe run after the table loads; abort+rollback if it fails.
+# Set empty to skip. Value is a shell command run on the host.
+HEALTHCHECK_CMD="pct exec 114 -- ping -c 1 -W 2 1.1.1.1"
