@@ -21,7 +21,7 @@ services:
       - "traefik.docker.network=traefik_default"
 
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.3.0
+    image: lscr.io/linuxserver/qbittorrent:5.3.1
     restart: unless-stopped
     depends_on:
       - xray
